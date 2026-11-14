@@ -7,6 +7,12 @@ if not spr or spr.filename ~= MASTER then spr = app.open(MASTER) end
 local function tagFrame(n) for _, t in ipairs(spr.tags) do if t.name == n then return t.fromFrame.frameNumber end end end
 local function inRect(x, y, r) return x >= r[1] and y >= r[2] and x < r[1] + r[3] and y < r[2] + r[4] end
 local function comp(s, f) local im = Image(128, 128, ColorMode.RGB); im:drawSprite(s, f); return im end
+-- every face:* tag and eyes:closed must cover exactly one frame
+local bad = {}
+for _, t in ipairs(spr.tags) do if t.name:match("^face:") or t.name == "eyes:closed" then
+  if t.fromFrame.frameNumber ~= t.toFrame.frameNumber then bad[#bad + 1] = string.format("%s %d-%d", t.name, t.fromFrame.frameNumber, t.toFrame.frameNumber) end end end
+print("multi-frame face/eyes tags: " .. (#bad == 0 and "0" or table.concat(bad, ", ")))
+assert(#bad == 0, "face/eyes tags must be one frame each")
 local idle = comp(spr, tagFrame("face:idle"))
 if REF then local r = app.open(REF); local a = comp(r, 1); r:close(); local n = 0
   for y = 0, 127 do for x = 0, 127 do if a:getPixel(x, y) ~= idle:getPixel(x, y) then n = n + 1 end end end

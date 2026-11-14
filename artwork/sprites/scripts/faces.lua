@@ -169,7 +169,6 @@ local function split(img)
   return fi, ei
 end
 
-local function tag(name, f) local t = spr:newTag(f, f); t.name = name end
 app.transaction(function()
   for n, f in ipairs(FACES) do
     if n > 1 then
@@ -179,7 +178,6 @@ app.transaction(function()
       local fi, ei = split(build(f))
       spr:newCel(LF, fr, fi, Point(FACE[1], FACE[2])); spr:newCel(LE, fr, ei, Point(EYES[1], EYES[2]))
     end
-    tag("face:" .. f.name, n)
   end
   -- eyes:closed: only the patch, on the eyes layer, transparent outside the footprint
   local n = #FACES + 1
@@ -189,7 +187,9 @@ app.transaction(function()
   for y = EYES[2], EYES[2] + EYES[4] - 1 do for x = EYES[1], EYES[1] + EYES[3] - 1 do
     if inFP(x, y) then patch:drawPixel(x - EYES[1], y - EYES[2], full:getPixel(x, y)) end end end
   spr:newCel(LE, fr, patch, Point(EYES[1], EYES[2]))
-  tag("eyes:closed", n)
+  -- tags only after every frame exists: a new frame would stretch any tag ending on the last frame
+  for i, f in ipairs(FACES) do local t = spr:newTag(i, i); t.name = "face:" .. f.name end
+  local t = spr:newTag(n, n); t.name = "eyes:closed"
 end)
 
 -- palette: every colour used on any frame (frame 1's 31 first, in their existing order)
