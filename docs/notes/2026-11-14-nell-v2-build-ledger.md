@@ -34,3 +34,20 @@ Task 6: complete (commits 87caef0..4e19b75, tests: bash -c 'scripts/test.sh && b
 Task 7: Shell: kill -9 Nell → relaunch reuses kitty (one instance: pid 70284 + its __watch_conf__ helper), panel hidden (0 on screen), chat prompt → Stop logged by the new Nell
 Task 7: User checklist 2026-11-14 — all eight items passed ("All good"): ⌘ from Chat opens console left + typing; ⌘ minimises/one-line bubble reopens; console open hides Code chatter, approval still shows and Allow works; ⌥-drag to bottom-left re-places console on her right, facing it; click-through without ⌥; ⌥-right-click menu; fonts OK (console 16.5 pt, bubbles 11 pt); no overlap at corners/top
 Task 7: Not verified: a second display (none available)
+Task 7: complete (commits 4e19b75..155dd52, tests: bash -c 'scripts/test.sh && bash Tests/hook-script-test.sh && swift build' → Build complete! (1.30 secs))
+Final: fixed Important 1 hook fallback raised the bare panel on the 590 s deadline while Nell was up — deadlineWithNellUpDoesNotRaiseKitty RED→GREEN (fallback now only on curl exit 7 = can't connect; NELL_HOOK_DEADLINE test override), suite 98/98 + hook 4/4
+Final: fixed Important 2 "Open terminal" left a pinned "Answer in the console" bubble — noDecisionOffersConsoleOnlyWhenItIsNotAlreadyOpen RED→GREEN (offersConsoleAfterNoDecision helper used by NellModel), suite 98/98
+Final: Ruling: Important 3 (wrong display with two screens) fixed by keeping Nell and kitty's placement on the primary display (PanelController.screen + model.displayFrame) — AppKit glue with no pure logic, verified by build only; marked shortcut in code — cost if wrong: on a second display Nell is pulled back to the main one
+Final: minor (deferred): open phase with no usable console frame on screens < ~400 pt still calls showConsole
+Final: minor (deferred): codeStatus not cleared on SessionEnd/UserPromptSubmit; "idle" shown while Claude thinks before its first tool
+Final: minor (deferred): drag end saves the unclamped position (re-clamped on load)
+Final: minor (deferred): a cancelled drag leaves dragStart set (hit-testing frozen, console hidden)
+Final: minor (deferred): ensureTab always refocuses the Code tab, even during Chat's trust prompt
+Final: minor (deferred): silent failure if kitty's socket never appears; failed ls read as "tab missing"
+Final: minor (deferred): calibration measured once globally right after show, never per display
+Final: minor (deferred): crash with an approval pending — reconnect hides the panel and Nell offers nothing
+Final: minor (deferred): a four-line draft overflows Nell's 200 pt block
+Final: minor (deferred): Focus 2 layout test only asserts column height; click-only flow untested in app target
+Final: minor (deferred): placeholder caption and context menu use the system font, not Departure Mono
+Final: minor (deferred): user's own artwork/ and concept-nell-design-system/ files were swept into spike commit 8e84ff8 by git add -A (now public) — ask the user
+Final: Ruling: declined-to-judge items (kitty with no tabs opening an OS window, hook show against the panel, column clipping with tall bubbles, Tink bundle id for the panel, alignment with auto-hiding menu bar/Dock, font-copy timing) stand as unverified — none reproduced on the user's checklist — cost if wrong: a stray kitty window or misplacement in rare cases
