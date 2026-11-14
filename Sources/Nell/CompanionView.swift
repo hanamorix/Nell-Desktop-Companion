@@ -48,7 +48,10 @@ struct CompanionView: View {
         VStack(alignment: l.side == .left ? .trailing : .leading, spacing: 8) {
             if l.columnUp { Spacer(minLength: 0) }
             ForEach(model.shown) { s in // fade each bubble as one, so its drop doesn't show through the fill
-                BubbleView(model: model, bubble: s.bubble, tailRight: l.side == .left).compositingGroup().opacity(s.opacity)
+                // your cream bubbles sit right, Nell's sit left; the tail follows the side
+                let mine = s.bubble.kind == .user
+                BubbleView(model: model, bubble: s.bubble, tailRight: mine).compositingGroup().opacity(s.opacity)
+                    .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
             }
             if !l.columnUp { Spacer(minLength: 0) }
         }
@@ -166,13 +169,11 @@ struct BubbleView: View {
 
     @ViewBuilder private var actions: some View {
         if case .approval(let id) = bubble.kind, !bubble.settled {
-            // ALLOW · DENY · OPEN CONSOLE don't fit one row in the column, so the third wraps (CSS flex-wrap)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Button { model.answer(id, .allow) } label: { Icon(name: "allow"); Text("Allow") }.buttonStyle(PixelButton(kind: .allow))
-                    Button { model.answer(id, .deny) } label: { Icon(name: "deny"); Text("Deny") }.buttonStyle(PixelButton(kind: .deny))
-                }
-                Button { model.openTerminal(bubble.mode, requestId: id) } label: { Icon(name: "terminal"); Text("Open console") }
+            // ALLOW 71 + DENY 64 + CONSOLE 85 + two 8 pt gaps = 236 pt, exactly the bubble's inner width
+            HStack(spacing: 8) {
+                Button { model.answer(id, .allow) } label: { Icon(name: "allow"); Text("Allow") }.buttonStyle(PixelButton(kind: .allow))
+                Button { model.answer(id, .deny) } label: { Icon(name: "deny"); Text("Deny") }.buttonStyle(PixelButton(kind: .deny))
+                Button { model.openTerminal(bubble.mode, requestId: id) } label: { Icon(name: "terminal"); Text("Console") }
                     .buttonStyle(PixelButton(kind: .quiet))
             }
         }
