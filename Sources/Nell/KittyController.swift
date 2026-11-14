@@ -118,6 +118,9 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         return PanelCalibration.measured(requested: CGRect(x: r.marginLeft, y: r.marginTop, width: r.widthPx, height: r.heightPx), actual: actual)
     }
 
+    /// Switch the console's visible tab without showing it or taking the keyboard.
+    func selectTab(_ m: Mode) { if let socket { runTool(KittyCommands.focusTab(socket: socket, mode: m)) } }
+
     func hideConsole() { if let socket { runTool(KittyCommands.hidePanel(socket: socket)) } }
 
     func send(_ text: String, to m: Mode) {

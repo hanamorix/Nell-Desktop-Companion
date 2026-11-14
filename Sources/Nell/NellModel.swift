@@ -3,6 +3,9 @@ import NellCore
 
 struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: Double; var id: UUID { bubble.id } }
 
+/// The console frame Nell draws around kitty: a border and a title strip.
+enum ConsoleChrome { static let border: CGFloat = 3; static let title: CGFloat = 24 }
+
 /// Nell's brain on the main actor: routes hook events into trackers + bubbles, and UI actions into kitty + approvals.
 @MainActor final class NellModel: ObservableObject {
     @Published var selected: Mode = .chat
@@ -12,7 +15,14 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
     @Published var paused = false
     /// The bar is holding text because Claude has a prompt open in kitty (or is still starting).
     @Published private(set) var barHeld = false
+    @Published private(set) var console = ConsoleState()
+    @Published private(set) var layout: NellCore.Layout?
+    /// What Claude Code is doing right now, for the minimised console bubble.
+    @Published private(set) var codeStatus: String?
     var hovered: UUID?
+    /// Recomputes where everything goes for a console phase and moves Nell's window (set by the app delegate).
+    var relayout: ((ConsolePhase) -> NellCore.Layout)?
+    var displayFrame: () -> CGRect = { NSScreen.main?.frame ?? .zero }
 
     let kitty: KittyController
     let registry: ApprovalRegistry
@@ -45,22 +55,69 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
         let text = draft; draft = ""
         let m = selected
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        bubbles.add(.user, mode: m, text: text, now: Date())
+        addBubble(.user, m, text, Date())
         if let now = queues[m]?.submit(text, held: trackers[m]?.inputHeld ?? false) { send(now, m) }
         refresh()
     }
 
-    /// First click selects the mode; clicking the selected chip shows/hides its kitty window.
-    func chip(_ m: Mode) {
-        if selected == m { _ = kitty.showConsole(tab: m) } else { selected = m }
+    func chatChip() { selected = .chat; refresh() }
+
+    /// ⌘: from Chat, select Code and open the console; in Code, toggle open ↔ minimised.
+    func codeChip() { console.pressCodeChip(selected: &selected); applyConsole() }
+
+    /// Every console open comes from a click: ⌘, the minimised bubble, Open console, Open terminal, Answer in terminal.
+    func openConsole(tab: Mode = .code) { console.open(tab: tab); applyConsole() }
+    func minimiseConsole() { console.minimise(); applyConsole() }
+
+    func relayoutNow() { if let l = relayout?(console.phase) { layout = l } }
+
+    /// Drag with ⌥: the console hides so the two windows never drift apart, and comes back where Nell lands.
+    func dragBegan() { if console.phase == .open { kitty.hideConsole() } }
+    func dragEnded() { applyConsole() }
+
+    private func applyConsole() {
+        relayoutNow()
+        if console.phase == .open {
+            bubbles.settleConsoleNeeded(mode: console.tab)
+            placeKitty()
+            if let cal = kitty.showConsole(tab: console.tab) { // first show: measure kitty's real frame and re-place
+                state.calibration = cal; onStateChanged?(); placeKitty()
+            }
+        } else {
+            kitty.hideConsole()
+        }
         refresh()
+    }
+
+    /// After a display change: re-lay everything out and move kitty with it, without taking the keyboard.
+    func refreshPlacement() { relayoutNow(); if console.phase == .open { placeKitty() } }
+
+    /// kitty fills the console frame minus its border and title strip.
+    private func placeKitty() {
+        guard let c = layout?.consoleFrame else { return }
+        let b = ConsoleChrome.border, t = ConsoleChrome.title
+        let content = CGRect(x: c.minX + b, y: c.minY + b, width: c.width - 2 * b, height: c.height - 2 * b - t)
+        kitty.place(content: content, display: displayFrame(), cal: state.calibration ?? .spike)
+    }
+
+    /// While the console is open it shows Code's chatter itself; while minimised, Code's status lives in that bubble.
+    private func columnAllows(_ kind: BubbleKind, _ m: Mode) -> Bool {
+        if m == .code, kind == .status, console.phase == .minimised { return false }
+        return showsInColumn(kind, mode: m, consoleOpen: console.phase == .open)
+    }
+    private func addBubble(_ kind: BubbleKind, _ m: Mode, _ text: String, _ now: Date) {
+        if columnAllows(kind, m) { bubbles.add(kind, mode: m, text: text, now: now) }
+    }
+    private func setStatus(_ m: Mode, _ text: String, _ now: Date) {
+        if m == .code { codeStatus = text }
+        if columnAllows(.status, m) { bubbles.setStatus(mode: m, text: text, now: now) }
     }
 
     func answer(_ requestId: String, _ a: ApprovalAnswer) { registry.answer(id: requestId, a) }
 
     func openTerminal(_ m: Mode, requestId: String?) {
         if let requestId { registry.answer(id: requestId, .none) }
-        _ = kitty.showConsole(tab: m)
+        openConsole(tab: m)
     }
 
     // MARK: Hook events
@@ -78,36 +135,41 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
         case "SessionStart":
             if m == .code, state.codeSessionId != e.sessionId { state.codeSessionId = e.sessionId; onStateChanged?() }
             if m == .chat, state.chatSessionId != e.sessionId { state.chatSessionId = e.sessionId; onStateChanged?() }
+            bubbles.settleConsoleNeeded(mode: m)
+            if m == .chat, console.tab == .chat { // Chat's one-time trust prompt is done: back to Code
+                console.chatConnected()
+                if console.phase == .open { kitty.selectTab(.code) }
+            }
         case "UserPromptSubmit":
             bubbles.clearStatus(mode: m)
             if let p = e.prompt {
                 if let i = sentByNell[m]?.firstIndex(of: p) { sentByNell[m]?.remove(at: i) } // already shown when typed in the bar
-                else { bubbles.add(.user, mode: m, text: p, now: now) }
+                else { addBubble(.user, m, p, now) }
             }
         case "PreToolUse":
-            if e.toolName != "AskUserQuestion" { bubbles.setStatus(mode: m, text: toolSummary(name: e.toolName ?? "", input: e.toolInput), now: now) }
+            if e.toolName != "AskUserQuestion" { setStatus(m, toolSummary(name: e.toolName ?? "", input: e.toolInput), now) }
         case "PermissionRequest":
             guard let id = requestId else { break }
             if e.toolName == "AskUserQuestion" {
                 questionIds.insert(id)
                 registry.answer(id: id, .none) // the picker is already open in kitty
-                bubbles.add(.question, mode: m, text: trackers[m]?.pendingQuestion ?? "Claude has a question", now: now)
+                addBubble(.question, m, trackers[m]?.pendingQuestion ?? "Claude has a question", now)
             } else {
-                bubbles.add(.approval(requestId: id), mode: m, text: approvalSummary(name: e.toolName ?? "", input: e.toolInput), now: now)
+                addBubble(.approval(requestId: id), m, approvalSummary(name: e.toolName ?? "", input: e.toolInput), now)
             }
         case "PostToolUse", "PostToolUseFailure":
             if e.toolName == "AskUserQuestion" { bubbles.settleQuestions(mode: m) }
             if e.name == "PostToolUseFailure" {
-                bubbles.setStatus(mode: m, text: toolSummary(name: e.toolName ?? "", input: e.toolInput) + " failed", now: now)
+                setStatus(m, toolSummary(name: e.toolName ?? "", input: e.toolInput) + " failed", now)
             }
         case "Notification":
-            if let a = trackers[m]?.lastAlert, a != alertBefore { bubbles.add(.alert, mode: m, text: a, now: now) }
+            if let a = trackers[m]?.lastAlert, a != alertBefore { addBubble(.alert, m, a, now) }
         case "Stop":
-            bubbles.clearStatus(mode: m)
-            if let r = e.lastAssistantMessage, !r.isEmpty { bubbles.add(.reply, mode: m, text: r, now: now) }
+            bubbles.clearStatus(mode: m); if m == .code { codeStatus = nil }
+            if let r = e.lastAssistantMessage, !r.isEmpty { addBubble(.reply, m, r, now) }
         case "StopFailure":
-            bubbles.clearStatus(mode: m)
-            bubbles.add(.error, mode: m, text: e.error ?? "Something went wrong", now: now)
+            bubbles.clearStatus(mode: m); if m == .code { codeStatus = nil }
+            addBubble(.error, m, e.error ?? "Something went wrong", now)
         case "SessionEnd":
             bubbles.clearStatus(mode: m)
             if kitty.ensureTab(m, cwd: cwd(m), state: &state) { trackers[m]?.markLaunched(now: now); onStateChanged?() }
@@ -121,7 +183,8 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
         trackers[m]?.settleApproval(id, answer: a)
         let quiet = questionIds.remove(id) != nil || settledInKitty.remove(id) != nil
         bubbles.settle(requestId: id, as: a == .allow ? "Allowed" : a == .deny ? "Denied" : "Answer in terminal")
-        if a == .none, !quiet { _ = kitty.showConsole(tab: m) } // Open terminal, deadline, or hook died: Claude asks in kitty
+        // a deadline or a dead hook: Claude now asks in the console, which only opens when you click
+        if a == .none, !quiet { addBubble(.consoleNeeded, m, "Answer in the console", Date()) }
         flushQueue(m)
         refresh()
     }
@@ -132,7 +195,10 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
         for m in Mode.allCases {
             trackers[m]?.tick(now: now)
             let disc = trackers[m]?.state == .disconnected
-            if disc, !wasDisconnected.contains(m) { wasDisconnected.insert(m); _ = kitty.showConsole(tab: m) } // e.g. the folder-trust dialog
+            if disc, !wasDisconnected.contains(m) { // e.g. the folder-trust dialog: offer the console, don't open it
+                wasDisconnected.insert(m)
+                addBubble(.consoleNeeded, m, m == .chat ? "Chat needs a one-time OK" : "Claude needs you in the console", now)
+            }
             if !disc { wasDisconnected.remove(m) }
         }
         bubbles.tick(now: now, userIdle: userIdle, hovered: hovered)

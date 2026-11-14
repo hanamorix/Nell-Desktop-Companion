@@ -32,6 +32,8 @@ import SwiftUI
         do { try server.start() } catch { return fail("Nell couldn't open her socket: \(error)") }
         self.server = server
 
+        Fonts.register()
+        Fonts.installForKitty() // approved by the user: kitty only loads installed fonts
         if model.state.projectDir == nil { model.state.projectDir = pickFolder() ?? FileManager.default.homeDirectoryForCurrentUser.path }
         do {
             let reused = try kitty.ensureRunning(projectDir: model.state.projectDir!, state: &model.state)
@@ -44,6 +46,10 @@ import SwiftUI
         panel.contentView = NSHostingView(rootView: CompanionView(model: model, sheet: sheet, image: image, controller: controller))
         controller.restore(positions: model.state.positions)
         controller.onPositionSaved = { [weak self] key, p in self?.model.state.positions[key] = p; self?.save() }
+        controller.onHover = { [weak self] id in self?.model.hovered = id }
+        let cell = consoleCell()
+        model.relayout = { [weak self] phase in self?.controller.relayout(phase, cell: cell) ?? model.layout! }
+        model.relayoutNow()
         controller.startClickThrough()
         panel.orderFrontRegardless()
 
@@ -53,7 +59,10 @@ import SwiftUI
         }
         model.onOpenProject = { [weak self] in self?.openProject() }
         model.onStateChanged = { [weak self] in self?.save() }
-        model.onHide = { [weak self] in self?.panel.orderOut(nil) }
+        model.onHide = { [weak self] in // the console goes with her; it comes back minimised
+            if self?.model.console.phase == .open { self?.model.minimiseConsole() }
+            self?.panel.orderOut(nil)
+        }
         model.onQuit = { NSApp.terminate(nil) }
         Hotkey.register { [weak self] in
             MainActor.assumeIsolated {
@@ -73,7 +82,7 @@ import SwiftUI
         }
         observePauses()
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.controller.clampToScreen() }
+            MainActor.assumeIsolated { self?.model.refreshPlacement() }
         }
         if Bundle.main.bundleURL.pathExtension == "app" { try? SMAppService.mainApp.register() }
     }
@@ -82,6 +91,13 @@ import SwiftUI
         kitty?.quit()
         server?.stop()
         save()
+    }
+
+    /// One Departure Mono cell at kitty's 16.5 pt, used to size the console for ~100×30 cells.
+    private func consoleCell() -> CGSize {
+        guard let f = NSFont(name: Fonts.family, size: 16.5) else { return CGSize(width: 10, height: 21) }
+        let w = ("M" as NSString).size(withAttributes: [.font: f]).width
+        return CGSize(width: ceil(w), height: ceil(f.ascender - f.descender + f.leading))
     }
 
     private func save() { try? model?.state.save(paths.stateFile) }
