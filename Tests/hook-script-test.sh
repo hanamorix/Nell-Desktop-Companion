@@ -13,4 +13,6 @@ if [ $rc -eq 0 ] && [ -z "$out" ] && [ $secs -le 1 ] && [ ! -e "$T/calls" ]; the
 
 out=$(run $F/PermissionRequest-Bash.json); rc=$?
 if [ $rc -eq 0 ] && [ -z "$out" ] && grep -q "resize-os-window --match env:NELL_MODE=code --action show" "$T/calls" && grep -q "focus-window --match env:NELL_MODE=code" "$T/calls"; then echo PASS permissionRaisesKittyWhenNellDown; else echo "FAIL permission rc=$rc out=[$out] calls=[$(cat "$T/calls" 2>/dev/null)]"; fail=1; fi
+out=$(run $F/Notification-idle_prompt.json); rc=$?
+if [ $rc -eq 0 ] && [ -z "$out" ] && ! grep -q "idle" "$T/calls" 2>/dev/null && [ "$(wc -l < "$T/calls")" -eq 2 ]; then echo PASS notificationDoesNotRaiseKitty; else echo "FAIL notification raised kitty: [$(cat "$T/calls")]"; fail=1; fi
 exit $fail

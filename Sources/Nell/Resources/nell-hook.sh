@@ -1,6 +1,6 @@
 #!/bin/bash
 # nell-hook.sh <mode> <nell-socket> — forwards one Claude Code hook event (stdin) to Nell.
-# If Nell can't be reached, approvals and alerts raise this session's kitty window so Claude's own prompt is seen.
+# If Nell can't be reached, approvals raise this session's kitty console so Claude's own prompt is seen.
 mode="$1"; sock="$2"
 KITTEN="${NELL_KITTEN:-/Applications/kitty.app/Contents/MacOS/kitten}"
 input=$(cat)
@@ -11,8 +11,9 @@ if out=$(printf '%s' "$input" | /usr/bin/curl -sf -m "$max" -H 'Expect:' --unix-
   [ "$event" = PermissionRequest ] && printf '%s' "$out"
   exit 0
 fi
+# Only an approval surfaces kitty without Nell: a plain notification isn't worth a window nobody asked for.
 case "$event" in
-  PermissionRequest|Notification)
+  PermissionRequest)
     if [ -n "${KITTY_LISTEN_ON:-}" ]; then
       "$KITTEN" @ --to "$KITTY_LISTEN_ON" resize-os-window --match "env:NELL_MODE=$mode" --action show >/dev/null 2>&1
       "$KITTEN" @ --to "$KITTY_LISTEN_ON" focus-window --match "env:NELL_MODE=$mode" >/dev/null 2>&1

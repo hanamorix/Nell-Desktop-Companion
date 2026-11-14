@@ -1,6 +1,6 @@
 import Foundation
 
-public enum BubbleKind: Equatable, Sendable { case user, reply, status, approval(requestId: String), question, alert, error }
+public enum BubbleKind: Equatable, Sendable { case user, reply, status, approval(requestId: String), question, alert, error, consoleNeeded }
 
 public struct Bubble: Identifiable, Equatable, Sendable {
     public let id = UUID()
@@ -36,6 +36,11 @@ public struct BubbleStore: Sendable {
             bubbles[i].settled = true
             bubbles[i].text += " — \(label)"
         }
+    }
+
+    /// Opening the console answers its "needs you in the console" bubbles.
+    public mutating func settleConsoleNeeded(mode: Mode) {
+        for i in bubbles.indices where bubbles[i].kind == .consoleNeeded && bubbles[i].mode == mode { bubbles[i].settled = true }
     }
 
     public mutating func settleQuestions(mode: Mode) {
@@ -76,7 +81,7 @@ public struct BubbleStore: Sendable {
     private func isPinned(_ b: Bubble) -> Bool {
         guard !b.settled else { return false }
         if case .approval = b.kind { return true }
-        return b.kind == .question
+        return b.kind == .question || b.kind == .consoleNeeded
     }
     private func truncated(_ s: String) -> String {
         let lines = s.components(separatedBy: "\n")
