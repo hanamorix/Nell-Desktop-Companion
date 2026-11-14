@@ -36,5 +36,6 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 |---|---|---|
 | Spec | [2026-11-14-nell-v3-pixel-design.md](specs/2026-11-14-nell-v3-pixel-design.md) | v3 design round: Plum Night interface, 128 px master sprite, faces, animations, emoji reactions (approved) |
 | Plan | [2026-11-14-nell-v3-pixel-plan.md](plans/2026-11-14-nell-v3-pixel-plan.md) | The 10-task plan: signal spike, logic, Plum Night UI, art (review-gated), compositor |
+| Notes | [2026-11-14-nell-v3-art-review-log.md](notes/2026-11-14-nell-v3-art-review-log.md) | Every round of the user's visual review of the interface and sprites, with their notes and acceptance |
 | Notes | [2026-11-14-design-system-review-findings.md](notes/2026-11-14-design-system-review-findings.md) | Review of `concept-nell-design-system/` (Plum Night): what's usable, what conflicts with v2, and fixes needed |
 | Notes | [2026-11-14-nell-v3-signal-spike-findings.md](notes/2026-11-14-nell-v3-signal-spike-findings.md) | v3 signal spike: test-result events, context usage in the transcript, `/clear` and `/compact` events, documented usage-limit signals |
