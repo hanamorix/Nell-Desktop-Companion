@@ -12,7 +12,7 @@ private let testCommandPatterns: [String] = [
 
 /// Splits on `&&` and `;` (a leading `cd x &&` is just another segment) and matches each segment's start.
 public func isTestCommand(_ command: String) -> Bool {
-    command.replacingOccurrences(of: "&&", with: ";").split(separator: ";").contains { seg in
+    command.replacingOccurrences(of: "&&", with: ";").replacingOccurrences(of: "\n", with: ";").split(separator: ";").contains { seg in
         let s = seg.trimmingCharacters(in: .whitespaces)
         return testCommandPatterns.contains { s.range(of: $0, options: .regularExpression) != nil }
     }
@@ -32,10 +32,24 @@ public func isPiped(_ command: String) -> Bool {
     unquoted(command).range(of: #"(?<!\|)\|(?!\|)"#, options: .regularExpression) != nil
 }
 
-/// Exit status can't be trusted: a pipe, `||`, or a trailing `; true` / `; exit 0` can mask a failure.
+/// Exit status is trusted only when the test is the last command (or followed solely by `&&`-chained ones):
+/// a pipe, `||`, `;`, newline or `&` after the first test segment can mask its failure.
 func exitStatusUnreliable(_ command: String) -> Bool {
-    let c = unquoted(command)
-    return isPiped(command) || c.contains("||") || c.range(of: #";\s*(true|exit\s+0)\s*$"#, options: .regularExpression) != nil
+    let c = unquoted(command).replacingOccurrences(of: #"\d*>&\d*|&>"#, with: " ", options: .regularExpression)
+    var start = c.startIndex
+    var i = c.startIndex
+    while true {
+        let atEnd = i == c.endIndex
+        if atEnd || c[i] == ";" || c[i] == "\n" || c[i...].hasPrefix("&&") {
+            if isTestCommand(String(c[start..<i])) {
+                return c[start...].replacingOccurrences(of: "&&", with: "")
+                    .range(of: #"[|;&\n]"#, options: .regularExpression) != nil
+            }
+            if atEnd { return true }
+            i = c.index(i, offsetBy: c[i...].hasPrefix("&&") ? 2 : 1)
+            start = i
+        } else { i = c.index(after: i) }
+    }
 }
 
 private let failSummaries: [String] = [#"(\d+) failed\b"#, #"(\d+) failures?\b"#]

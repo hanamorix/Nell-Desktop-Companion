@@ -85,3 +85,14 @@ private func failure(_ command: String, error: String) -> HookEvent {
     #expect(testOutcome(post("npm test", stdout: "Tests: 1 failed, 5 passed")) == .fail)
     #expect(testOutcome(post("npm test", stdout: "3 failures")) == .fail)
 }
+
+@Test func exitStatusTrustedOnlyWhenTestIsLastCommand() {
+    for c in ["swift test; echo done", "pytest; echo done", "swift test; echo \"exit $?\"", "npm test; npm run lint",
+              "pytest\necho done", "pytest &", "npm test & wait", "cd a; npm test; echo ok"] {
+        #expect(testOutcome(post(c, stdout: "error: build failed")) == nil, "\(c)")
+        #expect(testOutcome(post(c, stdout: "Tests: 1 failed")) == .fail, "\(c)")
+    }
+    for c in ["swift test", "cd app && pytest -q", "echo a; pytest", "pytest 2>&1", "pytest && echo done", "cd a\nnpm test"] {
+        #expect(testOutcome(post(c, stdout: "no summary")) == .pass, "\(c)")
+    }
+}
