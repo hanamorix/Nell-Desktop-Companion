@@ -1,0 +1,21 @@
+{
+ "session_id": "e002e056-0785-4ff4-8fc8-f17fa9973c15",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "41ef35de-e6b2-4c30-94f4-621f2c11eb55",
+ "permission_mode": "auto",
+ "effort": {
+  "level": "low"
+ },
+ "hook_event_name": "PostToolUseFailure",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "python3 -m unittest test_fail -v",
+  "description": "Run test_fail unittest suite verbosely"
+ },
+ "tool_use_id": "toolu_019Z9Co3pstVLQ9uwPffjLHB",
+ "error": "Exit code 1\ntest_bad (test_fail.T.test_bad) ... FAIL\n\n======================================================================\nFAIL: test_bad (test_fail.T.test_bad)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/x/proj/test_fail.py\", line 3, in test_bad\n    def test_bad(self): self.assertEqual(1+1, 3)\n                        ~~~~~~~~~~~~~~~~^^^^^^^^\nAssertionError: 2 != 3\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (failures=1)",
+ "is_interrupt": false,
+ "duration_ms": 88
+}

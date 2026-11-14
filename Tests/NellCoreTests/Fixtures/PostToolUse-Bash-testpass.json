@@ -1,0 +1,26 @@
+{
+ "session_id": "e002e056-0785-4ff4-8fc8-f17fa9973c15",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "bb2f4ad9-8054-401e-af0b-6b14bf9de6aa",
+ "permission_mode": "auto",
+ "effort": {
+  "level": "low"
+ },
+ "hook_event_name": "PostToolUse",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "python3 -m unittest test_ok -v",
+  "description": "Run test_ok unittest suite verbosely"
+ },
+ "tool_response": {
+  "stdout": "test_ok (test_ok.T.test_ok) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK",
+  "stderr": "",
+  "interrupted": false,
+  "isImage": false,
+  "noOutputExpected": false
+ },
+ "tool_use_id": "toolu_01Vnzcx7HooicNyyTyFvoRhP",
+ "duration_ms": 121
+}

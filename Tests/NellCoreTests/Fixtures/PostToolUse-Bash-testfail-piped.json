@@ -1,0 +1,26 @@
+{
+ "session_id": "e002e056-0785-4ff4-8fc8-f17fa9973c15",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "bfe3e826-d04f-4f86-802d-1703ad6d4f30",
+ "permission_mode": "auto",
+ "effort": {
+  "level": "low"
+ },
+ "hook_event_name": "PostToolUse",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "python3 -m unittest test_fail 2>&1 | tail -5",
+  "description": "Run test_fail and show last 5 lines"
+ },
+ "tool_response": {
+  "stdout": "----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (failures=1)",
+  "stderr": "",
+  "interrupted": false,
+  "isImage": false,
+  "noOutputExpected": false
+ },
+ "tool_use_id": "toolu_01JNw9KQLf9WoC5vDNfsFkQC",
+ "duration_ms": 82
+}
