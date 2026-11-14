@@ -73,12 +73,10 @@ public final class HookServer: @unchecked Sendable {
         registry.register(id: id)
         onEvent(mode, e, id)
         let watcher = DispatchQueue(label: "nell.peer")
-        var answered = false
-        let lock = NSLock()
+        let answered = Flag()
         watcher.async { [registry] in // the hook script died or timed out → no decision
             while true {
-                lock.lock(); let stop = answered; lock.unlock()
-                if stop { return }
+                if answered.value { return }
                 var p = pollfd(fd: c, events: Int16(POLLIN), revents: 0)
                 if poll(&p, 1, 200) > 0 {
                     var b: UInt8 = 0
@@ -87,7 +85,7 @@ public final class HookServer: @unchecked Sendable {
             }
         }
         let a = registry.wait(id: id, timeout: TimeInterval(Timings.hookTimeout))
-        lock.lock(); answered = true; lock.unlock()
+        answered.value = true
         reply(c, approvalResponseBody(a))
         onRequestSettled(mode, id, a)
     }
@@ -95,5 +93,14 @@ public final class HookServer: @unchecked Sendable {
     private func reply(_ c: Int32, _ body: Data) {
         let d = httpResponse(body: body)
         _ = d.withUnsafeBytes { write(c, $0.baseAddress, d.count) }
+    }
+}
+
+final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var v = false
+    var value: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return v }
+        set { lock.lock(); v = newValue; lock.unlock() }
     }
 }
