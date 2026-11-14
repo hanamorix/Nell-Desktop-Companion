@@ -25,5 +25,5 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 
 | Type | Document | What it is |
 |---|---|---|
-| Spec | [2026-11-14-nell-v2-console-design.md](specs/2026-11-14-nell-v2-console-design.md) | Kitty inside Nell's console bubble, placement and no-overlap layout, ⌥ to grab, Departure Mono (draft) |
+| Spec | [2026-11-14-nell-v2-console-design.md](specs/2026-11-14-nell-v2-console-design.md) | Kitty inside Nell's console bubble, placement and no-overlap layout, ⌥ to grab, Departure Mono (approved) |
 | Notes | [2026-11-14-kitty-panel-spike-findings.md](notes/2026-11-14-kitty-panel-spike-findings.md) | Tested facts about running kitty as a borderless panel inside Nell's console bubble |

@@ -1,6 +1,6 @@
 # Nell v2: Kitty + Nell, the console bubble
 
-Date: 2026-11-14 · Status: draft for approval · Builds on: [v1 design](2026-11-14-nell-v1-design.md) · Evidence: [kitty panel spike findings](../notes/2026-11-14-kitty-panel-spike-findings.md)
+Date: 2026-11-14 · Status: approved 2026-11-14 · Builds on: [v1 design](2026-11-14-nell-v1-design.md) · Evidence: [kitty panel spike findings](../notes/2026-11-14-kitty-panel-spike-findings.md)
 
 ## Intent
 
@@ -89,9 +89,7 @@ kitten panel --edge none --margin-left X --margin-top Y --columns Wpx --lines Hp
   - The 💬 chip selects Chat mode and leaves the console as it is.
 - **Open:** Nell draws the bubble frame (border, a title strip with the project name and a minimise control, and a tail pointing at Nell). The kitty panel is shown inside it with `resize-os-window --action show`, then `focus-window`, so it can be typed in at once.
 - **Minimised:** the panel is hidden with `--action hide`, and Nell draws a one-line bubble in the console's place. It shows the live status from hooks, the same text as v1's status bubble (for example "Running `npm test`"), and clicking it opens the console again. Nothing parses kitty's screen for progress counts. *(my call)*
-- **Keyboard focus:**
-  - Opens you ask for (⌘, clicking the minimised bubble, **Open terminal**, **Answer in terminal**) show the console **and** focus it, so you can type straight away.
-  - Opens Nell triggers herself (the 8-second nudge, an approval that timed out or whose hook died) only show it. They never take the keyboard away from the app you're typing in. *(my call)*
+- **Only you open the console** *(user's decision)*. It opens only when you click ⌘, the minimised bubble, an **Open console** button, **Open terminal** or **Answer in terminal**. Every open focuses it, so you can type straight away. Nell never opens it by herself.
 - **First ⌘ press:** selects Code **and** opens the console, even if Chat was selected, because pressing the console button should show the session. *(my call)*
 - **Code bubbles while the console is open:**
   - While it's open, Code-mode **status, reply and your-message bubbles are not added to the column**, since the console already shows them. Code **approvals, questions, alerts and errors still appear**.
@@ -105,14 +103,14 @@ kitten panel --edge none --margin-left X --margin-top Y --columns Wpx --lines Hp
 - **Which window sits on top:**
   - Both windows are at screen-saver level.
   - Nell's frame is a ring around a transparent centre that doesn't take clicks, so whichever window is in front, kitty stays visible and gets the clicks inside the frame.
-- **Every v1 "show kitty" trigger now opens the console bubble instead**, selecting the right tab:
-  - the 8-second "can't hear Claude" nudge, which also covers the folder-trust dialog;
-  - an approval settled with no decision;
-  - **Open terminal**;
-  - **Answer in terminal**.
+- **Every v1 "show kitty" trigger becomes a bubble with an Open console button**, and the console itself stays closed:
+  - the 8-second "can't hear Claude" nudge, which also covers the folder-trust dialog, becomes "Claude needs you in the console" plus **Open console**;
+  - an approval settled with no decision (a timeout, or the hook dying) becomes "Answer in the console" plus **Open console**, with needs-you and the sound as before.
   
-  If **Chat** needs the terminal, the console temporarily shows the Chat tab (`focus-tab`). Chat has no tools, so it never asks for approvals or questions. In practice that means its first-run trust dialog, or the 8-second nudge if Chat stops responding. The console switches back to Code when Chat's `SessionStart` arrives, or as soon as you press ⌘ or minimise. If `focus-tab` turns out not to change the visible tab, the fallback is a second, separate panel just for Chat, used only in this case. *(my call)*
-- **When Nell isn't running,** the hook script's fallback shows the kitty panel directly (`resize-os-window --action show` and `focus-window`). It appears without Nell's frame, which is acceptable for a crash.
+  **Open terminal** and **Answer in terminal** are your own clicks, so they open the console directly.
+  
+  Chat's tab appears only for Chat's first-run trust prompt. Nell shows "Chat needs a one-time OK" plus **Open console**, and opening it shows the Chat tab (`focus-tab`). The console switches back to Code when Chat's `SessionStart` arrives, or as soon as you press ⌘ or minimise. If `focus-tab` turns out not to change the visible tab, the fallback is a second, separate panel just for Chat, used only in this case. *(approved)*
+- **When Nell isn't running,** the hook script's fallback still shows the kitty panel by itself (`resize-os-window --action show` and `focus-window`) for approvals, because no Nell is there to show a button. It appears without Nell's frame. This is the only time the console opens without a click, and it exists to keep v1's anti-goal that an approval must never be lost silently. The script no longer raises kitty for plain `Notification` events. *(my call, flagged to the user)*
 
 ### Layout engine
 
