@@ -1,6 +1,6 @@
 # Nell — Desktop Companion for Claude
 
-Date: 2026-11-14 · Status: approved 2026-11-14 · Plan: `docs/superpowers/plans/2026-11-14-nell-v1.md`
+Date: 2026-11-14 · Status: approved 2026-11-14 · Plan: `docs/plans/2026-11-14-nell-v1-plan.md`
 
 ## Intent
 
@@ -121,7 +121,7 @@ Nell keeps the needs-you animation going until the approval is settled.
 
 - Nell is from the user's concept: a chibi girl in a dark cat-ear hoodie and round glasses, with long brown hair and pink eyes, sitting at a small desk with a laptop that has a cat logo. The final art is **pixel art**.
 - Each state from the table gets its own looping frame strip: idle, listening, thinking, typing, needs-you, oops, alert, done, sleepy, error. Strips are exported from Aseprite as a sprite sheet with JSON frame data, and drawn with nearest-neighbour scaling at a whole-number zoom.
-- The art is a separate track, so the app and the art can move forward independently. The concept is at `art/concept/nell-typing-4frames.png`:
+- The art is a separate track, so the app and the art can move forward independently. The concept is at `artwork/concept/nell-typing-4frames.png`:
   - four frames of about 390×390 px each, in a 1560×438 strip with captions underneath;
   - smooth illustrations on a checkerboard that's baked into the image, so it isn't real transparency;
   - not pixel art yet.
@@ -130,7 +130,7 @@ Nell keeps the needs-you animation going until the approval is settled.
 
 ## Lessons from existing companions
 
-Taken from a survey of about 30 projects and about 630 GitHub issues: [reports/Claude companion apps landscape.md](../../../reports/Claude%20companion%20apps%20landscape.md). These apply on top of the sections above. *(my call to include them; they come from bugs other companions shipped)*
+Taken from a survey of about 30 projects and about 630 GitHub issues: [docs/research/2026-11-14-companion-landscape/report.md](../research/2026-11-14-companion-landscape/report.md). These apply on top of the sections above. *(my call to include them; they come from bugs other companions shipped)*
 
 - **The hook address never changes.** Nell's server listens on a fixed Unix socket in App Support, which hook scripts reach with `curl --unix-socket`. The address can't be a port picked at launch, because a `claude` that outlives a Nell crash keeps the address baked into its `--settings`.
 - **Hook scripts** use only system tools, call `kitten` by its full path, and give up quietly within 0.5 s for events that don't block.
@@ -167,7 +167,7 @@ Verified on this Mac on 2026-11-14 with `claude --help` and `kitten @ send-text 
 - `claude` flags: `--settings` (loads *additional* settings), `--session-id <uuid>`, `--resume <id>`, `--tools ""` (turns off all built-in tools), `--strict-mcp-config`, `--setting-sources`. Also that `--bare` ignores the subscription login and `--safe-mode` turns off hooks.
 - `kitten @ send-text` with `--match id:N` and `--bracketed-paste enable|auto`.
 
-Verified by the pipeline spike on 2026-11-14 (`docs/superpowers/notes/2026-11-14-pipeline-spike.md`): the `PermissionRequest` schema and allow/deny/empty responses, the event payload fields, that `--settings` hooks are merged with the user's own, and the Chat flags (which also need `--no-chrome`). The spike notes list the deviations that change how windows are matched, how approvals settle, and how questions are handled.
+Verified by the pipeline spike on 2026-11-14 (`docs/notes/2026-11-14-pipeline-spike-findings.md`): the `PermissionRequest` schema and allow/deny/empty responses, the event payload fields, that `--settings` hooks are merged with the user's own, and the Chat flags (which also need `--no-chrome`). The spike notes list the deviations that change how windows are matched, how approvals settle, and how questions are handled.
 
 **The first job of the plan:** show that `send-text` submits a prompt into `claude` running in kitty, and that the matching hooks reach Nell's server. That includes one Allow/Deny round trip. Everything else depends on it.
 

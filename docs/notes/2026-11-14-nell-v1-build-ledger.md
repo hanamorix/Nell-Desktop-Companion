@@ -1,4 +1,4 @@
-# SDD ledger — plan: docs/superpowers/plans/2026-11-14-nell-v1.md
+# SDD ledger — plan: docs/plans/2026-11-14-nell-v1-plan.md
 Setup: Ruling: repo was not a git repo — git init on main with docs commit 7cadcf5, work on branch nell-v1; repo-local git identity set (none existed) — cost if wrong: author line edit
 Setup: Ruling: .gitignore created at setup (adds .impeccable/) instead of in Task 2 — no effect on Task 2 tests
 Pre-flight: T2→T4/T5 HookEvent, Mode, Timings, parseHTTPRequest — consistent
@@ -7,14 +7,14 @@ Pre-flight: T3→T6 Paths, claudeArgs, transcriptPath — consistent
 Pre-flight: T5→T9 HookServer onRequestSettled; BubbleStore.settle — consistent
 Pre-flight: T6→T8/T9 KittyController.send/show/ensureWindow — consistent
 Pre-flight: T1→T2/T3/T5/T6 fixtures + response format + socket naming — T1 values override plan values
-Task 1: Ruling: spike deviations 1-9 in docs/superpowers/notes/2026-11-14-pipeline-spike.md bind later tasks (env-match windows via kitty --session, clean env, approval settle via tool_use_id/turn end, AskUserQuestion via PermissionRequest→.none, chat --no-chrome + system prompt, quit via SIGTERM, hook fallback via $KITTY_LISTEN_ON) — cost if wrong: stale bubbles or misrouted text
+Task 1: Ruling: spike deviations 1-9 in docs/notes/2026-11-14-pipeline-spike-findings.md bind later tasks (env-match windows via kitty --session, clean env, approval settle via tool_use_id/turn end, AskUserQuestion via PermissionRequest→.none, chat --no-chrome + system prompt, quit via SIGTERM, hook fallback via $KITTY_LISTEN_ON) — cost if wrong: stale bubbles or misrouted text
 Task 1: complete (commits 7cadcf5..e4a265b, tests: bash -c 'ls Tests/NellCoreTests/Fixtures/*.json | wc -l' →       14)
 Task 2: Ruling: plain `swift test` fails on incremental builds (TestingMacros plugin not found, CLT-only toolchain); all test runs use scripts/test.sh which loads the plugin explicitly — cost if wrong: none, flag is additive
 Task 2: Ruling: decodesEveryFixture skips kitty-*.json (not hook events)
 Task 2: complete (commits e4a265b..e790bb2, tests: scripts/test.sh → ✔ Test run with 7 tests in 0 suites passed after 0.004 seconds.)
 Task 3: Ruling: hook script fallback uses $KITTY_LISTEN_ON + --match env:NELL_MODE=<mode> (resize-os-window show + focus-window) per spike deviations 1,9; chat args add --no-chrome and --append-system-prompt (deviation 5); Paths gains kittySession for the kitty --session file (deviation 1)
 Task 3: Ruling: transcript munging maps per UTF-16 unit (matches observed "日本"→"--"; emoji assumed 2 dashes like JS) — cost if wrong: emoji-named folder starts a fresh session instead of resuming
-Task 3: complete (commits e790bb2..ef4e036, tests: bash -c 'scripts/test.sh && bash tests/hook-script-test.sh' → PASS permissionRaisesKittyWhenNellDown)
+Task 3: complete (commits e790bb2..ef4e036, tests: bash -c 'scripts/test.sh && bash Tests/hook-script-test.sh' → PASS permissionRaisesKittyWhenNellDown)
 Task 4: Ruling: SessionTracker.handle returns [String] (approval request ids settled by the event: matching tool_use_id via last PreToolUse with same tool_name+tool_input, or turn end on UserPromptSubmit/Stop/StopFailure/SessionEnd) — spike deviation 3; app answers .none to those hanging connections
 Task 4: Ruling: AskUserQuestion PermissionRequest never becomes an approval; it sets pendingQuestion (from PreToolUse) and the app answers .none — spike deviation 4
 Task 4: Ruling: Notification and SubagentStop (and the question's own PreToolUse/PermissionRequest) don't release holds/questions — a permission Notification arrives ~6s after the prompt
@@ -26,13 +26,13 @@ Task 5: Ruling: ApprovalRegistry API is register(id)/answer(id,_)->Bool/closed(i
 Task 5: Ruling: Bubble.fadeStart renamed clockStart (start of visible countdown); hover restarts the countdown instead of pausing it (shortcut comment) — cost if wrong: a hovered bubble lingers a little longer
 Task 5: Ruling: BubbleStore gains clearStatus(mode:) and settleQuestions(mode:) (needed by Task 9 routing); deny response carries message "Denied from Nell"
 Task 5: Ruling: server watches the blocked connection with poll+MSG_PEEK every 200ms to detect the hook script dying → .none
-Task 5: complete (commits 09db603..68b28f2, tests: bash -c 'scripts/test.sh && bash tests/hook-script-test.sh' → PASS permissionRaisesKittyWhenNellDown)
+Task 5: complete (commits 09db603..68b28f2, tests: bash -c 'scripts/test.sh && bash Tests/hook-script-test.sh' → PASS permissionRaisesKittyWhenNellDown)
 Task 6: Ruling: kitty is launched with -c kitty.conf --session kitty.session (code window line with --env NELL_MODE=code); chat window via @ launch --env NELL_MODE=chat; all commands match env:NELL_MODE=<mode>; windowExists(lsJSON:mode:) instead of title: — spike deviation 1
 Task 6: Ruling: kitty gets KittyCommands.cleanEnvironment (HOME/USER/LOGNAME/SHELL/LANG/PATH only) — spike deviation 2
-Task 6: Ruling: hook script + kitty.conf moved to Sources/Nell/Resources (SwiftPM resources must live in the target); resourceURL() prefers Bundle.main (inside .app) then Bundle.module (swift run); tests/hook-script-test.sh path updated
+Task 6: Ruling: hook script + kitty.conf moved to Sources/Nell/Resources (SwiftPM resources must live in the target); resourceURL() prefers Bundle.main (inside .app) then Bundle.module (swift run); Tests/hook-script-test.sh path updated
 Task 6: Ruling: kitty.conf uses hide_window_decorations titlebar-only (not "yes") so the window can still be dragged/resized when shown — cost if wrong: one config line
 Task 6: Ruling: KittyController.ensureWindow takes cwd; quit() SIGTERMs kitty's pid parsed from the socket name — spike deviation 8
-Task 6: complete (commits 68b28f2..da9804f, tests: bash -c 'scripts/test.sh && bash tests/hook-script-test.sh && swift build' → Build complete! (1.08 secs))
+Task 6: complete (commits 68b28f2..da9804f, tests: bash -c 'scripts/test.sh && bash Tests/hook-script-test.sh && swift build' → Build complete! (1.08 secs))
 Task 7: Ruling: SwiftUI @State can't be used — its macro plugin ships only with Xcode (CLT has none); view state uses @StateObject/@Published classes (probe: @StateObject/@ObservedObject/@Binding/@FocusState/@Environment/@AppStorage compile fine) — cost if wrong: none
 Task 7: Ruling: SpriteSheet.isPlaceholder replaces the inline width check; placeholder caption shown for every state (not just non-typing) — informative while art is pending
 Task 7: Ruling: Step 7 eye-check deferred to the user's end-to-end pass (screencapture blocked: no Screen Recording permission); verified programmatically: window layer 1000 (.screenSaver), 320x520, bottom-right 24pt inset on the 1800x1169 display, demo runs without crash
@@ -50,7 +50,7 @@ Task 9: Ruling: --demo mode dropped; the real app run is the check
 Task 9: Ruling: NellModel.refresh publishes `shown` only when it changes (ShownBubble: Equatable)
 Task 9: E2E (Claude-run): kitty+2 env-tagged windows launched ✓; code+chat SessionStart reach nell.sock ✓; chat prompt→reply→Stop ✓; approval → bubble → user clicked Allow (log "settled allow") → command ran ✓; kill -9 Nell → kitty survives, relaunch reuses it (1 kitty) and hooks reach new Nell ✓; ~/.claude/settings.json mtime unchanged (1794652445) ✓; steady CPU 0.1%, footprint 21 MB ✓
 Task 9: E2E left for the user (no screen capture): Deny / Open terminal buttons, multi-line prompt typed in the bar, click-through + full-screen + drag + right-click menu + ⌥⌘N, fresh untrusted folder via Open project…, lid close / display unplug
-Task 9: complete (commits 749b6e6..ae7c259, tests: bash -c 'scripts/test.sh && bash tests/hook-script-test.sh && swift build' → Build complete! (1.25 secs))
+Task 9: complete (commits 749b6e6..ae7c259, tests: bash -c 'scripts/test.sh && bash Tests/hook-script-test.sh && swift build' → Build complete! (1.25 secs))
 Final: fixed Critical backslash escaping in send-text — sendTextPipesTextOnStdinSoNoEscapesApply RED→GREEN, live check C:\tmp\new \e \x41 a\\b arrived intact, suite 79/79
 Final: fixed Important 1 bar not held before SessionStart — heldUntilSessionStartAfterLaunch RED→GREEN (+ send() queues text when ensureWindow relaunches claude), suite 79/79
 Final: fixed Important 2 unrelated events released hold/question — unrelatedEventsKeepHoldAfterOpenTerminal, unrelatedEventsKeepQuestion RED→GREEN, suite 79/79
