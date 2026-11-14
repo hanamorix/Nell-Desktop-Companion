@@ -34,4 +34,5 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 
 | Type | Document | What it is |
 |---|---|---|
+| Spec | [2026-11-14-nell-v3-pixel-design.md](specs/2026-11-14-nell-v3-pixel-design.md) | v3 design round: Plum Night interface, 128 px master sprite, faces, animations, emoji reactions (draft) |
 | Notes | [2026-11-14-design-system-review-findings.md](notes/2026-11-14-design-system-review-findings.md) | Review of `concept-nell-design-system/` (Plum Night): what's usable, what conflicts with v2, and fixes needed |
