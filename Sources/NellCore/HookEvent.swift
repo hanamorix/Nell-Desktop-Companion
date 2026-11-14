@@ -41,11 +41,14 @@ public struct HookEvent: Decodable, Sendable, Equatable {
     public var notificationType: String?
     public var lastAssistantMessage: String?
     public var error: String?
+    public var toolResponse: JSONValue?
+    public var source: String?
 
     enum CodingKeys: String, CodingKey {
         case name = "hook_event_name", sessionId = "session_id", toolName = "tool_name", toolInput = "tool_input",
              toolUseId = "tool_use_id", prompt, message, notificationType = "notification_type",
-             lastAssistantMessage = "last_assistant_message", error
+             lastAssistantMessage = "last_assistant_message", error,
+             toolResponse = "tool_response", source
     }
 
     public static func decode(_ data: Data) throws -> HookEvent {
