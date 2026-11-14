@@ -49,6 +49,7 @@ import SwiftUI
         controller.onHover = { [weak self] id in self?.model.hovered = id }
         let cell = consoleCell()
         model.relayout = { [weak self] phase in self?.controller.relayout(phase, cell: cell) ?? model.layout! }
+        model.displayFrame = { NSScreen.screens.first?.frame ?? .zero } // the same display the layout uses
         model.relayoutNow()
         controller.startClickThrough()
         panel.orderFrontRegardless()

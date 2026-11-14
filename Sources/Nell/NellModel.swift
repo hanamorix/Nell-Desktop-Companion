@@ -184,7 +184,7 @@ enum ConsoleChrome { static let border: CGFloat = 3; static let title: CGFloat =
         let quiet = questionIds.remove(id) != nil || settledInKitty.remove(id) != nil
         bubbles.settle(requestId: id, as: a == .allow ? "Allowed" : a == .deny ? "Denied" : "Answer in terminal")
         // a deadline or a dead hook: Claude now asks in the console, which only opens when you click
-        if a == .none, !quiet { addBubble(.consoleNeeded, m, "Answer in the console", Date()) }
+        if a == .none, offersConsoleAfterNoDecision(quiet: quiet, console: console, mode: m) { addBubble(.consoleNeeded, m, "Answer in the console", Date()) }
         flushQueue(m)
         refresh()
     }

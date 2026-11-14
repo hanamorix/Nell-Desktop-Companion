@@ -66,9 +66,9 @@ extension View {
 
     init(panel: OverlayPanel) { self.panel = panel }
 
-    var screen: NSScreen? {
-        NSScreen.screens.first { $0.frame.contains(CGPoint(x: nellOrigin.x + 1, y: nellOrigin.y + 1)) } ?? NSScreen.main
-    }
+    /// shortcut: Nell stays on the primary display (the menu-bar one), where kitty's panel lives — kitty isn't told an
+    /// --output-name yet. Dropping her on another display pulls her back. Upgrade when multi-display is designed.
+    var screen: NSScreen? { NSScreen.screens.first }
 
     /// Lays everything out for `phase` around Nell and moves the window there.
     func relayout(_ phase: ConsolePhase, cell: CGSize) -> NellCore.Layout {

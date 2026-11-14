@@ -52,3 +52,12 @@ import Testing
     b.settleConsoleNeeded(mode: .code)
     #expect(b.bubbles.first?.settled == true)
 }
+
+@Test func noDecisionOffersConsoleOnlyWhenItIsNotAlreadyOpen() {
+    var c = ConsoleState()
+    #expect(offersConsoleAfterNoDecision(quiet: false, console: c, mode: .code))  // timed out, console closed
+    #expect(!offersConsoleAfterNoDecision(quiet: true, console: c, mode: .code))  // answered in kitty / a question
+    c.open(tab: .code)                                                             // you pressed Open terminal
+    #expect(!offersConsoleAfterNoDecision(quiet: false, console: c, mode: .code))
+    #expect(offersConsoleAfterNoDecision(quiet: false, console: c, mode: .chat))
+}

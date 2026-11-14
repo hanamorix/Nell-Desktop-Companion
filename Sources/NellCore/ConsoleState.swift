@@ -22,3 +22,9 @@ public func showsInColumn(_ kind: BubbleKind, mode: Mode, consoleOpen: Bool) -> 
     guard mode == .code, consoleOpen else { return true }
     return !(kind == .status || kind == .reply || kind == .user)
 }
+
+/// After an approval ends with no decision, offer "Answer in the console" unless that's already moot:
+/// it was answered in kitty or was a question (`quiet`), or the console is already open on that tab (Open terminal).
+public func offersConsoleAfterNoDecision(quiet: Bool, console: ConsoleState, mode: Mode) -> Bool {
+    !quiet && !(console.phase == .open && console.tab == mode)
+}
