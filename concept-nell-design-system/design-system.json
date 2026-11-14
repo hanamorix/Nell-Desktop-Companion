@@ -1,0 +1,114 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-14T14:20:00Z"
+  },
+  "title": "Nell",
+  "namespace": "Nell",
+  "libraries": [],
+  "sections": {},
+  "groups": [
+    "Character",
+    "Icons"
+  ],
+  "assetGroups": {
+    "Character": {
+      "name": "Character",
+      "tile": "l",
+      "order": [
+        "nell-pixel-reference.png",
+        "nell-typing-concept.png"
+      ],
+      "files": {
+        "nell-pixel-reference.png": {
+          "name": "nell-pixel-reference.png",
+          "blob": "c9c1a1cfc34cdc9d179e19dc3fc50691",
+          "size": 10930,
+          "type": "image/png"
+        },
+        "nell-typing-concept.png": {
+          "name": "nell-typing-concept.png",
+          "blob": "e0dcbc56c5ea8e4d2d9e3f2d2374e0cf",
+          "size": 237036,
+          "type": "image/png"
+        }
+      }
+    },
+    "Icons": {
+      "name": "Icons",
+      "tile": "s",
+      "order": [
+        "nell-chat.svg",
+        "nell-code.svg",
+        "nell-allow.svg",
+        "nell-deny.svg",
+        "nell-terminal.svg",
+        "nell-alert.svg",
+        "nell-more.svg",
+        "nell-sleepy.svg"
+      ],
+      "files": {
+        "nell-chat.svg": {
+          "name": "nell-chat.svg",
+          "blob": "8dc39b2892847ca2f1cd9d5e5a99a289",
+          "size": 1341,
+          "type": "image/svg+xml"
+        },
+        "nell-code.svg": {
+          "name": "nell-code.svg",
+          "blob": "071f451a8880529b94b316b41b269542",
+          "size": 1539,
+          "type": "image/svg+xml"
+        },
+        "nell-allow.svg": {
+          "name": "nell-allow.svg",
+          "blob": "4116558523b470732c0fda0b19b6f616",
+          "size": 644,
+          "type": "image/svg+xml"
+        },
+        "nell-deny.svg": {
+          "name": "nell-deny.svg",
+          "blob": "046230e7f6ba0acd582998507c7dbc6c",
+          "size": 829,
+          "type": "image/svg+xml"
+        },
+        "nell-terminal.svg": {
+          "name": "nell-terminal.svg",
+          "blob": "793375e53877ab58031a73df44a3ed12",
+          "size": 1248,
+          "type": "image/svg+xml"
+        },
+        "nell-alert.svg": {
+          "name": "nell-alert.svg",
+          "blob": "52680b2e51d22a63273cc7124f3f52a3",
+          "size": 920,
+          "type": "image/svg+xml"
+        },
+        "nell-more.svg": {
+          "name": "nell-more.svg",
+          "blob": "f914cf16e51fbd421e8d91f82331482e",
+          "size": 411,
+          "type": "image/svg+xml"
+        },
+        "nell-sleepy.svg": {
+          "name": "nell-sleepy.svg",
+          "blob": "8e9addedcfd9733c408deca05bda2c79",
+          "size": 645,
+          "type": "image/svg+xml"
+        }
+      }
+    }
+  },
+  "blobs": {},
+  "docs": {
+    "sections": []
+  },
+  "lastChange": {
+    "by": "Claude",
+    "at": "2026-11-14T14:20:00Z",
+    "via": "GitHub · hanamorix/Nell-Desktop-Companion@34feb96",
+    "note": "First sync: Plum Night pixel system from the spec, the plan and the user's pixel reference; Departure Mono; 10 hand-written components."
+  }
+}

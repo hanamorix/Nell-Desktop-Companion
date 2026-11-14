@@ -1,0 +1,41 @@
+<!-- @dsCard height=288 -->
+<div class="cv">
+  <svg class="cv-art" viewBox="480 0 480 288" width="480" height="288" shape-rendering="crispEdges" aria-hidden="true">
+    <!--
+      blocks: plum-700 slab 280x288 (bleeds top and bottom) · pink-400 136 tall · cream 112x80 · user-blue 88x80 · gold 80x72
+      arrangement: one tall slab with satellites, the pink block's lower-left edge cut as a stepped bubble tail
+      pattern: precise, mono, 2px art-pixel grid -> a dot grid of 4px pixels at a 24px pitch (space-6) on the slab, 8x6 = 48 units
+      steps and radii: px 2, space-5 16, space-6 24, bubble-max 264; corner-none (pixel art has no curves)
+    -->
+    <rect class="b-plum" x="480" y="0" width="280" height="288"/>
+    <rect class="b-out" x="756" y="0" width="4" height="288"/>
+    <path class="b-pink" d="M760 0H960V136H808V128H800V120H792V112H784V104H776V96H768V88H760Z"/>
+    <rect class="b-cream" x="760" y="136" width="112" height="80"/>
+    <rect class="b-blue" x="872" y="136" width="88" height="80"/>
+    <rect class="b-gold" x="760" y="216" width="80" height="72"/>
+    <rect class="b-ground" x="840" y="216" width="120" height="72"/>
+    <g class="b-dot">
+      <rect x="512" y="72" width="4" height="4"/><rect x="536" y="72" width="4" height="4"/><rect x="560" y="72" width="4" height="4"/><rect x="584" y="72" width="4" height="4"/><rect x="608" y="72" width="4" height="4"/><rect x="632" y="72" width="4" height="4"/><rect x="656" y="72" width="4" height="4"/><rect x="680" y="72" width="4" height="4"/>
+      <rect x="512" y="96" width="4" height="4"/><rect x="536" y="96" width="4" height="4"/><rect x="560" y="96" width="4" height="4"/><rect x="584" y="96" width="4" height="4"/><rect x="608" y="96" width="4" height="4"/><rect x="632" y="96" width="4" height="4"/><rect x="656" y="96" width="4" height="4"/><rect x="680" y="96" width="4" height="4"/>
+      <rect x="512" y="120" width="4" height="4"/><rect x="536" y="120" width="4" height="4"/><rect x="560" y="120" width="4" height="4"/><rect x="584" y="120" width="4" height="4"/><rect x="608" y="120" width="4" height="4"/><rect x="632" y="120" width="4" height="4"/><rect x="656" y="120" width="4" height="4"/><rect x="680" y="120" width="4" height="4"/>
+      <rect x="512" y="144" width="4" height="4"/><rect x="536" y="144" width="4" height="4"/><rect x="560" y="144" width="4" height="4"/><rect x="584" y="144" width="4" height="4"/><rect x="608" y="144" width="4" height="4"/><rect x="632" y="144" width="4" height="4"/><rect x="656" y="144" width="4" height="4"/><rect x="680" y="144" width="4" height="4"/>
+      <rect x="512" y="168" width="4" height="4"/><rect x="536" y="168" width="4" height="4"/><rect x="560" y="168" width="4" height="4"/><rect x="584" y="168" width="4" height="4"/><rect x="608" y="168" width="4" height="4"/><rect x="632" y="168" width="4" height="4"/><rect x="656" y="168" width="4" height="4"/><rect x="680" y="168" width="4" height="4"/>
+      <rect x="512" y="192" width="4" height="4"/><rect x="536" y="192" width="4" height="4"/><rect x="560" y="192" width="4" height="4"/><rect x="584" y="192" width="4" height="4"/><rect x="608" y="192" width="4" height="4"/><rect x="632" y="192" width="4" height="4"/><rect x="656" y="192" width="4" height="4"/><rect x="680" y="192" width="4" height="4"/>
+    </g>
+  </svg>
+  <div class="cv-text">
+    <div class="cv-name">Nell</div>
+    <div class="cv-tag">A pixel companion in a cat-ear hoodie, living on your desktop.</div>
+  </div>
+</div>
+<style>
+  html, body { margin: 0; }
+  .cv { position: relative; width: 960px; height: 288px; background: var(--plum-900); overflow: hidden; }
+  .cv-art { position: absolute; left: 480px; top: 0; }
+  .b-plum { fill: var(--plum-700); } .b-out { fill: var(--outline); } .b-pink { fill: var(--pink-400); }
+  .b-cream { fill: var(--cream); } .b-blue { fill: var(--user-blue); } .b-gold { fill: var(--gold); }
+  .b-ground { fill: var(--plum-900); } .b-dot { fill: var(--pink-600); }
+  .cv-text { position: absolute; left: 40px; bottom: 40px; max-width: 440px; }
+  .cv-name { font-family: var(--font-mono); font-size: 110px; line-height: .95; color: var(--cream); -webkit-font-smoothing: none; }
+  .cv-tag { margin-top: 16px; font-family: var(--font-mono); font-size: 11px; line-height: 15px; color: var(--muted); -webkit-font-smoothing: none; }
+</style>

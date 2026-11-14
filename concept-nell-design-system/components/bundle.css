@@ -1,0 +1,230 @@
+/* Nell — pixel UI kit. Plum Night.
+   Hand-written for this design system: the repo (hanamorix/Nell-Desktop-Companion@34feb96)
+   has no UI code yet; the app will be native Swift. Treat these classes as the visual spec. */
+
+/* ---------- pixel rendering ---------- */
+.nl, .nl * { box-sizing: border-box; }
+.nl {
+  font-family: var(--font-mono);
+  font-size: 11px; line-height: 15px;
+  color: var(--text);
+  -webkit-font-smoothing: none; -moz-osx-font-smoothing: unset; font-smooth: never;
+  text-rendering: optimizeSpeed;
+}
+.nl img, .nl-icon { image-rendering: pixelated; image-rendering: crisp-edges; }
+.nl-icon { width: 16px; height: 16px; display: inline-block; vertical-align: -4px; flex: none; }
+.nl-icon--x2 { width: 32px; height: 32px; }
+
+/* ---------- the frame: 1-art-pixel outline, notched corners, bevel ---------- */
+/* Outline on four sides only, so the corner pixel stays empty: the notch. Never border-radius. */
+.nl-frame {
+  --nl-fill: var(--surface); --nl-hi: var(--edge-light); --nl-lo: var(--edge-dark); --nl-ink: var(--text);
+  position: relative; margin: 2px;
+  background: var(--nl-fill); color: var(--nl-ink);
+  box-shadow:
+    0 -2px 0 0 var(--outline), 0 2px 0 0 var(--outline),
+    -2px 0 0 0 var(--outline), 2px 0 0 0 var(--outline),
+    0 4px 0 -2px var(--plum-900),
+    inset 0 2px 0 0 var(--nl-hi), inset 0 -2px 0 0 var(--nl-lo);
+}
+
+/* ---------- bubbles ---------- */
+.nl-bubble {
+  display: block; max-width: var(--bubble-max); width: max-content;
+  padding: calc(var(--space-3) + 2px) var(--space-4) var(--space-3);
+  margin-bottom: calc(var(--space-3) + 12px);
+  word-wrap: break-word; overflow-wrap: anywhere;
+}
+.nl-bubble p { margin: 0; }
+.nl-bubble p + p { margin-top: var(--space-1); }
+/* stepped tail, drawn pixel by pixel; it points down-left at Nell */
+.nl-bubble::after {
+  content: ""; position: absolute; top: 100%; left: 12px;
+  width: 2px; height: 2px; background: transparent;
+  box-shadow:
+    2px 0px 0 0 var(--nl-fill),
+    4px 0px 0 0 var(--nl-fill),
+    6px 0px 0 0 var(--nl-fill),
+    8px 0px 0 0 var(--nl-fill),
+    10px 0px 0 0 var(--nl-fill),
+    0px 2px 0 0 var(--outline),
+    2px 2px 0 0 var(--nl-fill),
+    4px 2px 0 0 var(--nl-fill),
+    6px 2px 0 0 var(--nl-fill),
+    8px 2px 0 0 var(--nl-fill),
+    10px 2px 0 0 var(--outline),
+    0px 4px 0 0 var(--outline),
+    2px 4px 0 0 var(--nl-fill),
+    4px 4px 0 0 var(--nl-fill),
+    6px 4px 0 0 var(--nl-fill),
+    8px 4px 0 0 var(--outline),
+    0px 6px 0 0 var(--outline),
+    2px 6px 0 0 var(--nl-fill),
+    4px 6px 0 0 var(--nl-fill),
+    6px 6px 0 0 var(--outline),
+    0px 8px 0 0 var(--outline),
+    2px 8px 0 0 var(--nl-fill),
+    4px 8px 0 0 var(--outline),
+    0px 10px 0 0 var(--outline),
+    2px 10px 0 0 var(--outline);
+}
+.nl-bubble--no-tail::after { display: none; }
+.nl-bubble--no-tail { margin-bottom: var(--space-3); }
+
+.nl-bubble--user {
+  --nl-fill: var(--user-blue); --nl-hi: var(--user-blue-hi); --nl-lo: var(--plum-900); --nl-ink: var(--snow);
+  margin-left: auto;
+}
+.nl-bubble--user::after { left: auto; right: 12px;
+  box-shadow:
+    8px 0px 0 0 var(--nl-fill),
+    6px 0px 0 0 var(--nl-fill),
+    4px 0px 0 0 var(--nl-fill),
+    2px 0px 0 0 var(--nl-fill),
+    0px 0px 0 0 var(--nl-fill),
+    10px 2px 0 0 var(--outline),
+    8px 2px 0 0 var(--nl-fill),
+    6px 2px 0 0 var(--nl-fill),
+    4px 2px 0 0 var(--nl-fill),
+    2px 2px 0 0 var(--nl-fill),
+    0px 2px 0 0 var(--outline),
+    10px 4px 0 0 var(--outline),
+    8px 4px 0 0 var(--nl-fill),
+    6px 4px 0 0 var(--nl-fill),
+    4px 4px 0 0 var(--nl-fill),
+    2px 4px 0 0 var(--outline),
+    10px 6px 0 0 var(--outline),
+    8px 6px 0 0 var(--nl-fill),
+    6px 6px 0 0 var(--nl-fill),
+    4px 6px 0 0 var(--outline),
+    10px 8px 0 0 var(--outline),
+    8px 8px 0 0 var(--nl-fill),
+    6px 8px 0 0 var(--outline),
+    10px 10px 0 0 var(--outline),
+    8px 10px 0 0 var(--outline);
+}
+.nl-bubble--status { --nl-fill: var(--plum-800); --nl-hi: var(--plum-600); --nl-ink: var(--text-muted);
+  display: flex; gap: var(--space-1); align-items: center; }
+.nl-bubble--status .nl-dots { color: var(--pink-400); }
+.nl-bubble--approval, .nl-bubble--question {
+  --nl-hi: var(--gold);
+  box-shadow:
+    0 -2px 0 0 var(--outline), 0 2px 0 0 var(--outline),
+    -2px 0 0 0 var(--outline), 2px 0 0 0 var(--outline),
+    2px 6px 0 -2px var(--plum-900),
+    inset 0 2px 0 0 var(--nl-hi), inset 0 -2px 0 0 var(--nl-lo);
+}
+.nl-bubble--approval { width: calc(var(--bubble-max) + 32px); max-width: calc(var(--bubble-max) + 32px); }
+.nl-bubble__actions .nl-btn { padding-left: var(--space-2); padding-right: var(--space-2); }
+.nl-bubble--alert { --nl-hi: var(--gold); }
+.nl-bubble--error { --nl-fill: var(--wine); --nl-hi: var(--berry); --nl-lo: var(--plum-900); }
+.nl-bubble--settled { --nl-hi: var(--plum-600); }
+
+.nl-bubble__head { display: flex; align-items: center; gap: var(--space-1); color: var(--gold); margin-bottom: var(--space-1); }
+.nl-bubble--error .nl-bubble__head { color: var(--blush); }
+.nl-bubble__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-3); }
+.nl-bubble__more { color: var(--text-muted); }
+.nl-bubble--scroll { max-height: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--pink-600) var(--plum-800); }
+
+/* inline code chip */
+.nl-code { background: var(--plum-900); color: var(--cream); padding: 0 var(--space-1); white-space: pre-wrap; }
+.nl-bubble--user .nl-code { background: var(--plum-900); color: var(--snow); }
+
+/* mode badge: bubbles from the mode you are NOT looking at */
+.nl-badge {
+  position: absolute; top: -8px; right: 6px; margin: 0;
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px var(--space-1) 1px 2px;
+  --nl-fill: var(--hair-700); --nl-hi: var(--hair-500); --nl-lo: var(--plum-900); --nl-ink: var(--muted);
+  box-shadow: 0 -2px 0 0 var(--outline), 0 2px 0 0 var(--outline), -2px 0 0 0 var(--outline), 2px 0 0 0 var(--outline), inset 0 2px 0 0 var(--nl-hi);
+  background: var(--nl-fill); color: var(--nl-ink);
+  font-size: 11px; line-height: 11px; text-transform: uppercase;
+}
+.nl-badge .nl-icon { vertical-align: 0; }
+
+/* settle tag (after an approval is answered) */
+.nl-tag { display: inline-block; padding: 0 var(--space-1); color: var(--outline); text-transform: uppercase; }
+.nl-tag--allow { background: var(--leaf); }
+.nl-tag--deny { background: var(--berry); color: var(--snow); }
+.nl-tag--terminal { background: var(--gold); }
+
+/* ---------- stack: newest at the bottom, nearest Nell ---------- */
+.nl-stack { display: flex; flex-direction: column; align-items: flex-start; width: calc(var(--bubble-max) + 40px); }
+.nl-stack > .nl-bubble--user { align-self: flex-end; }
+.nl-age-3 { opacity: var(--bubble-age-3); }
+.nl-age-2 { opacity: var(--bubble-age-2); }
+.nl-age-1 { opacity: var(--bubble-age-1); }
+.nl-age-0 { opacity: var(--bubble-age-0); }
+
+/* ---------- buttons ---------- */
+.nl-btn {
+  --nl-fill: var(--plum-600); --nl-hi: var(--pink-400); --nl-lo: var(--plum-800); --nl-ink: var(--cream);
+  font: inherit; font-size: 11px; line-height: 11px; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: calc(var(--space-2) + 2px) var(--space-3) var(--space-2);
+  border: 0; cursor: pointer; user-select: none;
+}
+.nl-btn:hover { --nl-fill: #574750; }
+.nl-btn:active, .nl-btn.is-pressed {
+  box-shadow: 0 -2px 0 0 var(--outline), 0 2px 0 0 var(--outline), -2px 0 0 0 var(--outline), 2px 0 0 0 var(--outline),
+    inset 0 2px 0 0 var(--nl-lo);
+  padding-top: calc(var(--space-2) + 4px); padding-bottom: calc(var(--space-2) - 2px);
+}
+.nl-btn--allow { --nl-fill: var(--leaf); --nl-hi: #c6efb7; --nl-lo: var(--leaf-700); --nl-ink: var(--outline); }
+.nl-btn--allow:hover { --nl-fill: #9fdc8d; }
+.nl-btn--deny { --nl-fill: var(--berry); --nl-hi: var(--pink-600); --nl-lo: var(--wine); --nl-ink: var(--snow); }
+.nl-btn--deny:hover { --nl-fill: #b55a69; }
+.nl-btn--quiet { --nl-fill: var(--plum-800); --nl-hi: var(--plum-600); --nl-lo: var(--plum-900); --nl-ink: var(--cream); }
+.nl-btn:disabled { --nl-fill: var(--plum-800); --nl-hi: var(--plum-800); --nl-lo: var(--plum-800); --nl-ink: var(--plum-500); cursor: default; }
+.nl-btn--allow .nl-icon, .nl-btn--terminal-ink .nl-icon { filter: brightness(0); }
+
+/* ---------- mode chips (💬 Chat / ⌘ Code, under the desk) ---------- */
+.nl-chips { display: inline-flex; gap: var(--space-3); }
+.nl-chip {
+  --nl-fill: var(--hair-700); --nl-hi: var(--hair-500); --nl-lo: var(--plum-900); --nl-ink: var(--muted);
+  font: inherit; font-size: 11px; line-height: 11px; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: calc(var(--space-1) + 2px) var(--space-2) var(--space-1);
+  border: 0; cursor: pointer;
+}
+.nl-chip.is-selected { --nl-fill: var(--plum-700); --nl-hi: var(--pink-400); --nl-ink: var(--cream); }
+.nl-chip.is-selected::after {
+  content: ""; position: absolute; left: 50%; top: calc(100% + 4px); width: 6px; height: 2px; margin-left: -3px;
+  background: var(--pink-400);
+}
+.nl-chip .nl-icon { opacity: .7; }
+.nl-chip.is-selected .nl-icon { opacity: 1; }
+.nl-chip__dot { width: 4px; height: 4px; background: var(--gold); margin-left: 2px; }
+
+/* ---------- message bar ---------- */
+.nl-bar {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: calc(var(--bubble-max) + 40px);
+  padding: calc(var(--space-2) + 2px) var(--space-2) var(--space-2);
+}
+.nl-bar__field {
+  flex: 1; min-width: 0; display: flex; align-items: center;
+  background: var(--surface-sunken); color: var(--text);
+  box-shadow: inset 0 2px 0 0 var(--outline);
+  padding: calc(var(--space-1) + 2px) var(--space-2) var(--space-1);
+  font: inherit; border: 0; outline: 0;
+}
+.nl-bar__field input { all: unset; flex: 1; min-width: 0; font: inherit; color: var(--text); caret-color: var(--pink-400); }
+.nl-bar__field input::placeholder { color: var(--text-muted); opacity: 1; }
+.nl-bar.is-focused { --nl-hi: var(--focus);
+  box-shadow: 0 -2px 0 0 var(--focus), 0 2px 0 0 var(--focus), -2px 0 0 0 var(--focus), 2px 0 0 0 var(--focus),
+    0 -4px 0 0 var(--outline), 0 4px 0 0 var(--outline), -4px 0 0 0 var(--outline), 4px 0 0 0 var(--outline),
+    inset 0 2px 0 0 var(--nl-hi), inset 0 -2px 0 0 var(--nl-lo); }
+.nl-caret { display: inline-block; width: 6px; height: 11px; background: var(--pink-400); vertical-align: -1px; }
+.nl-bar__queue { color: var(--gold); white-space: nowrap; }
+
+/* ---------- preview stage: half light, half dark wallpaper ---------- */
+.nl-stage {
+  min-height: 100%; padding: 24px;
+  background: repeating-linear-gradient(90deg, #d9d4cf 0 160px, #202326 160px 320px);
+  display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;
+}
+.nl-stage--dark { background: #202326; }
+.nl-row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.nl-col { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.nl-caption { box-shadow: 0 0 0 2px var(--plum-900); font: 11px/15px var(--font-mono); color: var(--muted); background: var(--plum-900); padding: 2px 4px; -webkit-font-smoothing: none; }
