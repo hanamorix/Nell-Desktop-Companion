@@ -29,4 +29,7 @@ public struct SpriteSheet: Sendable {
     }
 }
 
-public func isInteractive(_ p: CGPoint, rects: [CGRect]) -> Bool { rects.contains { $0.contains(p) } }
+/// Clicks pass through Nell unless they land on something with a control, or on her sprite while ⌥ is held.
+public func isInteractive(_ p: CGPoint, rects: [CGRect], grabRects: [CGRect], optionHeld: Bool) -> Bool {
+    rects.contains { $0.contains(p) } || (optionHeld && grabRects.contains { $0.contains(p) })
+}

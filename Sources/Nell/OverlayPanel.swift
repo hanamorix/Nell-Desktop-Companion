@@ -51,7 +51,7 @@ extension View {
     private func updateMouse() {
         guard !paused, panel.isVisible, let content = panel.contentView else { return }
         let p = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
-        let inside = isInteractive(CGPoint(x: p.x, y: content.bounds.height - p.y), rects: rects)
+        let inside = isInteractive(CGPoint(x: p.x, y: content.bounds.height - p.y), rects: rects, grabRects: [], optionHeld: false)
         if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
     }
 
