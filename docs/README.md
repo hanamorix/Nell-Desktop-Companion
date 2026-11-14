@@ -29,3 +29,9 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 | Plan | [2026-11-14-nell-v2-console-plan.md](plans/2026-11-14-nell-v2-console-plan.md) | The 7-task build plan for the console bubble |
 | Notes | [2026-11-14-kitty-panel-spike-findings.md](notes/2026-11-14-kitty-panel-spike-findings.md) | Tested facts about running kitty as a borderless panel inside Nell's console bubble |
 | Notes | [2026-11-14-nell-v2-build-ledger.md](notes/2026-11-14-nell-v2-build-ledger.md) | Every decision made during the v2 build, its checks, and the final review |
+
+### Design round (2026-11-14)
+
+| Type | Document | What it is |
+|---|---|---|
+| Notes | [2026-11-14-design-system-review-findings.md](notes/2026-11-14-design-system-review-findings.md) | Review of `concept-nell-design-system/` (Plum Night): what's usable, what conflicts with v2, and fixes needed |
