@@ -1,6 +1,6 @@
 # QuestionBubble
 
-Claude's `AskUserQuestion`. It shows the question text and a single **Answer in terminal** button, never Allow/Deny.
+Claude's `AskUserQuestion`. It shows the question text and a single **ANSWER IN CONSOLE** button, never Allow/Deny.
 
 ## Rules (from the spec)
 - It ranks **above** approval bubbles.

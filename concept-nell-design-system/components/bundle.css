@@ -72,7 +72,7 @@
 .nl-bubble--no-tail { margin-bottom: var(--space-3); }
 
 .nl-bubble--user {
-  --nl-fill: var(--user-blue); --nl-hi: var(--user-blue-hi); --nl-lo: var(--plum-900); --nl-ink: var(--snow);
+  --nl-fill: var(--user-fill); --nl-hi: var(--user-edge); --nl-lo: var(--muted); --nl-ink: var(--user-ink);
   margin-left: auto;
 }
 .nl-bubble--user::after { left: auto; right: 12px;
@@ -146,7 +146,7 @@
 .nl-tag { display: inline-block; padding: 0 var(--space-1); color: var(--outline); text-transform: uppercase; }
 .nl-tag--allow { background: var(--leaf); }
 .nl-tag--deny { background: var(--berry); color: var(--snow); }
-.nl-tag--terminal { background: var(--gold); }
+.nl-tag--console { background: var(--gold); }
 
 /* ---------- stack: newest at the bottom, nearest Nell ---------- */
 .nl-stack { display: flex; flex-direction: column; align-items: flex-start; width: calc(var(--bubble-max) + 40px); }

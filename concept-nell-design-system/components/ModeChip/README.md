@@ -4,7 +4,8 @@ The two mode switches under Nell's desk: 💬 **Chat** and ⌘ **Code**. They ar
 
 ## Behaviour (from the spec)
 - The first click selects the mode, and the message bar then sends to that mode.
-- A second click on the chip that is already selected shows or hides that mode's kitty window.
+- ⌘ toggles the console between open and minimised; the first ⌘ from Chat selects Code and opens it.
+- In the app the chips are icon-only (the name is the tooltip) so that they fit beside the bar.
 
 ## Look
 - At rest: a `hair-700` "wood" fill with a `hair-500` top edge and a `muted` label.

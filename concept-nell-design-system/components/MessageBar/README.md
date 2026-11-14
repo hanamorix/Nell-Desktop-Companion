@@ -1,6 +1,6 @@
 # MessageBar
 
-The single text field under Nell, styled like an iMessage bar in pixel form. It is the only element of Nell that takes keyboard focus.
+The single text field under Nell, drawn as a pixel panel around a sunken well. It is the only element of Nell that takes keyboard focus.
 
 ## Behaviour (from the spec and the plan)
 - It takes focus when clicked, or with the summon hotkey (⌥⌘N).

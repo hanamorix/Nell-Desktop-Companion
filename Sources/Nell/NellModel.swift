@@ -4,7 +4,7 @@ import NellCore
 struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: Double; var id: UUID { bubble.id } }
 
 /// The console frame Nell draws around kitty: a border and a title strip.
-enum ConsoleChrome { static let border: CGFloat = 3; static let title: CGFloat = 24 }
+enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat = 24 }
 
 /// Nell's brain on the main actor: routes hook events into trackers + bubbles, and UI actions into kitty + approvals.
 @MainActor final class NellModel: ObservableObject {
@@ -65,7 +65,7 @@ enum ConsoleChrome { static let border: CGFloat = 3; static let title: CGFloat =
     /// ⌘: from Chat, select Code and open the console; in Code, toggle open ↔ minimised.
     func codeChip() { console.pressCodeChip(selected: &selected); applyConsole() }
 
-    /// Every console open comes from a click: ⌘, the minimised bubble, Open console, Open terminal, Answer in terminal.
+    /// Every console open comes from a click: ⌘, the minimised bubble, Open console, Answer in console.
     func openConsole(tab: Mode = .code) { console.open(tab: tab); applyConsole() }
     func minimiseConsole() { console.minimise(); applyConsole() }
 
@@ -128,7 +128,7 @@ enum ConsoleChrome { static let border: CGFloat = 3; static let title: CGFloat =
         let settled = trackers[m]?.handle(e, requestId: requestId, now: now) ?? []
         for id in settled {   // answered in kitty, or the turn ended: release the hanging hook too
             settledInKitty.insert(id)
-            bubbles.settle(requestId: id, as: "Answered in terminal")
+            bubbles.settle(requestId: id, as: "Answered in console")
             registry.answer(id: id, .none)
         }
         switch e.name {
@@ -182,7 +182,7 @@ enum ConsoleChrome { static let border: CGFloat = 3; static let title: CGFloat =
     func requestSettled(_ m: Mode, _ id: String, _ a: ApprovalAnswer) {
         trackers[m]?.settleApproval(id, answer: a)
         let quiet = questionIds.remove(id) != nil || settledInKitty.remove(id) != nil
-        bubbles.settle(requestId: id, as: a == .allow ? "Allowed" : a == .deny ? "Denied" : "Answer in terminal")
+        bubbles.settle(requestId: id, as: a == .allow ? "Allowed" : a == .deny ? "Denied" : "Answer in the console")
         // a deadline or a dead hook: Claude now asks in the console, which only opens when you click
         if a == .none, offersConsoleAfterNoDecision(quiet: quiet, console: console, mode: m) { addBubble(.consoleNeeded, m, "Answer in the console", Date()) }
         flushQueue(m)

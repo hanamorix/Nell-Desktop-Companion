@@ -3,7 +3,7 @@ import NellCore
 import SwiftUI
 
 /// Nell's window, laid out by `Layout`: her block, the bubble column, and (when open) the console frame around kitty.
-/// Shapes are functional placeholders; the design round replaces them.
+/// Drawn in Plum Night (`PlumNight.swift`, from `concept-nell-design-system/`).
 struct CompanionView: View {
     @ObservedObject var model: NellModel
     let sheet: SpriteSheet
@@ -34,6 +34,9 @@ struct CompanionView: View {
         }
     }
 
+    /// The chip's gold dot: the other mode has a bubble showing that you aren't looking at.
+    private func hasNews(_ m: Mode) -> Bool { m != model.selected && model.shown.contains { $0.bubble.mode == m && $0.bubble.kind != .user } }
+
     private var projectName: String { ((model.state.projectDir ?? "") as NSString).lastPathComponent }
 
     /// Screen rect (y up) → this window's local rect (y down).
@@ -44,7 +47,9 @@ struct CompanionView: View {
     private func column(_ l: NellCore.Layout) -> some View {
         VStack(alignment: l.side == .left ? .trailing : .leading, spacing: 8) {
             if l.columnUp { Spacer(minLength: 0) }
-            ForEach(model.shown) { s in BubbleView(model: model, bubble: s.bubble, tailRight: l.side == .left).opacity(s.opacity) }
+            ForEach(model.shown) { s in // fade each bubble as one, so its drop doesn't show through the fill
+                BubbleView(model: model, bubble: s.bubble, tailRight: l.side == .left).compositingGroup().opacity(s.opacity)
+            }
             if !l.columnUp { Spacer(minLength: 0) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: l.side == .left ? .trailing : .leading)
@@ -65,20 +70,10 @@ struct CompanionView: View {
                     Divider()
                     Button("Quit Nell") { model.onQuit?() }
                 }
-            HStack(spacing: 4) {
-                Chip(label: "💬", help: "Chat", on: model.selected == .chat) { model.chatChip() }
-                Chip(label: "⌘", help: "Claude Code console", on: model.selected == .code) { model.codeChip() }
-                TextField(model.barHeld ? "Waiting — answer in the console" : model.selected == .chat ? "Message Nell…" : "Ask Claude Code…",
-                          text: $model.draft, axis: .vertical)
-                    .lineLimit(1...4)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 4))
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black, lineWidth: 2))
-                    .foregroundStyle(.black)
-                    .focused($barFocused)
-                    .onSubmit { model.submit() }
-                    .onChange(of: model.draft) { model.refresh() }
+            HStack(alignment: .center, spacing: 8) {
+                ModeChip(icon: "chat", help: "Chat", on: model.selected == .chat, news: hasNews(.chat)) { model.chatChip() }
+                ModeChip(icon: "code", help: "Claude Code console", on: model.selected == .code, news: hasNews(.code)) { model.codeChip() }
+                MessageBar(model: model, focused: $barFocused, isFocused: barFocused)
             }
             .interactive()
         }
@@ -92,40 +87,33 @@ extension View {
 
 extension Notification.Name { static let nellFocusBar = Notification.Name("nellFocusBar") }
 
-struct Chip: View {
-    let label: String; let help: String; let on: Bool; let action: () -> Void
+/// The one text field: a plum panel around a sunken plum-900 well. Gold QUEUED while Claude holds your input.
+struct MessageBar: View {
+    @ObservedObject var model: NellModel
+    var focused: FocusState<Bool>.Binding
+    /// Read by the parent too, so focus changes certainly redraw the ring.
+    let isFocused: Bool
+
     var body: some View {
-        Button(action: action) {
-            Text(label).frame(width: 28, height: 26)
-                .background(on ? Color(red: 0.95, green: 0.8, blue: 0.38) : Color.white, in: RoundedRectangle(cornerRadius: 4))
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black, lineWidth: 2))
-                .foregroundStyle(.black)
+        HStack(spacing: 4) {
+            TextField("", text: $model.draft, prompt: Text(placeholder).foregroundColor(PN.muted), axis: .vertical)
+                .lineLimit(1...4)
+                .textFieldStyle(.plain)
+                .foregroundStyle(PN.cream)
+                .tint(PN.pink400)
+                .focused(focused)
+                .onSubmit { model.submit() }
+                .onChange(of: model.draft) { model.refresh() }
+            if model.barHeld { Text("QUEUED").foregroundStyle(PN.gold).fixedSize() }
         }
-        .buttonStyle(.plain).help(help).accessibilityLabel(help)
+        .padding(.horizontal, 6).padding(.top, 4).padding(.bottom, 2)
+        .background { VStack(spacing: 0) { PN.outline.frame(height: PN.px); PN.plum900 } } // the well, with its top shadow
+        // shortcut: CSS pads the bar 8/6 and the well 6/4; trimmed so sprite + bar fit Nell's 200 pt block
+        .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 4)
+        .pixelFrame(focused: isFocused)
     }
-}
 
-/// Placeholder speech bubble: a bordered box with a small tail pointing at Nell.
-struct SpeechBubble<Content: View>: View {
-    let fill: Color; let tailRight: Bool
-    @ViewBuilder let content: Content
-    var body: some View {
-        content
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(fill, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black, lineWidth: 2))
-            .overlay(alignment: tailRight ? .bottomTrailing : .bottomLeading) {
-                Tail().fill(fill).overlay(Tail().stroke(Color.black, lineWidth: 2))
-                    .frame(width: 10, height: 8).scaleEffect(x: tailRight ? 1 : -1).offset(x: tailRight ? -14 : 14, y: 7)
-            }
-            .padding(.bottom, 6)
-    }
-}
-
-struct Tail: Shape {
-    func path(in r: CGRect) -> Path {
-        Path { p in p.move(to: CGPoint(x: r.minX, y: r.minY)); p.addLine(to: CGPoint(x: r.maxX, y: r.maxY)); p.addLine(to: CGPoint(x: r.maxX, y: r.minY)) }
-    }
+    private var placeholder: String { model.barHeld ? "Waiting…" : model.selected == .chat ? "Message Nell…" : "Ask Claude Code…" }
 }
 
 struct BubbleView: View {
@@ -134,54 +122,132 @@ struct BubbleView: View {
     let tailRight: Bool
 
     var body: some View {
-        SpeechBubble(fill: fill, tailRight: tailRight) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 4) {
-                    if bubble.mode != model.selected { Text(bubble.mode == .chat ? "💬" : "⌘") }
-                    if bubble.kind == .reply, bubble.mode == .chat {
-                        ScrollView { Text(bubble.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 180)
-                    } else {
-                        Text(bubble.text).lineLimit(bubble.kind == .reply ? 5 : 3)
-                    }
-                }
-                if case .approval(let id) = bubble.kind, !bubble.settled {
-                    HStack(spacing: 6) {
-                        action("Allow", .systemGreen) { model.answer(id, .allow) }
-                        action("Deny", .systemRed) { model.answer(id, .deny) }
-                        action("Open terminal", .darkGray) { model.openTerminal(bubble.mode, requestId: id) }
-                    }
-                }
-                if bubble.kind == .question, !bubble.settled {
-                    action("Answer in terminal", .systemBlue) { model.openTerminal(bubble.mode, requestId: nil) }
-                }
-                if bubble.kind == .consoleNeeded, !bubble.settled {
-                    action("Open console", .systemBlue) { model.openConsole(tab: bubble.mode) }
-                }
+        let s = style
+        VStack(alignment: .leading, spacing: 4) {
+            if let h = header {
+                HStack(spacing: 4) { Icon(name: h.icon, ink: PN.cream); Text(h.label) }.foregroundStyle(h.color)
             }
-            .foregroundStyle(.black)
+            content
+            actions.padding(.top, 4)
         }
-        .frame(maxWidth: 260, alignment: tailRight ? .trailing : .leading)
+        .lineSpacing(1) // Departure Mono's 14 pt line + 1 = the 11/15 body style
+        .foregroundStyle(s.ink)
+        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 8)
+        .pixelFrame(fill: s.fill, hi: s.hi, lo: s.lo, drop: s.drop)
+        .overlay(alignment: tailRight ? .bottomTrailing : .bottomLeading) {
+            if bubble.kind != .status { // status bubbles are muttering: no tail
+                PixelArt.tail(s.fill).scaleEffect(x: tailRight ? -1 : 1).offset(x: tailRight ? -14 : 14, y: 10)
+            }
+        }
+        .overlay(alignment: tailRight ? .topLeading : .topTrailing) {
+            if bubble.mode != model.selected { badge.offset(x: tailRight ? 6 : -6, y: -10) }
+        }
+        .padding(.bottom, bubble.kind == .status ? PN.px : 10) // room for the tail, or the drop inside the clipped column
+        .frame(maxWidth: 264, alignment: tailRight ? .trailing : .leading)
         .modifier(BubbleHit(id: bubble.id, hasButtons: hasButtons))
+    }
+
+    @ViewBuilder private var content: some View {
+        let (text, tag) = parts
+        if bubble.kind == .reply, bubble.mode == .chat {
+            ScrollView { rich(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 150)
+        } else if bubble.kind == .status {
+            (rich(text) + Text(text.hasSuffix("failed") ? "" : "…").foregroundColor(PN.pink400)).lineLimit(3)
+        } else {
+            rich(text).lineLimit(bubble.kind == .reply ? 5 : 3)
+        }
+        if hasMore { HStack(spacing: 4) { Text("…more in"); Icon(name: "code", ink: PN.muted) }.foregroundStyle(PN.muted) }
+        if let tag {
+            Text(tag.uppercased()).padding(.horizontal, 4)
+                .foregroundStyle(tag == "Denied" ? PN.snow : PN.outline)
+                .background(tag == "Allowed" ? PN.leaf : tag == "Denied" ? PN.berry : PN.gold)
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        if case .approval(let id) = bubble.kind, !bubble.settled {
+            // ALLOW · DENY · OPEN CONSOLE don't fit one row in the column, so the third wraps (CSS flex-wrap)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Button { model.answer(id, .allow) } label: { Icon(name: "allow"); Text("Allow") }.buttonStyle(PixelButton(kind: .allow))
+                    Button { model.answer(id, .deny) } label: { Icon(name: "deny"); Text("Deny") }.buttonStyle(PixelButton(kind: .deny))
+                }
+                Button { model.openTerminal(bubble.mode, requestId: id) } label: { Icon(name: "terminal"); Text("Open console") }
+                    .buttonStyle(PixelButton(kind: .quiet))
+            }
+        }
+        if bubble.kind == .question, !bubble.settled {
+            Button { model.openTerminal(bubble.mode, requestId: nil) } label: { Icon(name: "terminal"); Text("Answer in console") }
+                .buttonStyle(PixelButton(kind: .quiet))
+        }
+        if bubble.kind == .consoleNeeded, !bubble.settled {
+            Button { model.openConsole(tab: bubble.mode) } label: { Icon(name: "terminal"); Text("Open console") }
+                .buttonStyle(PixelButton(kind: .quiet))
+        }
+    }
+
+    /// A bubble from the mode you aren't looking at: a small wooden CHAT / CODE badge on its top edge.
+    private var badge: some View {
+        HStack(spacing: 2) { Icon(name: bubble.mode == .chat ? "chat" : "code", ink: PN.muted); Text(bubble.mode == .chat ? "CHAT" : "CODE") }
+            .foregroundStyle(PN.muted)
+            .padding(.leading, 2).padding(.trailing, 4)
+            .pixelFrame(fill: PN.hair700, hi: PN.hair500, lo: PN.hair700, drop: .none)
+    }
+
+    private static let more = "\n…more in ⌘"
+    private var hasMore: Bool { bubble.kind == .reply && bubble.text.hasSuffix(Self.more) }
+
+    /// The text, minus the "…more in ⌘" line (drawn with the pixel icon) and the settle label (drawn as a tag).
+    private var parts: (String, String?) {
+        var t = bubble.text
+        if hasMore { t.removeLast(Self.more.count) }
+        if case .approval = bubble.kind, bubble.settled, let r = t.range(of: " — ", options: .backwards) {
+            return (String(t[..<r.lowerBound]), String(t[r.upperBound...]))
+        }
+        return (t, nil)
+    }
+
+    /// `backticked` spans become code chips on plum-900.
+    private func rich(_ s: String) -> Text {
+        var out = AttributedString()
+        for (i, seg) in s.components(separatedBy: "`").enumerated() {
+            if i % 2 == 1, !seg.isEmpty {
+                var code = AttributedString(" \(seg) ")
+                code.backgroundColor = PN.plum900
+                code.foregroundColor = bubble.kind == .user ? PN.snow : PN.cream
+                out += code
+            } else {
+                out += AttributedString(seg)
+            }
+        }
+        return Text(out)
+    }
+
+    private var header: (icon: String, label: String, color: Color)? {
+        switch bubble.kind {
+        case .approval, .consoleNeeded: bubble.settled ? nil : ("alert", "NEEDS YOU", PN.gold)
+        case .question: bubble.settled ? nil : ("more", "QUESTION", PN.gold)
+        case .alert: ("alert", "HEADS UP", PN.gold)
+        case .error: ("deny", "FAILED", PN.blush)
+        default: nil
+        }
+    }
+
+    private var style: (fill: Color, hi: Color, lo: Color, ink: Color, drop: PixelDrop) {
+        switch bubble.kind {
+        case .user: (PN.cream, PN.snow, PN.muted, PN.outline, .small) // your messages are cream paper
+        case .status: (PN.plum800, PN.plum600, PN.plum800, PN.muted, .small)
+        case .error: (PN.wine, PN.berry, PN.plum900, PN.cream, .small)
+        case .alert: (PN.plum700, PN.gold, PN.plum800, PN.cream, .small)
+        case .approval, .question, .consoleNeeded: (PN.plum700, bubble.settled ? PN.plum600 : PN.gold, PN.plum800, PN.cream, .large)
+        case .reply: (PN.plum700, PN.pink400, PN.plum800, PN.cream, .small)
+        }
     }
 
     private var hasButtons: Bool {
         guard !bubble.settled else { return bubble.kind == .reply && bubble.mode == .chat }
         if case .approval = bubble.kind { return true }
         return bubble.kind == .question || bubble.kind == .consoleNeeded || (bubble.kind == .reply && bubble.mode == .chat)
-    }
-    private var fill: Color {
-        switch bubble.kind {
-        case .user: Color(white: 0.88)
-        case .error: Color(red: 1, green: 0.85, blue: 0.85)
-        case .approval, .question, .consoleNeeded: Color(red: 1, green: 0.95, blue: 0.77)
-        default: Color.white
-        }
-    }
-    private func action(_ title: String, _ color: NSColor, _ run: @escaping () -> Void) -> some View {
-        Button(action: run) {
-            Text(title).foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Color(nsColor: color), in: RoundedRectangle(cornerRadius: 3))
-        }.buttonStyle(.plain)
     }
 }
 
@@ -194,45 +260,58 @@ struct BubbleHit: ViewModifier {
     }
 }
 
-/// The frame Nell draws around the kitty panel: a border, a title strip with minimise, and a tail toward her.
+/// The pixel frame Nell draws around the kitty panel: outline, an uppercase title strip with minimise, and a stepped
+/// tail toward her. The middle stays hollow: kitty shows through it and it never takes clicks.
 struct ConsoleFrame: View {
     let project: String; let toward: Side; let minimise: () -> Void
     var body: some View {
+        let ring = ConsoleChrome.border - PN.px // plum between the outline and kitty
         VStack(spacing: 0) {
-            HStack {
-                Text("⌘ Claude Code · \(project)").lineLimit(1)
-                Spacer()
-                Button(action: minimise) { Text("_ minimise").padding(.horizontal, 6) }.buttonStyle(.plain)
+            HStack(spacing: 4) {
+                Icon(name: "code")
+                Text("CLAUDE CODE · \(project.uppercased())").lineLimit(1)
+                Spacer(minLength: 4)
+                Button(action: minimise) {
+                    PN.cream.frame(width: 8, height: PN.px).offset(y: 3).frame(width: 16, height: 16)
+                        .pixelFrame(fill: PN.plum800, hi: PN.plum600, lo: PN.plum900, drop: .none)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help("Minimise").accessibilityLabel("Minimise")
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 8)
-            .frame(height: ConsoleChrome.title)
-            .background(Color(red: 0.23, green: 0.21, blue: 0.31))
+            .foregroundStyle(PN.cream)
+            .padding(.horizontal, 6).padding(.top, PN.px)
+            .frame(maxWidth: .infinity)
+            .frame(height: ring + ConsoleChrome.title)
+            .background { VStack(spacing: 0) { PN.pink400.frame(height: PN.px); PN.plum700 } }
             .interactive()
-            Color.clear // kitty sits here, above or below this window; this area never takes clicks
+            HStack(spacing: 0) { PN.plum700.frame(width: ring); Color.clear; PN.plum700.frame(width: ring) }
+            PN.plum800.frame(height: ring) // bottom bevel
         }
-        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.black, lineWidth: ConsoleChrome.border))
+        .padding(PN.px)
+        .background(alignment: .bottom) { PN.plum900.frame(height: PN.px).padding(.horizontal, PN.px).offset(y: PN.px) }
+        .overlay(PixelEdges().fill(PN.outline))
         .overlay(alignment: toward == .left ? .bottomTrailing : .bottomLeading) {
-            Tail().fill(Color.black).frame(width: 10, height: 10)
-                .scaleEffect(x: toward == .left ? -1 : 1).offset(x: toward == .left ? 9 : -9, y: -14)
+            PixelArt.sideTail(PN.plum700).scaleEffect(x: toward == .left ? 1 : -1).offset(x: toward == .left ? 10 : -10, y: -12)
         }
     }
 }
 
+/// The minimised console: a quiet plum-800 strip with Code's status. Clicking it opens the console.
 struct MinimisedConsole: View {
     let status: String?; let toward: Side; let open: () -> Void
     var body: some View {
         Button(action: open) {
-            HStack {
-                Text("⌘ " + (status ?? "Claude Code is idle")).lineLimit(1)
-                Spacer()
-                Text("open").opacity(0.75)
+            HStack(spacing: 4) {
+                Icon(name: "code", ink: PN.muted)
+                Text(status ?? "Claude Code is idle").lineLimit(1)
+                Spacer(minLength: 4)
+                Text("OPEN").foregroundStyle(PN.pink400)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
+            .foregroundStyle(PN.muted)
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(red: 0.11, green: 0.105, blue: 0.15), in: RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.black, lineWidth: 3))
+            .pixelFrame(fill: PN.plum800, hi: PN.plum600, lo: PN.plum900)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

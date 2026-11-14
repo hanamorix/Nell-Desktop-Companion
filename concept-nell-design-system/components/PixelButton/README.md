@@ -5,7 +5,7 @@ A chunky, beveled pixel button with a 1-art-pixel outline and notched corners. I
 ## Variants
 - **`nl-btn--allow`**: `leaf` fill with `outline` ink. It is only for **Allow** on an approval bubble.
 - **`nl-btn--deny`**: `berry` fill with `snow` ink. It is only for **Deny**.
-- **`nl-btn--quiet`**: `plum-800`. Used for **Open terminal**, **Answer in terminal** and every other secondary action.
+- **`nl-btn--quiet`**: `plum-800`. Used for **OPEN CONSOLE**, **ANSWER IN CONSOLE** and every other secondary action.
 - default: `plum-600` with a `pink-400` top edge.
 
 Allow is lighter than Deny, so the pair can be told apart without relying on hue. Always keep the icon and the label together.

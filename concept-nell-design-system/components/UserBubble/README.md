@@ -1,9 +1,9 @@
 # UserBubble
 
-Your own message, shown in a blue bubble on the right with its tail mirrored. The spec makes these blue and right-aligned.
+Your own message, shown on **cream paper** against Nell's plum bubbles (the user's choice in v3, replacing blue).
 
 ## Look
-`user-blue` fill, `user-blue-hi` top edge, and `snow` ink (6.0:1). The tail sits 12px from the right.
+`user-fill` (`cream`) fill, `user-edge` (`snow`) top edge, a `muted` bottom bevel and `user-ink` (`outline`) text. Code chips keep their `plum-900` ground with `snow` text. In the app the tail points at Nell like every other bubble.
 
 ## Rules
 - It is added when you submit from the bar, or on `UserPromptSubmit` for text typed in kitty.
