@@ -25,3 +25,10 @@ Each round of the user's visual review: what was shown, what they said, and whet
 | 2 | Sad face with a 4 px tear stream from each eye, through the bottom of the glasses rims, down to the jaw; all other faces unchanged | "Make the 'tear rivers' wider" | Changes requested: widen both tear streams |
 | 3 | Sad face with 6 px tear streams (covering most of each cheek, breaking both glasses rims) | "Lets back track slightly and make them big tears that come from her eyes." | Changes requested: replace the rivers with big individual teardrops coming from her eyes |
 | 4 | Sad face with tears welling on the lower lids and one big teardrop (about 5×6 px) per eye on the cheek; glasses rims whole | "Accept, use scared" | **Accepted.** Faces and blink transition signed off; scared is the approval-needed face (awe stays on the sheet, unused) |
+
+## Body loops and in-betweens (Task 8)
+
+| Round | Shown | User's notes | Result |
+|---|---|---|---|
+| 1 | `body:idle` (two 2.5 s breaths, head follows chest by 1 px) and `body:typing` (hands alternate 1 px lifts, 1.33 s breath), GIFs at 2× on a dark background, plus a frame sheet | "Lets make sure there are some effects when typing." "Lets move the left hand slightly to the left, but so it's slightly hidden by the laptop screen." "We have to make sure that all backgrounds are transparent." | Changes requested: typing effects, left hand moved left and partly behind the laptop screen, transparent backgrounds everywhere |
+| 2 | Round 2: tap sparks on typing beats, left hand 3 px left with 9 px hidden behind the laptop lid (also on the master and face frames), transparent backgrounds everywhere, shown on a checkerboard | "Accept both" | **Accepted.** `body:idle` and `body:typing` signed off |

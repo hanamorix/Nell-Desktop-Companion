@@ -23,9 +23,10 @@ HEAD={{28,0},{127,0},{127,62},{108,64},{108,77},{92,77},{84,67},{46,68},{40,74},
 FACE={42,36,48,35}
 EYES={44,44,45,19}
 -- hands (round 3): the round-1 drawing, unchanged pixel for pixel; only moved onto the keyboard
--- (left hand +4 px right so it clears the lid edge, right hand +3 px right to keep them apart)
+-- (right hand +3 px right of round 1). Left hand: +4 px in round 3; Task 8 round 2 moved it 3 px back left so the lid
+-- (drawn in front of it, see LID_EDGE) hides its outer edge, at the user's request.
 HANDS={
- {x=50,y=93,rows={"....KKKKKK.....","..KKSSSSSSKK...",".KSSSSSSSSSBK..",".KSSRSSRSSRBBK.",".KSSRSSRSSRBDK.","KSSRSSRSSRSBDK.","KSSRSSRSSRBDK..","KBBKBBKBBKDK...",".KK.KK.KK.K...."}},
+ {x=47,y=93,rows={"....KKKKKK.....","..KKSSSSSSKK...",".KSSSSSSSSSBK..",".KSSRSSRSSRBBK.",".KSSRSSRSSRBDK.","KSSRSSRSSRSBDK.","KSSRSSRSSRBDK..","KBBKBBKBBKDK...",".KK.KK.KK.K...."}},
  {x=65,y=95,rows={".....KKKKKK.....","...KKSSSSSSKK...","..KBSSSSSSSSSK..",".KDBSRSSRSSRSSK.","KDDKSRSSRSSRSSK.","KDKSRSSRSSRSSK..",".KKSRSSRSSRSBK..","..KBKBBKBBKBBK..","...K.KK.KK.KK..."}},
 }
 EYE_SPEC={
@@ -42,7 +43,7 @@ MOUTH_CLEAR={56,59,13,5}
 STRINGS={63,70}
 LOGO={x=24,y=88,rows={"C...C","CC.CC","CCCCC","CCCCC",".CCC."}}
 DESK_SHADOW={{84,106,104}}
-ORPH_SKIP={{50,93,15,9},{65,95,16,9},{58,60,9,4}} -- plus the sclera ellipses of EYE_SPEC (orphans.lua)
+ORPH_SKIP={{49,93,13,9},{65,95,16,9},{58,60,9,4}} -- plus the sclera ellipses of EYE_SPEC (orphans.lua)
 EMOJI={28,14,16,16}
 PAPER={102,92,20,16}
 -- round 2 hand touch-ups (after the automatic outline pass): lid edge bump, desk right top corner
@@ -57,4 +58,29 @@ PATCHES={
  {layer="laptop", x=67, y=103, rows={"G"}, legend={G="#64595B"}},
  {layer="chair", x=124, y=104, rows={"x.",".x"}, legend={x="#00000000"}},
  {layer="desk", x=124, y=106, rows={"B"}, legend={B="#614B49"}},
+ -- Task 8 round 2 (left hand 3 px left): the sleeve pixel left beside the hand's top and a lone key fragment uncovered right of it
+ {layer="body", x=57, y=93, rows={"P"}, legend={P="#372931"}},
+ {layer="laptop", x=60, y=101, rows={"G"}, legend={G="#64595B"}},
+}
+-- The lid's right edge: per row, the first outline pixel of the laptop layer at x >= 40. Laptop pixels at or left of
+-- it are the lid, which stays in front of the left hand (hands.lua and body.lua never cut them).
+function LID_EDGE(img, y) for x = 40, 60 do if img:getPixel(x, y) == app.pixelColor.rgba(0x12, 0x0D, 0x0E, 255) then return x end end return -1 end
+-- body loops (Task 8, body.lua)
+-- one entry per frame: c = chest (body layer) up 1, h = head (head, face, eyes) up 1, l / r = left / right hand up 1,
+-- d = duration in ms (multiples of a 1/12 s tick). rest = the two resting frames, as offsets from the tag's first frame.
+BODY_LOOPS = {
+  {name = "idle", rest = "0,4", frames = {   -- two breaths of 2.5 s: hold, chest leads, head follows, chest falls first
+    {d = 1000}, {c = 1, d = 250}, {c = 1, h = 1, d = 1000}, {h = 1, d = 250},
+    {d = 1000}, {c = 1, d = 250}, {c = 1, h = 1, d = 1000}, {h = 1, d = 250}}},
+  {name = "typing", rest = "0,2", frames = { -- hands alternate on a 167 ms beat; one breath per 1.33 s loop
+    {d = 167}, {l = 1, d = 167, fx = "Rt"}, {d = 167}, {c = 1, r = 1, d = 167, fx = "Lt"},
+    {c = 1, h = 1, d = 167, fx = "Rt"}, {c = 1, h = 1, l = 1, d = 167, fx = "Ro"}, {h = 1, d = 167, fx = "Lt"}, {r = 1, d = 167, fx = "Lo"}}},
+}
+-- typing sparks (fx above): tap ticks at the top corners of the hand that is down (t), then the same ticks flying out
+-- one step (o). 3 px ticks, cream with a pink-400 outer tip; resting frames (0, 2) have none.
+TYPING_FX = {
+  Lt = {{50, 92, "#FFF4EC"}, {49, 91, "#FFF4EC"}, {48, 90, "#F4B6AC"}, {57, 92, "#FFF4EC"}, {58, 91, "#FFF4EC"}, {59, 90, "#F4B6AC"}},
+  Lo = {{48, 89, "#F4B6AC"}, {60, 89, "#F4B6AC"}},
+  Rt = {{68, 93, "#FFF4EC"}, {67, 92, "#FFF4EC"}, {66, 91, "#F4B6AC"}, {77, 93, "#FFF4EC"}, {78, 92, "#FFF4EC"}, {79, 91, "#F4B6AC"}},
+  Ro = {{65, 90, "#F4B6AC"}, {80, 90, "#F4B6AC"}},
 }

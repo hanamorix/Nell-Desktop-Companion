@@ -8,9 +8,11 @@ local body, lap, desk = layer("body"):cel(1), layer("laptop"):cel(1), layer("des
 local bi, li = Image(128,128,ColorMode.RGB), Image(128,128,ColorMode.RGB)
 local di = Image(128,128,ColorMode.RGB)
 bi:drawImage(body.image, body.position); li:drawImage(lap.image, lap.position); di:drawImage(desk.image, desk.position)
+local lid = {}; for y = 0, 127 do lid[y] = LID_EDGE(li, y) end
 for _, h in ipairs(HANDS) do
   for r, row in ipairs(h.rows) do for c = 1, #row do local ch = row:sub(c, c)
-    if LG[ch] then local x, y = h.x + c - 1, h.y + r - 1; bi:drawPixel(x, y, LG[ch]); li:drawPixel(x, y, pc.rgba(0,0,0,0)); di:drawPixel(x, y, pc.rgba(0,0,0,0)) end -- layers in front of body are cut under the hands
+    if LG[ch] then local x, y = h.x + c - 1, h.y + r - 1; bi:drawPixel(x, y, LG[ch]); di:drawPixel(x, y, pc.rgba(0,0,0,0)) -- layers in front of body are cut under the hands,
+      if x > lid[y] then li:drawPixel(x, y, pc.rgba(0,0,0,0)) end end                                                       -- except the lid, which hides the left hand's edge
   end end
 end
 body.image, body.position = bi, Point(0,0)

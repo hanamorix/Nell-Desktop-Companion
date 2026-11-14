@@ -1,4 +1,4 @@
--- set the palette to the used colours, then write the 1x PNG and 2x nearest-neighbour PNGs on light and dark backgrounds
+-- set the palette to the used colours, then write the 1x PNG and the 2x nearest-neighbour PNG, both on transparent
 local pc = app.pixelColor
 local spr = app.activeSprite
 local comp = Image(128, 128, ColorMode.RGB); comp:drawSprite(spr, 1)
@@ -12,10 +12,10 @@ spr:saveAs(spr.filename)
 local alphaBad = 0
 for it in comp:pixels() do local a = pc.rgbaA(it()); if a ~= 0 and a ~= 255 then alphaBad = alphaBad + 1 end end
 local function save(img, path) local s = Sprite(img.width, img.height, ColorMode.RGB); s.cels[1].image = img; s:saveAs(path); s:close() end
-save(comp, REV .. "master-" .. (ROUND or "r3") .. "-1x.png")
-for name, bg in pairs({light = pc.rgba(0xe9,0xe4,0xdc,255), dark = pc.rgba(0x2b,0x30,0x44,255)}) do
-  local big = Image(256, 256, ColorMode.RGB)
-  for y = 0, 255 do for x = 0, 255 do local v = comp:getPixel(x // 2, y // 2); big:drawPixel(x, y, pc.rgbaA(v) > 0 and v or bg) end end
-  save(big, REV .. "master-" .. (ROUND or "r3") .. "-" .. name .. ".png")
-end
+local R = ROUND or "r4"
+save(comp, REV .. "master-" .. R .. "-1x.png")
+-- 2x nearest-neighbour on a transparent background (rounds up to r3 also wrote -light/-dark versions on solid colours)
+local big = Image(256, 256, ColorMode.RGB)
+for y = 0, 255 do for x = 0, 255 do big:drawPixel(x, y, comp:getPixel(x // 2, y // 2)) end end
+save(big, REV .. "master-" .. R .. "-2x.png")
 print("palette", #cols, "partial-alpha px", alphaBad)
