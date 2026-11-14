@@ -104,9 +104,11 @@ struct MessageBar: View {
                 .textFieldStyle(.plain)
                 .foregroundStyle(PN.cream)
                 .tint(PN.pink400)
+                .accessibilityLabel("Message")
                 .focused(focused)
                 .onSubmit { model.submit() }
                 .onChange(of: model.draft) { model.refresh() }
+                .frame(maxWidth: .infinity, alignment: .leading)
             if model.barHeld { Text("QUEUED").foregroundStyle(PN.gold).fixedSize() }
         }
         .padding(.horizontal, 6).padding(.top, 4).padding(.bottom, 2)

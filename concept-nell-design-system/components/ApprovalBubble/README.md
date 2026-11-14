@@ -1,6 +1,6 @@
 # ApprovalBubble
 
-A blocking permission request from Claude Code ("Wants to run `npm test`"), with **ALLOW / DENY / OPEN CONSOLE**. It is the most important bubble Nell shows.
+A blocking permission request from Claude Code ("Wants to run `npm test`"), with **ALLOW / DENY / CONSOLE** on one row. It is the most important bubble Nell shows.
 
 ## Rules (from the spec; an approval must never get lost)
 - It comes from `PermissionRequest`. It **never fades** until it is settled, and Nell stays in the needs-you animation meanwhile.
@@ -11,7 +11,7 @@ A blocking permission request from Claude Code ("Wants to run `npm test`"), with
 - A soft sound plays once, unless kitty is already in front.
 
 ## Look
-In the app the column is 270pt, so it stays at `bubble-max` and OPEN CONSOLE wraps under ALLOW / DENY. `surface` with a **`gold`** top edge and a heavier `drop-lg` shadow, so it sits above the stack. The header is a `gold` NEEDS YOU line with the alert icon. A settled bubble drops back to a `plum-600` edge.
+It stays at `bubble-max`. The three buttons sit on one row, ALLOW · DENY · CONSOLE (the third is `quiet` with the terminal icon), which fills the 236pt inner width exactly. `surface` with a **`gold`** top edge and a heavier `drop-lg` shadow, so it sits above the stack. The header is a `gold` NEEDS YOU line with the alert icon. A settled bubble drops back to a `plum-600` edge.
 
 ## What the consumer provides
 The tool summary, the request id, and the settled outcome.

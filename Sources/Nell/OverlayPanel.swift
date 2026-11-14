@@ -60,7 +60,7 @@ extension View {
     private var timer: Timer?
     private var dragStart: (mouse: NSPoint, origin: NSPoint, nell: CGPoint)?
 
-    static let nellSize = CGSize(width: 230, height: 200)
+    static let nellSize = CGSize(width: 320, height: 200) // wide enough for a ~250 pt message bar beside the chips
     static let columnSize = CGSize(width: 270, height: 320)
     static let minimisedSize = CGSize(width: 340, height: 30)
 

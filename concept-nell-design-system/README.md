@@ -10,7 +10,7 @@ Nell is a small pixel-art girl in a plum cat-ear hoodie who sits on your Mac des
 - **Approvals start with what Claude wants:** "Wants to run `npm test`". After settling they say what happened: `Allowed`, `Denied`, `Answered in console` or `Answer in the console`.
 - **Commands, paths and tool names** always go in a `code` chip (`plum-900` ground). Never put them in quotes.
 - **Code replies** are cut to about 3 lines, then "…more in ⌘". **Chat replies** are shown in full.
-- **Labels** on buttons and chips are UPPERCASE, one or two words: ALLOW, DENY, OPEN CONSOLE, CHAT, CODE.
+- **Labels** on buttons and chips are UPPERCASE, one or two words: ALLOW, DENY, CONSOLE (approvals), OPEN CONSOLE (console-needed), ANSWER IN CONSOLE (questions, the one three-word label), CHAT, CODE.
 - **No emoji in Nell's own UI text.** The 💬 and ⌘ from the spec are drawn as pixel icons (`nell-chat.svg`, `nell-code.svg`).
 
 ## Visual foundations

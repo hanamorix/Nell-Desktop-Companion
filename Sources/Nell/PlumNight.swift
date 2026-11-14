@@ -152,7 +152,7 @@ struct PixelButton: ButtonStyle {
 }
 
 /// A mode switch under Nell's desk, drawn as a small wooden chip; selected chips turn plum with a pink underline.
-/// Icon-only to fit beside the bar in Nell's 230 pt block; the name is in the tooltip and accessibility label.
+/// Icon-only so the bar beside them stays wide; the name is in the tooltip and accessibility label.
 struct ModeChip: View {
     let icon: String; let help: String; let on: Bool; let news: Bool; let action: () -> Void
     var body: some View {
