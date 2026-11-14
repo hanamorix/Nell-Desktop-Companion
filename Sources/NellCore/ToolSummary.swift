@@ -16,3 +16,13 @@ public func toolSummary(name: String, input: [String: JSONValue]?) -> String {
     default: return "Using \(cut(name, 40))"
     }
 }
+
+/// The approval bubble's line: "Wants to run `ls`", built from the live summary.
+public func approvalSummary(name: String, input: [String: JSONValue]?) -> String {
+    let s = toolSummary(name: name, input: input)
+    for (from, to) in [("Running ", "run "), ("Editing ", "edit "), ("Reading ", "read "), ("Searching for ", "search for "),
+                       ("Looking up ", "look up "), ("Delegating: ", "delegate: "), ("Using ", "use ")] where s.hasPrefix(from) {
+        return "Wants to " + to + s.dropFirst(from.count)
+    }
+    return "Wants to " + s
+}

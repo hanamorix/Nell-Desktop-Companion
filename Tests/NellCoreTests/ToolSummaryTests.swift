@@ -25,3 +25,10 @@ import Testing
     let s = toolSummary(name: "Write", input: ["file_path": .string("/x/" + String(repeating: "f", count: 200)), "content": .string(String(repeating: "x", count: 1_000_000))])
     #expect(s.count < 60)
 }
+
+@Test func approvalWording() {
+    #expect(approvalSummary(name: "Bash", input: ["command": .string("npm test")]) == "Wants to run `npm test`")
+    #expect(approvalSummary(name: "Edit", input: ["file_path": .string("/a/auth.ts")]) == "Wants to edit auth.ts")
+    #expect(approvalSummary(name: "WebFetch", input: ["url": .string("https://example.com/x")]) == "Wants to look up example.com")
+    #expect(approvalSummary(name: "mcp__x__y", input: nil) == "Wants to use mcp__x__y")
+}
