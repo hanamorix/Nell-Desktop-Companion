@@ -1,7 +1,7 @@
 import AppKit
 import NellCore
 
-struct ShownBubble: Identifiable { let bubble: Bubble; let opacity: Double; var id: UUID { bubble.id } }
+struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: Double; var id: UUID { bubble.id } }
 
 /// Nell's brain on the main actor: routes hook events into trackers + bubbles, and UI actions into kitty + approvals.
 @MainActor final class NellModel: ObservableObject {
@@ -34,7 +34,7 @@ struct ShownBubble: Identifiable { let bubble: Bubble; let opacity: Double; var 
     }
 
     func cwd(_ m: Mode) -> String { m == .code ? (state.projectDir ?? paths.chatDir.path) : paths.chatDir.path }
-    func markLaunched() { let now = Date(); for m in Mode.allCases { trackers[m]?.markLaunched(now: now) }; refresh() }
+    func markLaunched(_ modes: [Mode]) { let now = Date(); for m in modes { trackers[m]?.markLaunched(now: now) }; refresh() }
 
     // MARK: UI actions
 
@@ -141,7 +141,8 @@ struct ShownBubble: Identifiable { let bubble: Bubble; let opacity: Double; var 
         let next = bodyState(selected: selected, code: code, chat: chat, listening: !draft.isEmpty)
         if (next == .needsYou || next == .question), body != next { onNeedsYou?() }
         if body != next { body = next }
-        shown = bubbles.visible(now: Date()).map { ShownBubble(bubble: $0.bubble, opacity: $0.opacity) }
+        let nextShown = bubbles.visible(now: Date()).map { ShownBubble(bubble: $0.bubble, opacity: $0.opacity) }
+        if nextShown != shown { shown = nextShown } // don't re-render the view every tick
     }
 
     private func send(_ text: String, _ m: Mode) {

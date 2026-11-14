@@ -3,8 +3,8 @@ import NellCore
 
 /// Finds a bundled resource: inside Nell.app it's in Contents/Resources; under `swift run` it's in the SwiftPM bundle.
 func resourceURL(_ name: String) -> URL {
-    if let u = Bundle.main.url(forResource: name, withExtension: nil) ?? Bundle.main.url(forResource: name, withExtension: nil, subdirectory: "Resources") { return u }
-    return Bundle.module.url(forResource: name, withExtension: nil, subdirectory: "Resources")!
+    if let r = Bundle.main.resourceURL?.appending(path: name), FileManager.default.fileExists(atPath: r.path) { return r }
+    return Bundle.module.url(forResource: "Resources", withExtension: nil)!.appending(path: name)
 }
 
 @discardableResult
@@ -45,10 +45,13 @@ func runTool(_ argv: [String], env: [String: String]? = nil) -> (status: Int32, 
     }
 
     /// Reuses a live kitty (Nell crashed earlier) or starts one with the code window, then makes sure both windows exist.
-    func ensureRunning(projectDir: String, state: inout SavedState) throws {
+    /// Returns true when an already-running kitty was reused (its sessions won't send SessionStart again).
+    @discardableResult
+    func ensureRunning(projectDir: String, state: inout SavedState) throws -> Bool {
         try installSupportFiles()
         let files = (try? FileManager.default.contentsOfDirectory(atPath: paths.support.path)) ?? []
-        if let live = pickKittySocket(files.map { paths.support.appending(path: $0).path }, isAlive: { kill($0, 0) == 0 }) {
+        let live = pickKittySocket(files.map { paths.support.appending(path: $0).path }, isAlive: { kill($0, 0) == 0 })
+        if let live {
             socket = "unix:" + live
         } else {
             let args = sessionArgs(.code, cwd: projectDir, state: &state)
@@ -65,6 +68,7 @@ func runTool(_ argv: [String], env: [String: String]? = nil) -> (status: Int32, 
         }
         ensureWindow(.code, cwd: projectDir, state: &state)
         ensureWindow(.chat, cwd: paths.chatDir.path, state: &state)
+        return live != nil
     }
 
     /// Relaunches a mode's window if Claude exited or the window was closed.
