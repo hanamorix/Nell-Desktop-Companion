@@ -52,7 +52,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
 
     /// First click selects the mode; clicking the selected chip shows/hides its kitty window.
     func chip(_ m: Mode) {
-        if selected == m { kitty.toggle(m) } else { selected = m }
+        if selected == m { _ = kitty.showConsole(tab: m) } else { selected = m }
         refresh()
     }
 
@@ -60,7 +60,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
 
     func openTerminal(_ m: Mode, requestId: String?) {
         if let requestId { registry.answer(id: requestId, .none) }
-        kitty.show(m)
+        _ = kitty.showConsole(tab: m)
     }
 
     // MARK: Hook events
@@ -110,7 +110,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
             bubbles.add(.error, mode: m, text: e.error ?? "Something went wrong", now: now)
         case "SessionEnd":
             bubbles.clearStatus(mode: m)
-            if kitty.ensureWindow(m, cwd: cwd(m), state: &state) { trackers[m]?.markLaunched(now: now); onStateChanged?() }
+            if kitty.ensureTab(m, cwd: cwd(m), state: &state) { trackers[m]?.markLaunched(now: now); onStateChanged?() }
         default: break
         }
         flushQueue(m)
@@ -121,7 +121,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
         trackers[m]?.settleApproval(id, answer: a)
         let quiet = questionIds.remove(id) != nil || settledInKitty.remove(id) != nil
         bubbles.settle(requestId: id, as: a == .allow ? "Allowed" : a == .deny ? "Denied" : "Answer in terminal")
-        if a == .none, !quiet { kitty.show(m) } // Open terminal, deadline, or hook died: Claude asks in kitty
+        if a == .none, !quiet { _ = kitty.showConsole(tab: m) } // Open terminal, deadline, or hook died: Claude asks in kitty
         flushQueue(m)
         refresh()
     }
@@ -132,7 +132,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
         for m in Mode.allCases {
             trackers[m]?.tick(now: now)
             let disc = trackers[m]?.state == .disconnected
-            if disc, !wasDisconnected.contains(m) { wasDisconnected.insert(m); kitty.show(m) } // e.g. the folder-trust dialog
+            if disc, !wasDisconnected.contains(m) { wasDisconnected.insert(m); _ = kitty.showConsole(tab: m) } // e.g. the folder-trust dialog
             if !disc { wasDisconnected.remove(m) }
         }
         bubbles.tick(now: now, userIdle: userIdle, hovered: hovered)
@@ -154,7 +154,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
     }
 
     private func send(_ text: String, _ m: Mode) {
-        if kitty.ensureWindow(m, cwd: cwd(m), state: &state) {
+        if kitty.ensureTab(m, cwd: cwd(m), state: &state) {
             // Claude was gone and is starting again: keep the text until its SessionStart
             trackers[m]?.markLaunched(now: Date()); onStateChanged?()
             _ = queues[m]?.submit(text, held: true)

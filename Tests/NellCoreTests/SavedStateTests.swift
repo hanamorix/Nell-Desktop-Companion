@@ -16,3 +16,11 @@ import Testing
     #expect(SavedState.load(url) == SavedState())
     #expect(SavedState.load(url.appending(path: "missing")) == SavedState())
 }
+
+@Test func savedStateRoundTripsCalibration() throws {
+    let url = URL(fileURLWithPath: tmpSocket()).deletingLastPathComponent().appending(path: "state.json")
+    var s = SavedState()
+    s.calibration = PanelCalibration(extraSize: CGSize(width: 50, height: 52), topOffset: 39)
+    try s.save(url)
+    #expect(SavedState.load(url).calibration == s.calibration)
+}

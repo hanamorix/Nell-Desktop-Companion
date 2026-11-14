@@ -8,7 +8,6 @@ public struct Paths: Sendable {
     }
     public var nellSocket: URL { support.appending(path: "nell.sock") }
     public var kittyConf: URL { support.appending(path: "kitty.conf") }
-    public var kittySession: URL { support.appending(path: "kitty.session") }
     public var hookScript: URL { support.appending(path: "nell-hook.sh") }
     public var stateFile: URL { support.appending(path: "state.json") }
     public var chatDir: URL { support.appending(path: "chat") }

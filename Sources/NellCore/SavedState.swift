@@ -7,6 +7,8 @@ public struct SavedState: Codable, Equatable, Sendable {
     public var chatSessionId: String?
     /// Panel origin per display (CGDirectDisplayID as a string).
     public var positions: [String: CGPoint] = [:]
+    /// kitty's measured panel offsets (nil until the console has been shown once).
+    public var calibration: PanelCalibration?
 
     public init() {}
 

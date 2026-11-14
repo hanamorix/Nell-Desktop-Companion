@@ -8,20 +8,6 @@ public enum KittyCommands {
     static func match(_ m: Mode) -> [String] { ["--match", "env:NELL_MODE=\(m.rawValue)"] }
     static func at(_ socket: String, _ rest: [String]) -> [String] { [kitten, "@", "--to", socket] + rest }
 
-    public static func launchKitty(paths: Paths) -> [String] {
-        [kitty, "-c", paths.kittyConf.path, "-o", "allow_remote_control=socket-only",
-         "--listen-on", "unix:" + paths.support.appending(path: "kitty-{kitty_pid}.sock").path,
-         "--start-as", "hidden", "--session", paths.kittySession.path]
-    }
-
-    /// One kitty session-file line that opens the window for `mode`.
-    public static func sessionFile(mode: Mode, cwd: String, claude: String, args: [String]) -> String {
-        "launch --env NELL_MODE=\(mode.rawValue) --cwd \(shellQuote(cwd)) " + ([claude] + args).map(shellQuote).joined(separator: " ") + "\n"
-    }
-
-    public static func launchWindow(socket: String, mode: Mode, cwd: String, claude: String, args: [String]) -> [String] {
-        at(socket, ["launch", "--type=os-window", "--keep-focus", "--env", "NELL_MODE=\(mode.rawValue)", "--cwd", cwd, claude] + args)
-    }
     /// The text goes on stdin: as an argument kitten would apply Python escapes to it (\n, \e, \x41…).
     public static func sendText(socket: String, mode: Mode) -> [String] {
         at(socket, ["send-text"] + match(mode) + ["--bracketed-paste", "enable", "--stdin"])
@@ -49,13 +35,7 @@ public enum KittyCommands {
     public static func closeTab(socket: String, mode: Mode) -> [String] { at(socket, ["close-tab"] + match(mode)) }
 
     public static func sendEnter(socket: String, mode: Mode) -> [String] { at(socket, ["send-key"] + match(mode) + ["enter"]) }
-    public static func show(socket: String, mode: Mode) -> [String] { at(socket, ["resize-os-window"] + match(mode) + ["--action", "show"]) }
-    public static func hide(socket: String, mode: Mode) -> [String] { at(socket, ["resize-os-window"] + match(mode) + ["--action", "hide"]) }
-    public static func toggle(socket: String, mode: Mode) -> [String] {
-        at(socket, ["resize-os-window"] + match(mode) + ["--action", "toggle-visibility"])
-    }
     public static func focus(socket: String, mode: Mode) -> [String] { at(socket, ["focus-window"] + match(mode)) }
-    public static func closeWindow(socket: String, mode: Mode) -> [String] { at(socket, ["close-window"] + match(mode)) }
     public static func ls(socket: String) -> [String] { at(socket, ["ls"]) }
 
     /// kitty must not inherit a parent Claude Code's env (CLAUDECODE, ANTHROPIC_BASE_URL, …).
