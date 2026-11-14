@@ -14,8 +14,8 @@ local function inE(x, y, cx, cy, rx, ry) local dx, dy = (x + 0.5 - cx) / rx, (y 
 local function inRect(x, y, r) return x >= r[1] and y >= r[2] and x < r[1] + r[3] and y < r[2] + r[4] end
 
 -- reset to the single idle frame
--- body:* tags go too: their frames (10..) are deleted here, so run body.lua after this script (run_all.lua does)
-for i = #spr.tags, 1, -1 do local n = spr.tags[i].name; if n:match("^face:") or n == "eyes:closed" or n:match("^body:") then spr:deleteTag(spr.tags[i]) end end
+-- body:* and between:* tags go too: their frames (10..) are deleted here, so run body.lua after this script (run_all.lua does)
+for i = #spr.tags, 1, -1 do local n = spr.tags[i].name; if n:match("^face:") or n == "eyes:closed" or n:match("^body:") or n:match("^between:") then spr:deleteTag(spr.tags[i]) end end
 while #spr.frames > 1 do spr:deleteFrame(#spr.frames) end
 
 local LF, LE = layer("face"), layer("eyes")

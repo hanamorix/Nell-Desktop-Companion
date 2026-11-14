@@ -66,15 +66,42 @@ PATCHES={
 -- it are the lid, which stays in front of the left hand (hands.lua and body.lua never cut them).
 function LID_EDGE(img, y) for x = 40, 60 do if img:getPixel(x, y) == app.pixelColor.rgba(0x12, 0x0D, 0x0E, 255) then return x end end return -1 end
 -- body loops (Task 8, body.lua)
--- one entry per frame: c = chest (body layer) up 1, h = head (head, face, eyes) up 1, l / r = left / right hand up 1,
--- d = duration in ms (multiples of a 1/12 s tick). rest = the two resting frames, as offsets from the tag's first frame.
+-- one entry per frame: c = chest (body layer) and h = head (head, face, eyes) offset in px, +1 up (breath, lean back),
+-- -1 down (slump); l / r = left / right hand up 1; fx = typing sparks (TYPING_FX); face = the face drawn in (a face:*
+-- tag; default the idle face, which the app covers with its pasted face); eyes = "closed" (the eyes:closed patch);
+-- arm = the raised left arm (ARMS); d = duration in ms (multiples of a 1/12 s tick).
+-- tag = the tag name; data = its user data: rest = the two resting frames as offsets from the tag's first frame,
+-- face=drawn = the face is part of the frames (the app skips its face and blink overlays on that tag).
 BODY_LOOPS = {
-  {name = "idle", rest = "0,4", frames = {   -- two breaths of 2.5 s: hold, chest leads, head follows, chest falls first
+  {tag = "body:idle", data = "rest=0,4", frames = {   -- two breaths of 2.5 s: hold, chest leads, head follows, chest falls first
     {d = 1000}, {c = 1, d = 250}, {c = 1, h = 1, d = 1000}, {h = 1, d = 250},
     {d = 1000}, {c = 1, d = 250}, {c = 1, h = 1, d = 1000}, {h = 1, d = 250}}},
-  {name = "typing", rest = "0,2", frames = { -- hands alternate on a 167 ms beat; one breath per 1.33 s loop
+  {tag = "body:typing", data = "rest=0,2", frames = { -- hands alternate on a 167 ms beat; one breath per 1.33 s loop
     {d = 167}, {l = 1, d = 167, fx = "Rt"}, {d = 167}, {c = 1, r = 1, d = 167, fx = "Lt"},
     {c = 1, h = 1, d = 167, fx = "Rt"}, {c = 1, h = 1, l = 1, d = 167, fx = "Ro"}, {h = 1, d = 167, fx = "Lt"}, {r = 1, d = 167, fx = "Lo"}}},
+  -- yawning (4.67 s): a slumped sleepy breath, then one yawn: the left hand rises to her mouth, eyes squeeze shut,
+  -- she leans back, and the hand comes down again. Rests (0, 4) are the same slumped pose.
+  {tag = "body:yawning", data = "rest=0,4 face=drawn", frames = {
+    {c = -1, h = -1, face = "exhausted", d = 917},
+    {h = -1, face = "exhausted", d = 250},
+    {face = "exhausted", d = 917},
+    {c = -1, face = "exhausted", d = 250},
+    {c = -1, h = -1, face = "exhausted", d = 583},
+    {arm = "mid", face = "exhausted", d = 250},
+    {c = 1, h = 1, arm = "mouth", face = "exhausted", eyes = "closed", d = 1250},
+    {arm = "mid", face = "exhausted", d = 250}}},
+  -- in-betweens: the face changes behind a drawn blink (typing rest -> blink -> chest drops -> yawning rest, and back)
+  {tag = "between:typing-yawning", data = "face=drawn", frames = {
+    {face = "exhausted", eyes = "closed", d = 167}, {c = -1, face = "exhausted", d = 250}}},
+  {tag = "between:yawning-typing", data = "face=drawn", frames = {
+    {h = -1, face = "exhausted", d = 250}, {face = "exhausted", eyes = "closed", d = 167}}},
+}
+-- the raised left arm for the yawn (props layer, never over the lid): the accepted left-hand rows flipped upright at
+-- hand = {x, y} (9 rows; the gaps between the fingertips are closed with outline), on a sleeve from the cuff (top) down
+-- to the elbow behind the lid (bot); xl / xr = the sleeve's left and right outline x at top and bottom
+ARMS = {   -- the cuff starts on the wrist row (the hand's last row), one pixel wider than the wrist on each side
+  mid   = {hand = {49, 75}, top = 83, bot = 94, xl = {52, 44}, xr = {59, 59}},
+  mouth = {hand = {52, 58}, top = 66, bot = 94, xl = {55, 40}, xr = {62, 59}},
 }
 -- typing sparks (fx above): tap ticks at the top corners of the hand that is down (t), then the same ticks flying out
 -- one step (o). 3 px ticks, cream with a pink-400 outer tip; resting frames (0, 2) have none.

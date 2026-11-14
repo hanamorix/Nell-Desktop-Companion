@@ -72,23 +72,40 @@ print("hand px behind the lid (not compared): " .. hidden)
 local function handAt(im, i, dy) local bad = 0
   for _, q in ipairs(hands[i]) do if im:getPixel(q[1], q[2] + dy) ~= q[3] then bad = bad + 1 end end; return bad end
 
-print("per frame: duration | face key | enclosed | silhouette not outline | stray colours | partial alpha | hands (L,R dy) | idle-face paste diff | worst face ring seam | closed-eye paste outside eyes key | emoji rect opaque")
-for _, t in ipairs(spr.tags) do if t.name:match("^body:") then
+local POSE = {}   -- tag name -> {data, frames} from cfg.lua
+for _, loop in ipairs(BODY_LOOPS) do POSE[loop.tag] = loop end
+local propsLayer; for _, l in ipairs(spr.layers) do if l.name == "props" then propsLayer = l end end
+local function faceImg(name, closed)   -- composite of a face frame, optionally with the closed-eye patch
+  local im = comp(tag("face:" .. name).fromFrame.frameNumber)
+  if closed then im:drawImage(pcel.image, pcel.position) end
+  return im
+end
+print("per frame: duration | face key | enclosed | silhouette not outline | stray colours | partial alpha | hands (L,R dy) | idle-face paste diff (drawn faces: drawn-face diff) | worst face ring seam | closed-eye paste outside eyes key | emoji rect opaque")
+for _, t in ipairs(spr.tags) do if t.name:match("^body:") or t.name:match("^between:") then
+  local loop = POSE[t.name]; assert(loop and #loop.frames == t.toFrame.frameNumber - t.fromFrame.frameNumber + 1 and loop.data == t.data, "tag " .. t.name .. " differs from cfg")
+  local drawn = (t.data or ""):match("face=drawn") ~= nil
   for f = t.fromFrame.frameNumber, t.toFrame.frameNumber do
+    local p = loop.frames[f - t.fromFrame.frameNumber + 1]
     local im = comp(f)
     local fk, ek, mk = key("face", f), key("eyes", f), key("emoji", f)
     local dy = fk[2] - FACE[2]
-    check(fk[1] == FACE[1] and fk[3] == FACE[3] and fk[4] == FACE[4] and math.abs(dy) <= 1, "face key " .. f)
+    check(fk[1] == FACE[1] and fk[3] == FACE[3] and fk[4] == FACE[4] and dy == -(p.h or 0), "face key " .. f)
     check(ek[2] - EYES[2] == dy and mk[2] - EMOJI[2] == dy and ek[1] == EYES[1] and mk[1] == EMOJI[1], "eyes/emoji key not following face " .. f)
     local stray, partial = 0, 0
     for it in im:pixels() do local v = it(); if a(v) > 0 and not OKCOL[v] then stray = stray + 1 end; if a(v) > 0 and a(v) < 255 then partial = partial + 1 end end
     -- hands: each must sit exactly at dy 0 or -1
     local hs = {}
-    for i = 1, 2 do if handAt(im, i, 0) == 0 then hs[i] = "0" elseif handAt(im, i, -1) == 0 then hs[i] = "-1" else hs[i] = "X" end end
+    for i = 1, 2 do if i == 1 and p.arm then hs[i] = "arm" elseif handAt(im, i, 0) == 0 then hs[i] = "0" elseif handAt(im, i, -1) == 0 then hs[i] = "-1" else hs[i] = "X" end end
     check(hs[1] ~= "X" and hs[2] ~= "X", "hand not an exact copy on frame " .. f)
     -- seam: paste each face's rect at this frame's face key
     local idleDiff, worstRing = 0, 0
-    for ff = 1, 8 do local ring = 0
+    local props = Image(128, 128, ColorMode.RGB); local pc2 = propsLayer:cel(f); if pc2 then props:drawImage(pc2.image, pc2.position) end
+    if drawn then   -- the drawn face must be that face (closed if asked) translated to the key, except under the raised hand
+      local want = faceImg(p.face, p.eyes == "closed")
+      for y = 0, FACE[4] - 1 do for x = 0, FACE[3] - 1 do
+        if a(props:getPixel(fk[1] + x, fk[2] + y)) == 0 and want:getPixel(FACE[1] + x, FACE[2] + y) ~= im:getPixel(fk[1] + x, fk[2] + y) then idleDiff = idleDiff + 1 end end end
+    end
+    for ff = 1, drawn and 0 or 8 do local ring = 0
       for y = 0, FACE[4] - 1 do for x = 0, FACE[3] - 1 do
         local v = FACEIMG[ff]:getPixel(FACE[1] + x, FACE[2] + y)
         local w = im:getPixel(fk[1] + x, fk[2] + y)
@@ -101,7 +118,7 @@ for _, t in ipairs(spr.tags) do if t.name:match("^body:") then
     end
     -- closed-eye patch at the eyes key: every patch pixel must land inside the eyes key rect and on the face it closes
     local outside = 0
-    for it in pcel.image:pixels() do if a(it()) > 0 then
+    for it in pcel.image:pixels() do if not drawn and a(it()) > 0 then
       local x, y = it.x + pcel.position.x - EYES[1] + ek[1], it.y + pcel.position.y - EYES[2] + ek[2]
       if x < ek[1] or y < ek[2] or x >= ek[1] + ek[3] or y >= ek[2] + ek[4] then outside = outside + 1 end
       -- the patch replaces eye pixels; the pixel it covers must be the same as frame 1 under the unshifted patch
@@ -122,7 +139,7 @@ local function layerImg(n, f) for _, l in ipairs(spr.layers) do if l.name == n t
   local im = Image(128, 128, ColorMode.RGB); local c = l:cel(f); if c then im:drawImage(c.image, c.position) end; return im end end end
 for _, n in ipairs({"chair", "desk", "laptop"}) do
   local base, total, list = layerImg(n, 1), 0, {}
-  for _, t in ipairs(spr.tags) do if t.name:match("^body:") then for f = t.fromFrame.frameNumber, t.toFrame.frameNumber do
+  for _, t in ipairs(spr.tags) do if t.name:match("^body:") or t.name:match("^between:") then for f = t.fromFrame.frameNumber, t.toFrame.frameNumber do
     local im = layerImg(n, f)
     for y = 0, 127 do for x = 0, 127 do local u, v = base:getPixel(x, y), im:getPixel(x, y)
       if u ~= v then total = total + 1
