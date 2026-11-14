@@ -1,0 +1,114 @@
+import Foundation
+import NellCore
+
+/// Finds a bundled resource: inside Nell.app it's in Contents/Resources; under `swift run` it's in the SwiftPM bundle.
+func resourceURL(_ name: String) -> URL {
+    if let u = Bundle.main.url(forResource: name, withExtension: nil) ?? Bundle.main.url(forResource: name, withExtension: nil, subdirectory: "Resources") { return u }
+    return Bundle.module.url(forResource: name, withExtension: nil, subdirectory: "Resources")!
+}
+
+@discardableResult
+func runTool(_ argv: [String], env: [String: String]? = nil) -> (status: Int32, out: Data) {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: argv[0])
+    p.arguments = Array(argv.dropFirst())
+    if let env { p.environment = env }
+    let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
+    do { try p.run() } catch { return (-1, Data()) }
+    let data = out.fileHandleForReading.readDataToEndOfFile()
+    p.waitUntilExit()
+    return (p.terminationStatus, data)
+}
+
+/// Owns Nell's kitty instance and the two `claude` windows in it.
+/// shortcut: kitten @ calls run synchronously on the main thread (each ~20 ms); move to a queue if they ever stall the UI.
+@MainActor final class KittyController {
+    let paths: Paths
+    private(set) var socket: String?
+    private let home = FileManager.default.homeDirectoryForCurrentUser
+    private var claude: String { home.appending(path: ".local/bin/claude").path }
+
+    init(paths: Paths) { self.paths = paths }
+
+    /// Writes kitty.conf, the hook script and both hook settings files into Application Support.
+    func installSupportFiles() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: paths.chatDir, withIntermediateDirectories: true)
+        for (name, dest) in [("kitty.conf", paths.kittyConf), ("nell-hook.sh", paths.hookScript)] {
+            try? fm.removeItem(at: dest)
+            try fm.copyItem(at: resourceURL(name), to: dest)
+        }
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: paths.hookScript.path)
+        for m in Mode.allCases {
+            try hooksSettingsJSON(script: paths.hookScript.path, socket: paths.nellSocket.path, mode: m).write(to: paths.hooksSettings(m))
+        }
+    }
+
+    /// Reuses a live kitty (Nell crashed earlier) or starts one with the code window, then makes sure both windows exist.
+    func ensureRunning(projectDir: String, state: inout SavedState) throws {
+        try installSupportFiles()
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: paths.support.path)) ?? []
+        if let live = pickKittySocket(files.map { paths.support.appending(path: $0).path }, isAlive: { kill($0, 0) == 0 }) {
+            socket = "unix:" + live
+        } else {
+            let args = sessionArgs(.code, cwd: projectDir, state: &state)
+            try KittyCommands.sessionFile(mode: .code, cwd: projectDir, claude: claude, args: args)
+                .write(to: paths.kittySession, atomically: true, encoding: .utf8)
+            let p = Process()
+            let argv = KittyCommands.launchKitty(paths: paths)
+            p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
+            p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName())
+            try p.run()
+            let sock = paths.support.appending(path: "kitty-\(p.processIdentifier).sock").path
+            for _ in 0..<50 where !FileManager.default.fileExists(atPath: sock) { usleep(100_000) }
+            socket = "unix:" + sock
+        }
+        ensureWindow(.code, cwd: projectDir, state: &state)
+        ensureWindow(.chat, cwd: paths.chatDir.path, state: &state)
+    }
+
+    /// Relaunches a mode's window if Claude exited or the window was closed.
+    func ensureWindow(_ m: Mode, cwd: String, state: inout SavedState) {
+        guard let socket else { return }
+        let ls = runTool(KittyCommands.ls(socket: socket)).out
+        guard !windowExists(lsJSON: ls, mode: m) else { return }
+        let args = sessionArgs(m, cwd: cwd, state: &state)
+        runTool(KittyCommands.launchWindow(socket: socket, mode: m, cwd: cwd, claude: claude, args: args))
+        runTool(KittyCommands.hide(socket: socket, mode: m))
+    }
+
+    func send(_ text: String, to m: Mode) {
+        guard let socket else { return }
+        runTool(KittyCommands.sendText(socket: socket, mode: m, text: text))
+        runTool(KittyCommands.sendEnter(socket: socket, mode: m))
+    }
+
+    func show(_ m: Mode) {
+        guard let socket else { return }
+        runTool(KittyCommands.show(socket: socket, mode: m)); runTool(KittyCommands.focus(socket: socket, mode: m))
+    }
+    func toggle(_ m: Mode) { if let socket { runTool(KittyCommands.toggle(socket: socket, mode: m)) } }
+
+    func restartCode(in dir: String, state: inout SavedState) {
+        guard let socket else { return }
+        runTool(KittyCommands.closeWindow(socket: socket, mode: .code))
+        state.codeSessionId = nil
+        state.projectDir = dir
+        ensureWindow(.code, cwd: dir, state: &state)
+    }
+
+    /// Closing windows leaves kitty running, so end the process itself. Sessions resume next launch.
+    func quit() {
+        if let socket, let pid = kittyPid(fromSocket: socket) { kill(pid, SIGTERM) }
+        socket = nil
+    }
+
+    /// `--resume` the saved session if its transcript exists, otherwise a fresh `--session-id`.
+    private func sessionArgs(_ m: Mode, cwd: String, state: inout SavedState) -> [String] {
+        let saved = m == .code ? state.codeSessionId : state.chatSessionId
+        let resume = saved.map { FileManager.default.fileExists(atPath: transcriptPath(home: home, cwd: cwd, sessionId: $0).path) } ?? false
+        let id = resume ? saved! : UUID().uuidString.lowercased()
+        if m == .code { state.codeSessionId = id } else { state.chatSessionId = id }
+        return claudeArgs(mode: m, sessionId: id, resume: resume, settings: paths.hooksSettings(m).path)
+    }
+}
