@@ -16,3 +16,12 @@ Each round of the user's visual review: what was shown, what they said, and whet
 | 1 | 128 px master at 2× on light and dark, beside the concept and the Nell-PixelArt reference | Remove the fang so the mouth looks right. Show the table's rounded edges. Connect the laptop hinge. Clean up the black outlines. Simplify the hands so they're nicer to look at; the left hand must not overlap the laptop screen and both hands go on the keyboard. | Changes requested |
 | 2 | Round 2: fang removed, rounded desk corners, connected hinge, cleaned outlines, simplified hands on the keyboard | "Revert the hands back, the simplified ones are pretty bad." Everything else is accepted by omission. | Changes requested: restore round 1's hands, keeping them on the keyboard and clear of the screen |
 | 3 | Round 3: round 1's hands restored and moved onto the keyboard, clear of the screen; round 2 fixes kept | "Accept" | **Accepted.** The master sprite is signed off |
+
+## Faces and blink transition (Task 7)
+
+| Round | Shown | User's notes | Result |
+|---|---|---|---|
+| 1 | 8 faces (idle, intent, exhausted, happy, smile, sad, scared, awe) plus shared closed eyes at 2× on light and dark, and a blink-swap GIF cycling through the faces | "With sad lets make the crying more extreme like a river line coming from her eyes, which is easy to see." Other faces accepted by omission. Scared vs awe for approvals not answered; scared kept as the default until round 2 review. | Changes requested: sad gets heavier, easy-to-see streams of tears running down from both eyes |
+| 2 | Sad face with a 4 px tear stream from each eye, through the bottom of the glasses rims, down to the jaw; all other faces unchanged | "Make the 'tear rivers' wider" | Changes requested: widen both tear streams |
+| 3 | Sad face with 6 px tear streams (covering most of each cheek, breaking both glasses rims) | "Lets back track slightly and make them big tears that come from her eyes." | Changes requested: replace the rivers with big individual teardrops coming from her eyes |
+| 4 | Sad face with tears welling on the lower lids and one big teardrop (about 5×6 px) per eye on the cheek; glasses rims whole | "Accept, use scared" | **Accepted.** Faces and blink transition signed off; scared is the approval-needed face (awe stays on the sheet, unused) |
