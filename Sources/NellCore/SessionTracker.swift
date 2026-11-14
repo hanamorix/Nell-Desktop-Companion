@@ -19,6 +19,7 @@ public struct SessionTracker: Sendable {
     private var openToolUses: [(name: String, input: [String: JSONValue]?, id: String?)] = []
     private var shownAlerts: Set<String> = []
     private var beforeAlert: NellState = .idle
+    private var testIds: Set<String> = []
 
     /// requestId → tool_use_id of the PreToolUse it belongs to (PermissionRequest carries none).
     public private(set) var pendingApprovals: [String: String?] = [:]
@@ -26,6 +27,11 @@ public struct SessionTracker: Sendable {
     public private(set) var lastAlert: String?
     /// The live session id from SessionStart (it changes after /clear).
     public private(set) var sessionId: String?
+    /// A `StopFailure` with `error == "rate_limit"` set this; the next `Stop` clears it.
+    public private(set) var usageLimited = false
+    public var testRunning: Bool { !testIds.isEmpty }
+    /// A turn is in flight (not finalized, and thinking/typing or waiting on the user).
+    public var turnRunning: Bool { !finalized && [.thinking, .typing, .needsYou, .question].contains(state) }
 
     public init() {}
 
@@ -62,6 +68,8 @@ public struct SessionTracker: Sendable {
         // Only the tool that opened a prompt in kitty (or the end of the turn) closes it; parallel tools don't.
         if turnEnds || (isPost && hold != nil && (hold?.toolUseId == nil ? false : hold?.toolUseId == e.toolUseId)) { hold = nil }
         if turnEnds || (isPost && isQuestionTool) { pendingQuestion = nil }
+        if turnEnds { testIds = [] }
+        if isPost { testIds.remove(e.toolUseId ?? "") }
         if isPost { openToolUses.removeAll { $0.id != nil && $0.id == e.toolUseId } }
 
         if finalized, ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"].contains(e.name) { return [] }
@@ -76,6 +84,7 @@ public struct SessionTracker: Sendable {
             return settleAll()
         case "PreToolUse":
             openToolUses.append((e.toolName ?? "", e.toolInput, e.toolUseId))
+            if e.toolName == "Bash", let c = e.toolInput?["command"]?.string, isTestCommand(c) { testIds.insert(e.toolUseId ?? "") }
             if openToolUses.count > 32 { openToolUses.removeFirst() }
             if isQuestionTool { pendingQuestion = firstQuestion(e.toolInput) ?? "Claude has a question" } else { set(.typing) }
         case "PermissionRequest":
@@ -96,11 +105,12 @@ public struct SessionTracker: Sendable {
             beforeAlert = base == .alert ? beforeAlert : base
             set(.alert)
         case "Stop":
-            finalized = true
+            finalized = true; usageLimited = false
             set(.done, for: Timings.doneBeat, then: .idle, now: now)
             return settleAll()
         case "StopFailure":
             finalized = true; set(.error)
+            if e.error == "rate_limit" { usageLimited = true }
             return settleAll()
         case "SessionEnd":
             finalized = true; set(.idle)
@@ -119,7 +129,6 @@ public struct SessionTracker: Sendable {
         if hold != nil, quiet >= Timings.typingWatchdog { hold = nil } // Esc in kitty sends no event at all
         guard pendingApprovals.isEmpty, pendingQuestion == nil else { return }
         if (base == .typing || base == .thinking), quiet >= Timings.typingWatchdog { base = .idle }
-        if base == .idle, quiet >= Timings.sleepyAfter { base = .sleepy }
     }
 
     private mutating func set(_ s: NellState) { base = s; transient = nil }

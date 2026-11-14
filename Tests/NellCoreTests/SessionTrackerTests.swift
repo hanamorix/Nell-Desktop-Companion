@@ -143,12 +143,31 @@ func started() -> SessionTracker {
     t.tick(now: at(1000)); #expect(t.state == .needsYou)
 }
 
-@Test func sleepyAfter600sIdle() {
+@Test func noSleepyAfterLongIdle() {
     var t = started()
     t.handle(ev("Stop"), requestId: nil, now: at(1))
-    t.tick(now: at(1 + Timings.sleepyAfter - 1)); #expect(t.state == .idle)
-    t.tick(now: at(1 + Timings.sleepyAfter)); #expect(t.state == .sleepy)
-    t.handle(ev("UserPromptSubmit"), requestId: nil, now: at(700)); #expect(t.state == .thinking)
+    t.tick(now: at(1 + 100_000)); #expect(t.state == .idle)
+}
+
+@Test func usageLimitedFromRateLimitUntilStop() {
+    var t = started()
+    t.handle(HookEvent(name: "StopFailure", sessionId: "S", toolName: nil, toolInput: nil, toolUseId: nil, prompt: nil,
+                       message: nil, notificationType: nil, lastAssistantMessage: nil, error: "rate_limit"), requestId: nil, now: at(1))
+    #expect(t.usageLimited)
+    t.handle(ev("StopFailure"), requestId: nil, now: at(2)); #expect(t.usageLimited) // other failure doesn't clear it
+    t.handle(ev("UserPromptSubmit"), requestId: nil, now: at(3)); t.handle(ev("Stop"), requestId: nil, now: at(4))
+    #expect(!t.usageLimited)
+}
+
+@Test func testRunningFromPreToolUseToMatchingPost() {
+    var t = started()
+    let swiftTest: [String: JSONValue] = ["command": .string("swift test")]
+    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u0"), requestId: nil, now: at(1)); #expect(!t.testRunning)
+    t.handle(ev("PreToolUse", tool: "Bash", input: swiftTest, id: "u1"), requestId: nil, now: at(2)); #expect(t.testRunning)
+    t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u0"), requestId: nil, now: at(3)); #expect(t.testRunning)
+    t.handle(ev("PostToolUseFailure", tool: "Bash", input: swiftTest, id: "u1"), requestId: nil, now: at(4)); #expect(!t.testRunning)
+    t.handle(ev("PreToolUse", tool: "Bash", input: swiftTest, id: "u2"), requestId: nil, now: at(5)); #expect(t.testRunning)
+    t.handle(ev("Stop"), requestId: nil, now: at(6)); #expect(!t.testRunning)
 }
 
 @Test func disconnectedIfNoSessionStartIn8s() {

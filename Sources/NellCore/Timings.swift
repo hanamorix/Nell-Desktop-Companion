@@ -4,7 +4,6 @@ public enum Timings {
     public static let oopsBeat: TimeInterval = 1.5
     public static let doneBeat: TimeInterval = 3
     public static let typingWatchdog: TimeInterval = 180
-    public static let sleepyAfter: TimeInterval = 600
     public static let hooksNotConnected: TimeInterval = 8
     public static let bubbleVisible: TimeInterval = 20
     public static let chatReplyVisible: TimeInterval = 60
