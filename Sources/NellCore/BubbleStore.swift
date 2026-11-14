@@ -46,19 +46,23 @@ public struct BubbleStore: Sendable {
     public mutating func tick(now: Date, userIdle: TimeInterval, hovered: UUID?) {
         for i in bubbles.indices {
             let b = bubbles[i]
+            if isPinned(b) { continue } // a pending approval or question never fades
             if b.id == hovered { bubbles[i].clockStart = now; continue }
-            guard b.clockStart == nil else { continue }
-            let pinned = (b.kind == .question || isApproval(b.kind)) && !b.settled
-            if !pinned, userIdle < 5 { bubbles[i].clockStart = now }
+            if b.clockStart == nil, userIdle < 5 { bubbles[i].clockStart = now }
         }
         let gone = Set(bubbles.filter { fadeFactor($0, now) <= 0 }.map(\.id))
         bubbles.removeAll { gone.contains($0.id) }
     }
 
+    /// Pending approvals/questions always show at full strength; the rest fill the remaining slots, newest brightest.
     public func visible(now: Date) -> [(bubble: Bubble, opacity: Double)] {
-        let live = bubbles.filter { fadeFactor($0, now) > 0 }.suffix(Timings.maxVisibleBubbles)
+        let pinned = Set(bubbles.filter(isPinned).map(\.id))
+        let others = bubbles.filter { !pinned.contains($0.id) && fadeFactor($0, now) > 0 }
+            .suffix(max(1, Timings.maxVisibleBubbles - pinned.count))
         let ranks = [1.0, 0.55, 0.3, 0.12]
-        return live.reversed().enumerated().map { (i, b) in (b, ranks[i] * fadeFactor(b, now)) }.reversed()
+        var opacity: [UUID: Double] = [:]
+        for (i, b) in others.reversed().enumerated() { opacity[b.id] = ranks[min(i, 3)] * fadeFactor(b, now) }
+        return bubbles.compactMap { b in pinned.contains(b.id) ? (b, 1) : opacity[b.id].map { (b, $0) } }
     }
 
     private func duration(_ b: Bubble) -> TimeInterval {
@@ -69,7 +73,11 @@ public struct BubbleStore: Sendable {
         let over = now.timeIntervalSince(start) - duration(b)
         return over <= 0 ? 1 : max(0, 1 - over / Timings.bubbleFade)
     }
-    private func isApproval(_ k: BubbleKind) -> Bool { if case .approval = k { true } else { false } }
+    private func isPinned(_ b: Bubble) -> Bool {
+        guard !b.settled else { return false }
+        if case .approval = b.kind { return true }
+        return b.kind == .question
+    }
     private func truncated(_ s: String) -> String {
         let lines = s.components(separatedBy: "\n")
         let head = lines.prefix(3).joined(separator: "\n")

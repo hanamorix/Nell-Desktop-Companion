@@ -11,11 +11,12 @@ public struct SessionTracker: Sendable {
     private var base: NellState = .idle
     private var transient: (until: Date, then: NellState)?
     private var finalized = false
-    private var holdUntilNextEvent = false
+    /// After Open terminal / a deadline, Claude's own prompt is open in kitty: hold until that tool finishes (id if known).
+    private var hold: (toolUseId: String?, since: Date)?
     private var lastEventAt: Date?
     private var launchedAt: Date?
     private var connected = false
-    private var lastPreToolUse: (name: String, input: [String: JSONValue]?, id: String?)?
+    private var openToolUses: [(name: String, input: [String: JSONValue]?, id: String?)] = []
     private var shownAlerts: Set<String> = []
     private var beforeAlert: NellState = .idle
 
@@ -23,6 +24,8 @@ public struct SessionTracker: Sendable {
     public private(set) var pendingApprovals: [String: String?] = [:]
     public private(set) var pendingQuestion: String?
     public private(set) var lastAlert: String?
+    /// The live session id from SessionStart (it changes after /clear).
+    public private(set) var sessionId: String?
 
     public init() {}
 
@@ -32,7 +35,9 @@ public struct SessionTracker: Sendable {
         return base
     }
 
-    public var inputHeld: Bool { !pendingApprovals.isEmpty || pendingQuestion != nil || holdUntilNextEvent }
+    public var inputHeld: Bool {
+        !pendingApprovals.isEmpty || pendingQuestion != nil || hold != nil || (launchedAt != nil && !connected)
+    }
 
     public mutating func markLaunched(now: Date) { launchedAt = now; connected = false }
 
@@ -42,37 +47,42 @@ public struct SessionTracker: Sendable {
     }
 
     public mutating func settleApproval(_ id: String, answer: ApprovalAnswer) {
-        guard pendingApprovals.removeValue(forKey: id) != nil else { return }
-        if answer == .none { holdUntilNextEvent = true } // Claude's own prompt is now open in kitty
+        guard let toolUseId = pendingApprovals.removeValue(forKey: id) else { return }
+        if answer == .none { hold = (toolUseId, lastEventAt ?? .distantPast) } // Claude's own prompt is now open in kitty
     }
 
     /// Returns the approval request ids this event settled (answered in kitty, or the turn ended).
     @discardableResult
     public mutating func handle(_ e: HookEvent, requestId: String?, now: Date) -> [String] {
         if let t = transient, now >= t.until { base = t.then; transient = nil }
-        connected = true
         lastEventAt = now
         let isQuestionTool = e.toolName == "AskUserQuestion"
-        let passive = e.name == "Notification" || e.name == "SubagentStop"
-            || (isQuestionTool && (e.name == "PreToolUse" || e.name == "PermissionRequest"))
-        if !passive { holdUntilNextEvent = false; pendingQuestion = nil }
+        let isPost = e.name == "PostToolUse" || e.name == "PostToolUseFailure"
+        let turnEnds = ["UserPromptSubmit", "Stop", "StopFailure", "SessionEnd"].contains(e.name)
+        // Only the tool that opened a prompt in kitty (or the end of the turn) closes it; parallel tools don't.
+        if turnEnds || (isPost && hold != nil && (hold?.toolUseId == nil ? false : hold?.toolUseId == e.toolUseId)) { hold = nil }
+        if turnEnds || (isPost && isQuestionTool) { pendingQuestion = nil }
+        if isPost { openToolUses.removeAll { $0.id != nil && $0.id == e.toolUseId } }
 
         if finalized, ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"].contains(e.name) { return [] }
 
         switch e.name {
         case "SessionStart":
+            connected = true; sessionId = e.sessionId
             set(.idle)
         case "UserPromptSubmit":
             finalized = false; shownAlerts = []; lastAlert = nil
             set(.thinking)
             return settleAll()
         case "PreToolUse":
-            lastPreToolUse = (e.toolName ?? "", e.toolInput, e.toolUseId)
+            openToolUses.append((e.toolName ?? "", e.toolInput, e.toolUseId))
+            if openToolUses.count > 32 { openToolUses.removeFirst() }
             if isQuestionTool { pendingQuestion = firstQuestion(e.toolInput) ?? "Claude has a question" } else { set(.typing) }
         case "PermissionRequest":
             guard let requestId, !isQuestionTool else { break }
-            let p = lastPreToolUse
-            pendingApprovals[requestId] = (p?.name == e.toolName && p?.input == e.toolInput) ? p?.id : nil
+            let claimed = Set(pendingApprovals.values.compactMap { $0 })
+            let match = openToolUses.last { $0.name == e.toolName && $0.input == e.toolInput && !claimed.contains($0.id ?? "") }
+            pendingApprovals[requestId] = match?.id
         case "PostToolUse", "PostToolUseFailure":
             let settled = pendingApprovals.filter { $0.value != nil && $0.value == e.toolUseId }.map(\.key)
             for id in settled { pendingApprovals.removeValue(forKey: id) }
@@ -104,8 +114,10 @@ public struct SessionTracker: Sendable {
     public mutating func tick(now: Date) {
         if let t = transient, now >= t.until { base = t.then; transient = nil }
         if let l = launchedAt, !connected, now.timeIntervalSince(l) >= Timings.hooksNotConnected { base = .disconnected }
-        guard let last = lastEventAt, pendingApprovals.isEmpty, pendingQuestion == nil else { return }
+        guard let last = lastEventAt else { return }
         let quiet = now.timeIntervalSince(last)
+        if hold != nil, quiet >= Timings.typingWatchdog { hold = nil } // Esc in kitty sends no event at all
+        guard pendingApprovals.isEmpty, pendingQuestion == nil else { return }
         if (base == .typing || base == .thinking), quiet >= Timings.typingWatchdog { base = .idle }
         if base == .idle, quiet >= Timings.sleepyAfter { base = .sleepy }
     }

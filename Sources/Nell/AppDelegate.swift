@@ -52,6 +52,7 @@ import SwiftUI
             if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != "net.kovidgoyal.kitty" { NSSound(named: "Tink")?.play() }
         }
         model.onOpenProject = { [weak self] in self?.openProject() }
+        model.onStateChanged = { [weak self] in self?.save() }
         model.onHide = { [weak self] in self?.panel.orderOut(nil) }
         model.onQuit = { NSApp.terminate(nil) }
         Hotkey.register { [weak self] in

@@ -29,7 +29,7 @@ struct CompanionView: View {
             HStack(spacing: 4) {
                 Chip(label: "💬", help: "Chat", on: model.selected == .chat) { model.chip(.chat) }
                 Chip(label: "⌘", help: "Code", on: model.selected == .code) { model.chip(.code) }
-                TextField(model.selected == .chat ? "Message Nell…" : "Ask Claude Code…", text: $model.draft, axis: .vertical)
+                TextField(model.barHeld ? "Waiting — answer in the terminal first" : model.selected == .chat ? "Message Nell…" : "Ask Claude Code…", text: $model.draft, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))

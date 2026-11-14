@@ -6,7 +6,8 @@ KITTEN="${NELL_KITTEN:-/Applications/kitty.app/Contents/MacOS/kitten}"
 input=$(cat)
 event=$(printf '%s' "$input" | /usr/bin/jq -r '.hook_event_name // empty' 2>/dev/null)
 if [ "$event" = PermissionRequest ]; then max=590; else max=0.5; fi
-if out=$(printf '%s' "$input" | /usr/bin/curl -sf -m "$max" --unix-socket "$sock" --data-binary @- "http://nell/hook?mode=$mode"); then
+# Expect: off — for big bodies curl otherwise waits 1 s for 100-continue, past the 0.5 s budget.
+if out=$(printf '%s' "$input" | /usr/bin/curl -sf -m "$max" -H 'Expect:' --unix-socket "$sock" --data-binary @- "http://nell/hook?mode=$mode"); then
   [ "$event" = PermissionRequest ] && printf '%s' "$out"
   exit 0
 fi

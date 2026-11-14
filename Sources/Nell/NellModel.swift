@@ -10,6 +10,8 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
     @Published private(set) var shown: [ShownBubble] = []
     @Published var draft = ""
     @Published var paused = false
+    /// The bar is holding text because Claude has a prompt open in kitty (or is still starting).
+    @Published private(set) var barHeld = false
     var hovered: UUID?
 
     let kitty: KittyController
@@ -20,6 +22,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
     var onOpenProject: (() -> Void)?
     var onHide: (() -> Void)?
     var onQuit: (() -> Void)?
+    var onStateChanged: (() -> Void)?
 
     private var trackers: [Mode: SessionTracker] = [.code: SessionTracker(), .chat: SessionTracker()]
     private var bubbles = BubbleStore()
@@ -72,6 +75,9 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
             registry.answer(id: id, .none)
         }
         switch e.name {
+        case "SessionStart":
+            if m == .code, state.codeSessionId != e.sessionId { state.codeSessionId = e.sessionId; onStateChanged?() }
+            if m == .chat, state.chatSessionId != e.sessionId { state.chatSessionId = e.sessionId; onStateChanged?() }
         case "UserPromptSubmit":
             bubbles.clearStatus(mode: m)
             if let p = e.prompt {
@@ -104,7 +110,7 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
             bubbles.add(.error, mode: m, text: e.error ?? "Something went wrong", now: now)
         case "SessionEnd":
             bubbles.clearStatus(mode: m)
-            kitty.ensureWindow(m, cwd: cwd(m), state: &state)
+            if kitty.ensureWindow(m, cwd: cwd(m), state: &state) { trackers[m]?.markLaunched(now: now); onStateChanged?() }
         default: break
         }
         flushQueue(m)
@@ -141,13 +147,20 @@ struct ShownBubble: Identifiable, Equatable { let bubble: Bubble; let opacity: D
         let next = bodyState(selected: selected, code: code, chat: chat, listening: !draft.isEmpty)
         if (next == .needsYou || next == .question), body != next { onNeedsYou?() }
         if body != next { body = next }
+        let held = trackers[selected]?.inputHeld ?? false
+        if barHeld != held { barHeld = held }
         let nextShown = bubbles.visible(now: Date()).map { ShownBubble(bubble: $0.bubble, opacity: $0.opacity) }
         if nextShown != shown { shown = nextShown } // don't re-render the view every tick
     }
 
     private func send(_ text: String, _ m: Mode) {
+        if kitty.ensureWindow(m, cwd: cwd(m), state: &state) {
+            // Claude was gone and is starting again: keep the text until its SessionStart
+            trackers[m]?.markLaunched(now: Date()); onStateChanged?()
+            _ = queues[m]?.submit(text, held: true)
+            return
+        }
         sentByNell[m, default: []].append(text)
-        kitty.ensureWindow(m, cwd: cwd(m), state: &state)
         kitty.send(text, to: m)
     }
 

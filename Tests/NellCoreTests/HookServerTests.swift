@@ -67,3 +67,18 @@ func waitFor(_ cond: () -> Bool) { for _ in 0..<100 where !cond() { usleep(50_00
     let perms = try FileManager.default.attributesOfItem(atPath: sock)[.posixPermissions] as? Int
     #expect(perms == 0o600)
 }
+
+@Test func hookScriptDeliversHugeBodyQuickly() throws {
+    // curl sends `Expect: 100-continue` for big bodies and waits 1 s — longer than the script's 0.5 s budget.
+    let sock = tmpSocket(); let events = Box<String>()
+    let s = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, e, _ in events.add(e.name) }, onRequestSettled: { _, _, _ in })
+    try s.start(); defer { s.stop() }
+    let big = #"{"hook_event_name":"PreToolUse","session_id":"S","tool_name":"Write","tool_input":{"file_path":"/x/a.txt","content":""# + String(repeating: "x", count: 1_500_000) + #""}}"#
+    let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/Nell/Resources/nell-hook.sh").path
+    let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/bash"); p.arguments = [script, "code", sock]
+    let inp = Pipe(); p.standardInput = inp; p.standardOutput = Pipe()
+    try p.run(); inp.fileHandleForWriting.write(Data(big.utf8)); try inp.fileHandleForWriting.close()
+    p.waitUntilExit()
+    waitFor { !events.all.isEmpty }
+    #expect(events.all == ["PreToolUse"])
+}

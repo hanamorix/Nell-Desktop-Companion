@@ -67,3 +67,22 @@ import Testing
     b.settleQuestions(mode: .code)
     #expect(b.bubbles[0].settled == true)
 }
+
+@Test func hoveredPendingApprovalStays() {
+    var b = BubbleStore()
+    b.add(.approval(requestId: "r1"), mode: .code, text: "Wants to run `ls`", now: t0)
+    let id = b.bubbles[0].id
+    b.tick(now: at(1), userIdle: 0, hovered: id)
+    b.tick(now: at(100), userIdle: 0, hovered: nil)
+    #expect(b.visible(now: at(100)).first?.opacity == 1)
+}
+
+@Test func pendingApprovalSurvivesNewerBubbles() {
+    var b = BubbleStore()
+    b.add(.approval(requestId: "r1"), mode: .code, text: "Wants to run `ls`", now: t0)
+    for i in 0..<5 { b.add(.user, mode: .code, text: "m\(i)", now: at(Double(i + 1))) }
+    let v = b.visible(now: at(6))
+    let approval = v.first { $0.bubble.kind == .approval(requestId: "r1") }
+    #expect(approval?.opacity == 1)
+    #expect(v.count <= Timings.maxVisibleBubbles + 1)
+}

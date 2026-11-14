@@ -22,8 +22,9 @@ public enum KittyCommands {
     public static func launchWindow(socket: String, mode: Mode, cwd: String, claude: String, args: [String]) -> [String] {
         at(socket, ["launch", "--type=os-window", "--keep-focus", "--env", "NELL_MODE=\(mode.rawValue)", "--cwd", cwd, claude] + args)
     }
-    public static func sendText(socket: String, mode: Mode, text: String) -> [String] {
-        at(socket, ["send-text"] + match(mode) + ["--bracketed-paste", "enable", "--", text])
+    /// The text goes on stdin: as an argument kitten would apply Python escapes to it (\n, \e, \x41…).
+    public static func sendText(socket: String, mode: Mode) -> [String] {
+        at(socket, ["send-text"] + match(mode) + ["--bracketed-paste", "enable", "--stdin"])
     }
     public static func sendEnter(socket: String, mode: Mode) -> [String] { at(socket, ["send-key"] + match(mode) + ["enter"]) }
     public static func show(socket: String, mode: Mode) -> [String] { at(socket, ["resize-os-window"] + match(mode) + ["--action", "show"]) }
@@ -48,10 +49,10 @@ public func kittyPid(fromSocket s: String) -> Int32? {
     return Int32(name.dropFirst(6).dropLast(5))
 }
 
-/// The live kitty socket with the newest pid, if any.
-public func pickKittySocket(_ paths: [String], isAlive: (Int32) -> Bool) -> String? {
+/// The live kitty socket with the newest pid, if any. `isLive` should check the socket answers, not just that the pid exists.
+public func pickKittySocket(_ paths: [String], isLive: (String, Int32) -> Bool) -> String? {
     paths.compactMap { p in kittyPid(fromSocket: p).map { (p, $0) } }
-        .filter { isAlive($0.1) }.max { $0.1 < $1.1 }?.0
+        .sorted { $0.1 > $1.1 }.first { isLive($0.0, $0.1) }?.0
 }
 
 public func windowExists(lsJSON: Data, mode: Mode) -> Bool {

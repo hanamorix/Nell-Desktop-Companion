@@ -8,13 +8,14 @@ func resourceURL(_ name: String) -> URL {
 }
 
 @discardableResult
-func runTool(_ argv: [String], env: [String: String]? = nil) -> (status: Int32, out: Data) {
+func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data) {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: argv[0])
     p.arguments = Array(argv.dropFirst())
-    if let env { p.environment = env }
     let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
+    let inp = Pipe(); p.standardInput = stdin == nil ? FileHandle.nullDevice : inp
     do { try p.run() } catch { return (-1, Data()) }
+    if let stdin { inp.fileHandleForWriting.write(stdin); try? inp.fileHandleForWriting.close() }
     let data = out.fileHandleForReading.readDataToEndOfFile()
     p.waitUntilExit()
     return (p.terminationStatus, data)
@@ -50,7 +51,10 @@ func runTool(_ argv: [String], env: [String: String]? = nil) -> (status: Int32, 
     func ensureRunning(projectDir: String, state: inout SavedState) throws -> Bool {
         try installSupportFiles()
         let files = (try? FileManager.default.contentsOfDirectory(atPath: paths.support.path)) ?? []
-        let live = pickKittySocket(files.map { paths.support.appending(path: $0).path }, isAlive: { kill($0, 0) == 0 })
+        let sockets = files.filter { $0.hasPrefix("kitty-") && $0.hasSuffix(".sock") }.map { paths.support.appending(path: $0).path }
+        // a live pid isn't enough: after a reboot the pid may belong to another process, so the socket must answer
+        let live = pickKittySocket(sockets, isLive: { path, pid in kill(pid, 0) == 0 && runTool(KittyCommands.ls(socket: "unix:" + path)).status == 0 })
+        for s in sockets where s != live { unlink(s) }
         if let live {
             socket = "unix:" + live
         } else {
@@ -71,19 +75,21 @@ func runTool(_ argv: [String], env: [String: String]? = nil) -> (status: Int32, 
         return live != nil
     }
 
-    /// Relaunches a mode's window if Claude exited or the window was closed.
-    func ensureWindow(_ m: Mode, cwd: String, state: inout SavedState) {
-        guard let socket else { return }
+    /// Relaunches a mode's window if Claude exited or the window was closed. Returns true if it launched one.
+    @discardableResult
+    func ensureWindow(_ m: Mode, cwd: String, state: inout SavedState) -> Bool {
+        guard let socket else { return false }
         let ls = runTool(KittyCommands.ls(socket: socket)).out
-        guard !windowExists(lsJSON: ls, mode: m) else { return }
+        guard !windowExists(lsJSON: ls, mode: m) else { return false }
         let args = sessionArgs(m, cwd: cwd, state: &state)
         runTool(KittyCommands.launchWindow(socket: socket, mode: m, cwd: cwd, claude: claude, args: args))
         runTool(KittyCommands.hide(socket: socket, mode: m))
+        return true
     }
 
     func send(_ text: String, to m: Mode) {
         guard let socket else { return }
-        runTool(KittyCommands.sendText(socket: socket, mode: m, text: text))
+        runTool(KittyCommands.sendText(socket: socket, mode: m), stdin: Data(text.utf8))
         runTool(KittyCommands.sendEnter(socket: socket, mode: m))
     }
 

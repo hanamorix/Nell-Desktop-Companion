@@ -83,8 +83,9 @@ func started() -> SessionTracker {
     #expect(t.pendingApprovals.isEmpty)
 }
 
-@Test func heldAfterNoneSettleUntilNextEvent() {
+@Test func heldAfterNoneSettleUntilItsToolFinishes() {
     var t = started()
+    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
     t.settleApproval("r1", answer: .none)
     #expect(t.inputHeld)
@@ -174,4 +175,64 @@ func started() -> SessionTracker {
     let chat = started()
     #expect(bodyState(selected: .code, code: code, chat: chat, listening: true) == .listening)
     #expect(bodyState(selected: .chat, code: code, chat: chat, listening: true) == .thinking)
+}
+
+// MARK: final-review fixes
+
+@Test func heldUntilSessionStartAfterLaunch() {
+    var t = SessionTracker(); t.markLaunched(now: t0)
+    #expect(t.inputHeld) // the trust dialog or a still-starting claude would eat the text
+    t.handle(ev("SessionStart"), requestId: nil, now: at(2))
+    #expect(!t.inputHeld)
+}
+
+@Test func sessionEndDoesNotCountAsConnected() {
+    var t = SessionTracker(); t.markLaunched(now: t0)
+    t.handle(ev("SessionEnd"), requestId: nil, now: at(1)) // the old window's session closing
+    t.tick(now: at(Timings.hooksNotConnected)); #expect(t.state == .disconnected)
+}
+
+@Test func unrelatedEventsKeepHoldAfterOpenTerminal() {
+    var t = started()
+    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
+    t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
+    t.settleApproval("r1", answer: .none)
+    t.handle(ev("PreToolUse", tool: "Read", id: "u7"), requestId: nil, now: at(2))   // a parallel subagent tool
+    t.handle(ev("PostToolUse", tool: "Read", id: "u7"), requestId: nil, now: at(3))
+    #expect(t.inputHeld)
+    t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(4))
+    #expect(!t.inputHeld)
+}
+
+@Test func unrelatedEventsKeepQuestion() {
+    var t = started()
+    t.handle(ev("PreToolUse", tool: "AskUserQuestion", input: ask, id: "u4"), requestId: nil, now: at(1))
+    t.handle(ev("PostToolUse", tool: "Read", id: "u9"), requestId: nil, now: at(2))
+    #expect(t.pendingQuestion != nil)
+    t.handle(ev("Stop"), requestId: nil, now: at(3))
+    #expect(t.pendingQuestion == nil)
+}
+
+@Test func holdExpiresAfterSilence() {
+    var t = started()
+    t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
+    t.settleApproval("r1", answer: .none) // then Esc in kitty: no event ever comes
+    t.tick(now: at(1 + Timings.typingWatchdog)); #expect(!t.inputHeld)
+}
+
+@Test func permissionMatchedWithTwoOpenPreToolUses() {
+    var t = started()
+    let other: [String: JSONValue] = ["command": .string("pwd")]
+    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "uA"), requestId: nil, now: at(1))
+    t.handle(ev("PreToolUse", tool: "Bash", input: other, id: "uB"), requestId: nil, now: at(1))
+    t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "rA", now: at(1))
+    #expect(t.pendingApprovals["rA"] == "uA")
+    #expect(t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "uA"), requestId: nil, now: at(2)) == ["rA"])
+}
+
+@Test func sessionStartRecordsSessionId() {
+    var t = SessionTracker()
+    var e = ev("SessionStart"); e.sessionId = "new-id"
+    t.handle(e, requestId: nil, now: t0)
+    #expect(t.sessionId == "new-id")
 }
