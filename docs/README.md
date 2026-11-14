@@ -30,9 +30,10 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 | Notes | [2026-11-14-kitty-panel-spike-findings.md](notes/2026-11-14-kitty-panel-spike-findings.md) | Tested facts about running kitty as a borderless panel inside Nell's console bubble |
 | Notes | [2026-11-14-nell-v2-build-ledger.md](notes/2026-11-14-nell-v2-build-ledger.md) | Every decision made during the v2 build, its checks, and the final review |
 
-### Design round (2026-11-14)
+### v3: pixel design round (2026-11-14)
 
 | Type | Document | What it is |
 |---|---|---|
-| Spec | [2026-11-14-nell-v3-pixel-design.md](specs/2026-11-14-nell-v3-pixel-design.md) | v3 design round: Plum Night interface, 128 px master sprite, faces, animations, emoji reactions (draft) |
+| Spec | [2026-11-14-nell-v3-pixel-design.md](specs/2026-11-14-nell-v3-pixel-design.md) | v3 design round: Plum Night interface, 128 px master sprite, faces, animations, emoji reactions (approved) |
+| Plan | [2026-11-14-nell-v3-pixel-plan.md](plans/2026-11-14-nell-v3-pixel-plan.md) | The 10-task plan: signal spike, logic, Plum Night UI, art (review-gated), compositor |
 | Notes | [2026-11-14-design-system-review-findings.md](notes/2026-11-14-design-system-review-findings.md) | Review of `concept-nell-design-system/` (Plum Night): what's usable, what conflicts with v2, and fixes needed |

@@ -1,6 +1,6 @@
 # Nell v3: the pixel design round
 
-Date: 2026-11-14 · Status: draft for approval · Builds on:
+Date: 2026-11-14 · Status: approved 2026-11-14 · Plan: `docs/plans/2026-11-14-nell-v3-pixel-plan.md` · Builds on:
 - [v1 design](2026-11-14-nell-v1-design.md)
 - [v2 console design](2026-11-14-nell-v2-console-design.md)
 - [design system review](../notes/2026-11-14-design-system-review-findings.md)
