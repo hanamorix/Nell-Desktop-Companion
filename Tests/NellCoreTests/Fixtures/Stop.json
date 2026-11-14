@@ -1,0 +1,16 @@
+{
+ "session_id": "fef0516a-fd5b-420a-b6e4-8718ed43e3ce",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "892d1052-0b9a-45fd-8025-63f8d077887b",
+ "permission_mode": "auto",
+ "effort": {
+  "level": "low"
+ },
+ "hook_event_name": "Stop",
+ "stop_hook_active": false,
+ "last_assistant_message": "Hi there, friend!",
+ "background_tasks": [],
+ "session_crons": []
+}

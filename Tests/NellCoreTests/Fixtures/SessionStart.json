@@ -1,0 +1,9 @@
+{
+ "session_id": "fef0516a-fd5b-420a-b6e4-8718ed43e3ce",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "hook_event_name": "SessionStart",
+ "source": "startup",
+ "model": "claude-opus-4-8"
+}

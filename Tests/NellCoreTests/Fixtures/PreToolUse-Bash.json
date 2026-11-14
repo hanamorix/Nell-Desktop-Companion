@@ -1,0 +1,18 @@
+{
+ "session_id": "fef0516a-fd5b-420a-b6e4-8718ed43e3ce",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "febcc2c0-dc81-4e10-9336-f45581cecedd",
+ "permission_mode": "default",
+ "effort": {
+  "level": "low"
+ },
+ "hook_event_name": "PreToolUse",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "touch spike-a.txt",
+  "description": "Create empty file spike-a.txt"
+ },
+ "tool_use_id": "toolu_01RHiyEMLDJ2riMAPXe7tcFS"
+}

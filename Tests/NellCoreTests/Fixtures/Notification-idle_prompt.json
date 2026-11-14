@@ -1,0 +1,10 @@
+{
+ "session_id": "fef0516a-fd5b-420a-b6e4-8718ed43e3ce",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "b92452c8-57c8-452e-b071-e7987ca9bca1",
+ "hook_event_name": "Notification",
+ "message": "Claude is waiting for your input",
+ "notification_type": "idle_prompt"
+}

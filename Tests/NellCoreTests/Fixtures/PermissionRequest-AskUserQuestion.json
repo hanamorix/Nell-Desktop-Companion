@@ -1,0 +1,32 @@
+{
+ "session_id": "fef0516a-fd5b-420a-b6e4-8718ed43e3ce",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "b92452c8-57c8-452e-b071-e7987ca9bca1",
+ "permission_mode": "default",
+ "effort": {
+  "level": "low"
+ },
+ "hook_event_name": "PermissionRequest",
+ "tool_name": "AskUserQuestion",
+ "tool_input": {
+  "questions": [
+   {
+    "question": "Do you prefer cats or dogs?",
+    "header": "Pets",
+    "options": [
+     {
+      "label": "Cats",
+      "description": "You prefer cats."
+     },
+     {
+      "label": "Dogs",
+      "description": "You prefer dogs."
+     }
+    ],
+    "multiSelect": false
+   }
+  ]
+ }
+}

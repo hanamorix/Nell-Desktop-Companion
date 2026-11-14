@@ -1,0 +1,9 @@
+{
+ "session_id": "d1c521d9-64e1-4d92-beae-3384c7ddf6fd",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "4c81a8d3-3aa4-4987-8664-b1504f85e8aa",
+ "hook_event_name": "SessionEnd",
+ "reason": "other"
+}

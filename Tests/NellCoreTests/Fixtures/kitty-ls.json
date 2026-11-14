@@ -1,0 +1,46 @@
+[
+ {
+  "id": 1,
+  "is_focused": true,
+  "tabs": [
+   {
+    "id": 1,
+    "windows": [
+     {
+      "id": 1,
+      "title": "Three-word greeting",
+      "pid": 49689,
+      "env": {},
+      "cmdline": [
+       "/Users/me/.local/bin/claude",
+       "--session-id"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": 3,
+  "is_focused": false,
+  "tabs": [
+   {
+    "id": 3,
+    "windows": [
+     {
+      "id": 3,
+      "title": "Listing available tools and MCP servers",
+      "pid": 50574,
+      "env": {
+       "NELL_MODE": "chat"
+      },
+      "cmdline": [
+       "/Users/me/.local/bin/claude",
+       "--session-id"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]

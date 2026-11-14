@@ -1,0 +1,19 @@
+{
+ "session_id": "fef0516a-fd5b-420a-b6e4-8718ed43e3ce",
+ "transcript_path": "/Users/x/.claude/projects/-Users-x-proj/S.jsonl",
+ "cwd": "/Users/x/proj",
+ "scratchpad_dir": "/tmp/scratch",
+ "prompt_id": "978b69bb-222f-43b1-ac52-55cac0b402c2",
+ "permission_mode": "auto",
+ "agent_id": "a64a173edcd620047",
+ "agent_type": "",
+ "effort": {
+  "level": "low"
+ },
+ "hook_event_name": "SubagentStop",
+ "stop_hook_active": false,
+ "agent_transcript_path": "/Users/me/.claude/projects/-Users-me-proj/00000000-0000-0000-0000-000000000000/subagents/agent-00000000000000000.jsonl",
+ "last_assistant_message": "line four: the cat says meow",
+ "background_tasks": [],
+ "session_crons": []
+}

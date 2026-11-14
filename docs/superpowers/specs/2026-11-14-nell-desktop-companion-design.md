@@ -167,11 +167,7 @@ Verified on this Mac on 2026-11-14 with `claude --help` and `kitten @ send-text 
 - `claude` flags: `--settings` (loads *additional* settings), `--session-id <uuid>`, `--resume <id>`, `--tools ""` (turns off all built-in tools), `--strict-mcp-config`, `--setting-sources`. Also that `--bare` ignores the subscription login and `--safe-mode` turns off hooks.
 - `kitten @ send-text` with `--match id:N` and `--bracketed-paste enable|auto`.
 
-Taken from docs and research but not tested here:
-- the exact `PermissionRequest` input and output schema;
-- the `UserPromptSubmit` and `Notification` payload fields;
-- that hooks added through `--settings` combine with, rather than replace, other hooks;
-- that `--setting-sources` drops user plugins in Chat.
+Verified by the pipeline spike on 2026-11-14 (`docs/superpowers/notes/2026-11-14-pipeline-spike.md`): the `PermissionRequest` schema and allow/deny/empty responses, the event payload fields, that `--settings` hooks are merged with the user's own, and the Chat flags (which also need `--no-chrome`). The spike notes list the deviations that change how windows are matched, how approvals settle, and how questions are handled.
 
 **The first job of the plan:** show that `send-text` submits a prompt into `claude` running in kitty, and that the matching hooks reach Nell's server. That includes one Allow/Deny round trip. Everything else depends on it.
 
