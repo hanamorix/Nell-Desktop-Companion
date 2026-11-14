@@ -67,3 +67,21 @@ private func failure(_ command: String, error: String) -> HookEvent {
     #expect(testOutcome(HookEvent(name: "PreToolUse", sessionId: "S", toolName: "Bash",
                                   toolInput: ["command": .string("npm test")])) == nil)
 }
+
+@Test func maskedExitStatusDecidesFromSummaryOnly() {
+    for c in ["npm test || true", "pytest || exit 0", "npm test; true", "npm test ; exit 0"] {
+        #expect(testOutcome(post(c, stdout: "some output")) == nil, "\(c)")
+        #expect(testOutcome(post(c, stdout: "Tests: 2 failed")) == .fail, "\(c)")
+    }
+    #expect(testOutcome(post("npm test", stdout: "some output")) == .pass)
+    #expect(testOutcome(post("echo '||' ; npm test", stdout: "some output")) == .pass)
+}
+
+@Test func zeroFailedCountIsNotAFailure() {
+    #expect(testOutcome(post("npm test", stdout: "Tests: 0 failed, 5 passed")) == .pass)
+    #expect(testOutcome(post("pytest", stdout: "5 passed, 0 failed")) == .pass)
+    #expect(testOutcome(post("mvn test | tail", stdout: "Failures: 0, Errors: 0\n0 failures")) == nil)
+    #expect(testOutcome(post("pytest | tail", stdout: "0 passed")) == nil)
+    #expect(testOutcome(post("npm test", stdout: "Tests: 1 failed, 5 passed")) == .fail)
+    #expect(testOutcome(post("npm test", stdout: "3 failures")) == .fail)
+}

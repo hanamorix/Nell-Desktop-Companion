@@ -18,35 +18,44 @@ public func isTestCommand(_ command: String) -> Bool {
     }
 }
 
-/// True for a `|` outside quotes; `||` doesn't count.
-public func isPiped(_ command: String) -> Bool {
+private func unquoted(_ command: String) -> String {
     var quote: Character?
-    let cs = Array(command)
-    var i = 0
-    while i < cs.count {
-        let c = cs[i]
-        if let q = quote { if c == q { quote = nil } }
-        else if c == "\"" || c == "'" { quote = c }
-        else if c == "|" {
-            if i + 1 < cs.count, cs[i + 1] == "|" { i += 1 } else { return true }
-        }
-        i += 1
-    }
-    return false
+    return String(command.map { c in
+        if let q = quote { if c == q { quote = nil }; return " " }
+        if c == "\"" || c == "'" { quote = c; return " " }
+        return c
+    })
 }
 
-private let failSummaries: [String] = [
-    #"\b\d+ failed\b"#, #"Tests:.*\bfailed\b"#, #"✘ Test run"#,
-    #"test result: FAILED"#, #"^FAIL\b"#, #"^FAILED \("#,
-]
-private let passSummaries: [String] = [
-    #"\b\d+ passed\b"#, #"Tests:.*\bpassed\b"#, #"✔ Test run"#,
-    #"test result: ok\."#, #"^ok\s"#, #"^OK\b"#,
-]
+/// True for a `|` outside quotes; `||` doesn't count.
+public func isPiped(_ command: String) -> Bool {
+    unquoted(command).range(of: #"(?<!\|)\|(?!\|)"#, options: .regularExpression) != nil
+}
+
+/// Exit status can't be trusted: a pipe, `||`, or a trailing `; true` / `; exit 0` can mask a failure.
+func exitStatusUnreliable(_ command: String) -> Bool {
+    let c = unquoted(command)
+    return isPiped(command) || c.contains("||") || c.range(of: #";\s*(true|exit\s+0)\s*$"#, options: .regularExpression) != nil
+}
+
+private let failSummaries: [String] = [#"(\d+) failed\b"#, #"(\d+) failures?\b"#]
+private let failMarkers: [String] = [#"✘ Test run"#, #"test result: FAILED"#, #"^FAIL\b"#, #"^FAILED \("#]
+private let passCounts: [String] = [#"(\d+) passed\b"#]
+private let passMarkers: [String] = [#"✔ Test run"#, #"test result: ok\."#, #"^ok\s"#, #"^OK\b"#]
+
+private func has(_ out: String, _ p: String) -> Bool { out.range(of: "(?m)" + p, options: .regularExpression) != nil }
+
+/// True when some "N <word>" match has N > 0, so "0 failed" is not a failure.
+private func positiveCount(_ out: String, _ p: String) -> Bool {
+    guard let re = try? NSRegularExpression(pattern: p) else { return false }
+    return re.matches(in: out, range: NSRange(out.startIndex..., in: out)).contains { m in
+        Range(m.range(at: 1), in: out).flatMap { Int(out[$0]) }.map { $0 > 0 } ?? false
+    }
+}
 
 private func summary(_ out: String) -> TestOutcome? {
-    if failSummaries.contains(where: { out.range(of: "(?m)" + $0, options: .regularExpression) != nil }) { return .fail }
-    if passSummaries.contains(where: { out.range(of: "(?m)" + $0, options: .regularExpression) != nil }) { return .pass }
+    if failMarkers.contains(where: { has(out, $0) }) || failSummaries.contains(where: { positiveCount(out, $0) }) { return .fail }
+    if passMarkers.contains(where: { has(out, $0) }) || passCounts.contains(where: { positiveCount(out, $0) }) { return .pass }
     return nil
 }
 
@@ -54,7 +63,7 @@ private func summary(_ out: String) -> TestOutcome? {
 public func testOutcome(_ e: HookEvent) -> TestOutcome? {
     guard e.toolName == "Bash", e.name == "PostToolUse" || e.name == "PostToolUseFailure",
           let command = e.toolInput?["command"]?.string, isTestCommand(command) else { return nil }
-    let piped = isPiped(command)
+    let piped = exitStatusUnreliable(command)
     if e.name == "PostToolUseFailure" {
         guard let err = e.error else { return piped ? nil : .fail }
         return summary(err) == .fail || !piped ? .fail : nil
