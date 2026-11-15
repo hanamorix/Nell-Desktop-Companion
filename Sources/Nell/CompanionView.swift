@@ -110,7 +110,7 @@ struct MessageBar: View {
         }
         .padding(.horizontal, 6).padding(.top, 4).padding(.bottom, 2)
         .background { VStack(spacing: 0) { PN.outline.frame(height: PN.px); PN.plum900 } } // the well, with its top shadow
-        // shortcut: CSS pads the bar 8/6 and the well 6/4; trimmed so sprite + bar fit Nell's 200 pt block
+        // shortcut: CSS pads the bar 8/6 and the well 6/4; trimmed to keep the bar row 34 pt (nellSize)
         .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 4)
         .pixelFrame(focused: isFocused)
     }

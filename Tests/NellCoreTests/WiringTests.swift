@@ -178,3 +178,12 @@ private func event(_ name: String) throws -> HookEvent { try HookEvent.decode(fi
 private func ev(_ name: String, errorText: String) -> HookEvent {
     var e = ev(name); e.error = errorText; return e
 }
+
+@Test func typingLastsThroughAFailedTool() {
+    var t = started()
+    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
+    t.handle(ev("PostToolUseFailure", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(2))
+    #expect(body(code: t, chat: SessionTracker(), selected: .code) == .typing, "the turn is still running")
+    t.handle(ev("Notification", message: "Claude needs your permission", type: "idle_prompt"), requestId: nil, now: at(3))
+    #expect(body(code: t, chat: SessionTracker(), selected: .code) == .typing)
+}

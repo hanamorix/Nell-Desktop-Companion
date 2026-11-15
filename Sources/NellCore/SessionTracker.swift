@@ -30,8 +30,8 @@ public struct SessionTracker: Sendable {
     /// A `StopFailure` with `error == "rate_limit"` set this; the next `Stop`, tool call or `quota_auto_resume_*` notification clears it.
     public private(set) var usageLimited = false
     public var testRunning: Bool { !testIds.isEmpty }
-    /// A turn is in flight (not finalized, and thinking/typing or waiting on the user).
-    public var turnRunning: Bool { !finalized && [.thinking, .typing, .needsYou, .question].contains(state) }
+    /// A turn is in flight (not finalized; a failed tool or a mid-turn alert doesn't end it).
+    public var turnRunning: Bool { !finalized && [.thinking, .typing, .needsYou, .question, .oops, .alert].contains(state) }
 
     public init() {}
 
