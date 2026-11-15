@@ -44,6 +44,7 @@ import NellCore
         if sc.stepDuration >= 1 || step % 20 == 0 { log("\(sc.name) / \(st.name)") } // a burst logs once a second
         for a in st.actions { run(a) }
         check(st)
+        if sc.stepDuration >= 1 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.checkColumn() } } // rects settle after layout
         previousBody = model.pose.body
     }
 
@@ -70,7 +71,7 @@ import NellCore
         case .theme(let n): model.setTheme(n)
         case .place(let x, let y):
             guard let v = controller.screen?.visibleFrame else { return }
-            let s = PanelController.nellSize
+            let s = NellBlock.size
             controller.nellOrigin = CGPoint(x: (v.minX + x * (v.width - s.width)).rounded(), y: (v.minY + y * (v.height - s.height)).rounded())
             model.relayoutNow()
         }
@@ -97,9 +98,21 @@ import NellCore
         }
     }
 
+    /// Bubbles that don't fit are off screen and report nothing; nothing just outside the column takes clicks (D3).
+    private func checkColumn() {
+        guard let l = model.layout else { return }
+        let col = CGRect(x: l.columnFrame.minX - l.panelFrame.minX, y: l.panelFrame.maxY - l.columnFrame.maxY,
+                         width: l.columnFrame.width, height: l.columnFrame.height) // window points, y down
+        let outside = controller.hoverRects.values.filter { !col.insetBy(dx: -0.5, dy: -0.5).contains($0) }
+        if !outside.isEmpty { log("MISMATCH bubble rects outside the column: \(outside)") }
+        let beyond = CGPoint(x: col.midX, y: l.columnUp ? col.minY - 3 : col.maxY + 3) // the column's far edge, inside the panel
+        if controller.takesClick(at: beyond) { log("MISMATCH a click beyond the column at \(beyond) is taken") }
+        log("column: \(controller.hoverRects.count) of \(model.shown.count) bubbles on screen, pinned \(model.shown.filter(\.bubble.pinned).count)")
+    }
+
     /// `--probe`: checks the right-click hit area in-process (posting real mouse events needs Accessibility access):
-    /// a point on her head and one in a transparent gap of the sprite box, then a right-click on her head that opens the
-    /// menu, closed 3 s later with Escape.
+    /// a point on her head and one in a transparent gap of the sprite box; left clicks on her, the Chat chip and the bar
+    /// (only the bar may take the keyboard); then a right-click on her head that opens the menu, closed 3 s later with Escape.
     func probe() {
         guard let box = controller.grabRects.first, let face = model.sprite.sheet.slice("face", frame: 0) else { return log("probe: no sprite") }
         let head = NellBlock.head(faceSlice: face, mirrored: model.layout?.faceRight ?? false)
@@ -121,6 +134,17 @@ import NellCore
             }
         }
         log("probe: left click on her head -> key \(panel.isKeyWindow)")
+        // a button needs no keyboard: the Chat chip fires and the panel stays non-key
+        let m = model.layout?.faceRight ?? false, chat = NellBlock.chips(CGSize(width: 38, height: 30), mirrored: m).chat
+        let chatAt = NSPoint(x: box.minX - NellBlock.spriteX(mirrored: m) + chat.midX, y: content.bounds.height - (box.minY + chat.midY))
+        model.selected = .code
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let e = NSEvent.mouseEvent(with: type, location: chatAt, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                panel.sendEvent(e)
+            }
+        }
+        log("probe: left click on the Chat chip -> key \(panel.isKeyWindow), fired \(model.selected == .chat)")
         let bar = NellBlock.bar(mirrored: model.layout?.faceRight ?? false)
         let barAt = CGPoint(x: box.minX - NellBlock.spriteX(mirrored: model.layout?.faceRight ?? false) + bar.midX, y: box.minY + bar.midY)
         var v = content.hitTest(NSPoint(x: barAt.x, y: content.bounds.height - barAt.y)), wants = false

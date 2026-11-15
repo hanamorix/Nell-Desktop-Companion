@@ -11,6 +11,13 @@ public struct Bubble: Identifiable, Equatable, Sendable {
     public var settled = false
     /// When the visible countdown started; nil until it may begin (approvals, or replies while you're away).
     public var clockStart: Date?
+
+    /// A pending approval or question (or a "needs you in the console"): never fades, and always keeps its place on screen.
+    public var pinned: Bool {
+        guard !settled else { return false }
+        if case .approval = kind { return true }
+        return kind == .question || kind == .consoleNeeded
+    }
 }
 
 public struct BubbleStore: Sendable {
@@ -56,7 +63,7 @@ public struct BubbleStore: Sendable {
     public mutating func tick(now: Date, userIdle: TimeInterval, hovered: UUID?) {
         for i in bubbles.indices {
             let b = bubbles[i]
-            if isPinned(b) { continue } // a pending approval or question never fades
+            if b.pinned { continue } // a pending approval or question never fades
             if b.id == hovered { bubbles[i].clockStart = now; continue }
             if b.clockStart == nil, userIdle < 5 { bubbles[i].clockStart = now }
         }
@@ -66,7 +73,7 @@ public struct BubbleStore: Sendable {
 
     /// Pending approvals/questions always show at full strength; the rest fill the remaining slots, newest brightest.
     public func visible(now: Date) -> [(bubble: Bubble, opacity: Double)] {
-        let pinned = Set(bubbles.filter(isPinned).map(\.id))
+        let pinned = Set(bubbles.filter(\.pinned).map(\.id))
         let others = bubbles.filter { !pinned.contains($0.id) && fadeFactor($0, now) > 0 }
             .suffix(max(1, Timings.maxVisibleBubbles - pinned.count))
         let ranks = [1.0, 0.55, 0.3, 0.12]
@@ -82,11 +89,6 @@ public struct BubbleStore: Sendable {
         guard let start = b.clockStart else { return 1 }
         let over = now.timeIntervalSince(start) - duration(b)
         return over <= 0 ? 1 : max(0, 1 - over / Timings.bubbleFade)
-    }
-    private func isPinned(_ b: Bubble) -> Bool {
-        guard !b.settled else { return false }
-        if case .approval = b.kind { return true }
-        return b.kind == .question || b.kind == .consoleNeeded
     }
     private func truncated(_ s: String) -> String {
         let lines = s.components(separatedBy: "\n")

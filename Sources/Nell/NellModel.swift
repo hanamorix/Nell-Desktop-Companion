@@ -11,7 +11,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     @Published var selected: Mode = .chat { didSet { pullReturned() } }
     @Published private(set) var shown: [ShownBubble] = []
     @Published var draft = ""
-    /// The screen is locked or asleep: the sprite stops entirely.
+    /// The screen is locked or asleep, or Nell is hidden: the sprite stops entirely.
     var paused = false { didSet { sprite.paused = paused } }
     /// The bar is holding text because Claude has a prompt open in kitty (or is still starting).
     @Published private(set) var barHeld = false
@@ -28,7 +28,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     @Published private(set) var theme: Theme
     var hovered: UUID?
     /// Recomputes where everything goes for a console phase and moves Nell's window (set by the app delegate).
-    var relayout: ((ConsolePhase) -> NellCore.Layout)?
+    var relayout: ((ConsolePhase) -> NellCore.Layout?)?
     var displayFrame: () -> CGRect = { NSScreen.main?.frame ?? .zero }
 
     let kitty: KittyController
@@ -64,7 +64,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     }
 
     func cwd(_ m: Mode) -> String { m == .code ? (state.projectDir ?? paths.chatDir.path) : paths.chatDir.path }
-    func markLaunched(_ modes: [Mode]) { let now = Date(); for m in modes { trackers[m]?.markLaunched(now: now) }; refresh() }
+    func markLaunched(_ modes: [Mode]) { markStarting(modes); refresh() }
+    private func markStarting(_ modes: [Mode]) { let now = Date(); for m in modes { trackers[m]?.markLaunched(now: now) } }
 
     // MARK: UI actions
 
@@ -223,7 +224,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
             addBubble(e.error == "rate_limit" ? .alert : .error, m, stopFailureMessage(e), now) // a limit is a nap, not a failure
         case "SessionEnd":
             bubbles.clearStatus(mode: m)
-            if kitty.ensureTab(m, cwd: cwd(m), state: &state) { trackers[m]?.markLaunched(now: now); onStateChanged?() }
+            let started = kitty.ensureTab(m, cwd: cwd(m), state: &state).launched
+            if !started.isEmpty { markStarting(started); onStateChanged?() }
         default: break
         }
         flushQueue(m)
@@ -322,14 +324,20 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     }
 
     private func send(_ text: String, _ m: Mode) {
-        if kitty.ensureTab(m, cwd: cwd(m), state: &state) {
-            // Claude was gone and is starting again: keep the text until its SessionStart
-            trackers[m]?.markLaunched(now: Date()); onStateChanged?()
+        let tab = kitty.ensureTab(m, cwd: cwd(m), state: &state)
+        if !tab.launched.isEmpty { markStarting(tab.launched); onStateChanged?() } // a restart starts Code too
+        switch tab.delivery(for: m) {
+        case .now:
+            sentByNell[m, default: []].append(text)
+            kitty.send(text, to: m)
+        case .hold: // Claude was gone and is starting again: keep the text until its SessionStart
             _ = queues[m]?.submit(text, held: true)
-            return
+        case .giveBack: // kitty is down: writing to its socket would lose the text
+            bubbles.removeUser(mode: m, text: text)
+            returned.add([text], for: m)
+            pullReturned()
+            addBubble(.error, m, "Claude's console isn't running. Your message is back in the bar.", Date())
         }
-        sentByNell[m, default: []].append(text)
-        kitty.send(text, to: m)
     }
 
     private func flushQueue(_ m: Mode) {

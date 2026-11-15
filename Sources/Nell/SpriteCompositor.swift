@@ -4,10 +4,10 @@ import NellCore
 import SwiftUI
 
 /// Runs the animator and composes Nell's 128 px frame. It wakes only when the animator, the pose or an overlay changes,
-/// and not at all while the screen is locked or asleep.
+/// and not at all while paused (the screen locked or asleep, or Nell hidden).
 @MainActor final class SpriteDriver: ObservableObject {
     @Published private(set) var image: CGImage?
-    var paused = false { didSet { if paused != oldValue { tick() } } }
+    var paused = false { didSet { if paused != oldValue { tick(redraw: true) } } } // resuming draws what changed while paused
     var mirrored = false { didSet { if mirrored != oldValue { redraw() } } }
 
     let sheet: SpriteSheet
@@ -69,7 +69,7 @@ import SwiftUI
     }
 
     private func redraw() {
-        guard let f = frame else { return }
+        guard !paused, let f = frame else { return }
         let size = sheet.frames[f.body].rect.size
         guard let ctx = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0,
                                   space: sheetImage.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,

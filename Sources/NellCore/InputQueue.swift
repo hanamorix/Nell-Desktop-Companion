@@ -31,3 +31,26 @@ public struct ReturnedText: Sendable {
         return (back + [typed]).filter { !$0.isEmpty }.joined(separator: "\n")
     }
 }
+
+/// What checking a mode's kitty tab before a send found.
+public enum TabCheck: Equatable, Sendable {
+    /// That mode's Claude was already running.
+    case ready
+    /// These Claudes were just started: a kitty restart starts Code with it, so a Chat send can launch both.
+    case launched([Mode])
+    /// kitty is down (its restart failed, or is inside the cooldown) or the tab wouldn't start: nothing can take text.
+    case unavailable
+
+    public enum Delivery: Equatable, Sendable { case now, hold, giveBack }
+
+    public var launched: [Mode] { if case .launched(let ms) = self { ms } else { [] } }
+
+    /// Send now; hold until that Claude's SessionStart; or give the text back to the bar unsent.
+    public func delivery(for m: Mode) -> Delivery {
+        switch self {
+        case .ready: .now
+        case .launched(let ms): ms.contains(m) ? .hold : .giveBack
+        case .unavailable: .giveBack
+        }
+    }
+}

@@ -111,15 +111,16 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     }
 
     /// Relaunches a mode's tab if Claude exited or the tab was closed, and kitty itself if it's gone (quit, crashed, or
-    /// its last tab closed: `kitten panel` always quits then). Returns true if it launched that mode's Claude.
+    /// its last tab closed: `kitten panel` always quits then). Reports every Claude it started: a restarted kitty starts
+    /// Code as its first window, whichever mode asked.
     @discardableResult
-    func ensureTab(_ m: Mode, cwd: String, state: inout SavedState) -> Bool {
-        guard var socket else { return false }
+    func ensureTab(_ m: Mode, cwd: String, state: inout SavedState) -> TabCheck {
+        guard var socket else { return .ready } // never started (the showcase): every kitty call is a no-op
         var ls = runTool(KittyCommands.ls(socket: socket))
         let restarted = ls.status != 0
         if restarted {
             // after a failed restart, try again at most every 30 s, so a kitty that won't start can't freeze every send
-            if let t = restartFailedAt, Date().timeIntervalSince(t) < 30 { return false }
+            if let t = restartFailedAt, Date().timeIntervalSince(t) < 30 { return .unavailable }
             let path = String(socket.dropFirst("unix:".count))
             // its socket is still there and its pid is kitty: it's stuck, not gone. It's ours (it answered moments ago),
             // so end it and its Claudes rather than run a second set on the same sessions. A clean quit removes the socket.
@@ -128,18 +129,20 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
             do { socket = try startPanel(codeDir: state.usableProjectDir ?? paths.chatDir.path, state: &state, wait: 5) } catch {
                 EventLog.write("kitty restart failed: \(error)") // `socket` keeps the dead path, so a later send retries
                 restartFailedAt = Date()
-                return false
+                return .unavailable
             }
             restartFailedAt = nil
             self.socket = socket
             if shown { runTool(KittyCommands.showPanel(socket: socket)) }
             ls = runTool(KittyCommands.ls(socket: socket))
         }
-        guard !windowExists(lsJSON: ls.out, mode: m) else { return restarted } // the new panel's first window is Code
+        let started: [Mode] = restarted ? [.code] : [] // the new panel's first window is Code
+        guard !windowExists(lsJSON: ls.out, mode: m) else { return started.isEmpty ? .ready : .launched(started) }
         let args = sessionArgs(m, cwd: cwd, state: &state)
         let launched = runTool(KittyCommands.launchTab(socket: socket, mode: m, cwd: cwd, claude: claude, args: args)).status == 0
         runTool(KittyCommands.focusTab(socket: socket, mode: .code)) // the console always rests on Code
-        return launched
+        let all = started + (launched ? [m] : [])
+        return all.isEmpty ? .unavailable : .launched(all)
     }
 
     /// Moves and sizes the panel so it covers `content` (AppKit coords) on `display` (its full frame).

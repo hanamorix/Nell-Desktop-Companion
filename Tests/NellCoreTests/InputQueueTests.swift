@@ -67,3 +67,16 @@ import Testing
     #expect(q.count == 0)
     #expect(q.submit(" keep my spaces ", held: false) == " keep my spaces ")
 }
+
+@Test func whatASendDoesAfterCheckingTheTab() {
+    #expect(TabCheck.ready.delivery(for: .chat) == .now)
+    // a Chat send that restarted kitty relaunched Code too: both are starting, so this text waits for SessionStart
+    #expect(TabCheck.launched([.code, .chat]).delivery(for: .chat) == .hold)
+    #expect(TabCheck.launched([.code, .chat]).launched == [.code, .chat], "both get marked launched")
+    #expect(TabCheck.launched([.chat]).delivery(for: .chat) == .hold)
+    // kitty came back with Code, but Chat's tab didn't start: nothing can take the text
+    #expect(TabCheck.launched([.code]).delivery(for: .chat) == .giveBack)
+    // kitty is down (restart failed, or inside the restart cooldown): never write to a dead socket
+    #expect(TabCheck.unavailable.delivery(for: .code) == .giveBack)
+    #expect(TabCheck.unavailable.launched.isEmpty && TabCheck.ready.launched.isEmpty)
+}

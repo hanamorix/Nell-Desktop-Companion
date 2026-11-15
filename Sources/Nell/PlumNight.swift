@@ -185,7 +185,7 @@ struct ModeChip: View {
             .overlay(alignment: .bottom) { if on { PN.pink400.frame(width: 6, height: 2).offset(y: 4) } }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).help(help).accessibilityLabel(help)
+        .buttonStyle(.plain).help(help).accessibilityLabel(help).accessibilityValue(news ? "new messages" : "")
     }
 }
 

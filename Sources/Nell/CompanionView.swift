@@ -28,7 +28,7 @@ struct CompanionView: View {
             .font(Fonts.ui())
             .onPreferenceChange(InteractiveRectsKey.self) { r in MainActor.assumeIsolated { controller.rects = r } }
             .onPreferenceChange(GrabRectsKey.self) { r in MainActor.assumeIsolated { controller.grabRects = r } }
-            .onPreferenceChange(PassiveRectsKey.self) { r in MainActor.assumeIsolated { controller.passiveRects = r } }
+            .onPreferenceChange(KeyRectsKey.self) { r in MainActor.assumeIsolated { controller.keyRects = r } }
             .onPreferenceChange(HoverRectsKey.self) { r in MainActor.assumeIsolated { controller.hoverRects = r } }
             .onReceive(NotificationCenter.default.publisher(for: .nellFocusBar)) { _ in barFocused = true }
         }
@@ -52,20 +52,20 @@ struct CompanionView: View {
 
     private func column(_ l: NellCore.Layout) -> some View {
         let head = headX(l), width = l.columnFrame.width
-        return VStack(spacing: 8) {
-            if l.columnUp { Spacer(minLength: 0) }
+        return BubbleColumn(columnUp: l.columnUp, spacing: 8) {
             ForEach(columnOrder(model.shown, columnUp: l.columnUp)) { s in // fade each bubble as one, so its drop doesn't show through the fill
                 // Nell's bubbles sit over her head; your cream ones stay on the far side
                 let mine = s.bubble.kind == .user
                 ColumnRow(width: width, headX: head, mine: mine) {
                     BubbleView(model: model, bubble: s.bubble, layout: l, headX: head, columnWidth: width).compositingGroup().opacity(s.opacity)
                 }
+                .layoutValue(key: PinnedRow.self, value: s.bubble.pinned)
             }
-            if !l.columnUp { Spacer(minLength: 0) }
         }
-        // anchored on her side, so when they overflow the oldest (at the far end) are the ones clipped
-        .frame(width: width, height: l.columnFrame.height, alignment: l.columnUp ? .bottom : .top)
+        .frame(width: width, height: l.columnFrame.height)
         .clipped()
+        .contentShape(Rectangle()) // clicks too: nothing outside the column (a parked or clipped row) can be hit
+        .clipRects(to: local(l.columnFrame, in: l))
     }
 
     /// Option A: the sprite against the laptop side, the bar spanning her desk underneath, and the chips stacked on the
@@ -79,7 +79,7 @@ struct CompanionView: View {
                 .grabbable()
                 .gesture(DragGesture(minimumDistance: 2) // only with ⌥ held: PanelController ignores plain drags
                     .onChanged { v in if controller.dragChanged(start: v.startLocation) { model.dragBegan() } }
-                    .onEnded { _ in if controller.dragEnded() { model.dragEnded() } })
+                    .onEnded { _ in if controller.dragEnded() { model.dragEnded(); controller.savePosition() } })
                 .contextMenu {
                     // the shortcut only brings her back, so it's named in the label rather than shown as this item's key
                     Button("Minimise (⌥⌘N to return)") { model.onHide?() }
@@ -97,10 +97,10 @@ struct CompanionView: View {
                 .interactive().place(chips.chat)
             ModeChip(icon: "code", help: "Claude Code console", on: model.selected == .code, news: hasNews(.code)) { model.codeChip() }
                 .interactive().place(chips.code)
-            UsageChip(kind: .weekly, gauge: model.weeklyGauge).passive().place(usage.weekly)
-            UsageChip(kind: .session, gauge: model.sessionGauge).passive().place(usage.session)
+            UsageChip(kind: .weekly, gauge: model.weeklyGauge).interactive().place(usage.weekly) // for the tooltip
+            UsageChip(kind: .session, gauge: model.sessionGauge).interactive().place(usage.session)
             MessageBar(model: model, focused: $barFocused, isFocused: barFocused) // grows upward over her when multi-line
-                .interactive()
+                .takesKeyboard()
                 .frame(width: bar.width, height: size.height, alignment: .bottom)
                 .position(x: bar.midX, y: size.height / 2)
         }
@@ -175,7 +175,7 @@ struct BubbleView: View {
         // room for the tail (and the badge) inside the clipped column, on the edges they stick out of
         .padding(.top, tailDown ? (badged ? farEdge : 0) : (hasTail ? TailRule.room : 0))
         .padding(.bottom, tailDown ? (hasTail ? TailRule.room : drop) : farEdge)
-        .modifier(BubbleHit(id: bubble.id, hasButtons: hasButtons))
+        .modifier(BubbleHit(id: bubble.id, hasButtons: bubble.pinned, selectable: bubble.kind == .reply && bubble.mode == .chat))
     }
 
     /// The tail on the edge facing her, its tip as near her head as the bubble allows; the badge on the opposite edge.
@@ -227,8 +227,12 @@ struct BubbleView: View {
             }
         }
         if bubble.kind == .question, !bubble.settled {
-            Button { model.openTerminal(bubble.mode, requestId: nil) } label: { Icon(name: "terminal"); Text("Answer in the console") }
-                .buttonStyle(PixelButton(kind: .quiet))
+            VStack(alignment: .leading, spacing: 8) { // the two don't fit one 236 pt row
+                Button { model.openTerminal(bubble.mode, requestId: nil) } label: { Icon(name: "terminal"); Text("Answer in the console") }
+                    .buttonStyle(PixelButton(kind: .quiet))
+                // Esc in kitty sends no event: this clears the bubble and hands queued text back to the bar
+                Button { model.dismissQuestion(mode: bubble.mode) } label: { Text("Dismiss") }.buttonStyle(PixelButton(kind: .quiet))
+            }
         }
         if bubble.kind == .consoleNeeded, !bubble.settled {
             Button { model.openConsole(tab: bubble.mode) } label: { Icon(name: "terminal"); Text("Open console") }
@@ -294,19 +298,49 @@ struct BubbleView: View {
         }
     }
 
-    private var hasButtons: Bool {
-        guard !bubble.settled else { return bubble.kind == .reply && bubble.mode == .chat }
-        if case .approval = bubble.kind { return true }
-        return bubble.kind == .question || bubble.kind == .consoleNeeded || (bubble.kind == .reply && bubble.mode == .chat)
+}
+
+/// Bubbles with buttons take clicks; a Chat reply (selectable, maybe scrolling) also takes the keyboard, for ⌘C.
+/// Plain ones pass clicks through but still report hover.
+struct BubbleHit: ViewModifier {
+    let id: UUID; let hasButtons: Bool; let selectable: Bool
+    func body(content: Content) -> some View {
+        let tracked = content.background(GeometryReader { g in Color.clear.preference(key: HoverRectsKey.self, value: [id: g.frame(in: .global)]) })
+        if selectable { tracked.takesKeyboard() } else if hasButtons { tracked.interactive() } else { tracked }
     }
 }
 
-/// Bubbles with buttons (or a scrollable reply) take clicks; plain ones pass clicks through but still report hover.
-struct BubbleHit: ViewModifier {
-    let id: UUID; let hasButtons: Bool
-    func body(content: Content) -> some View {
-        let tracked = content.background(GeometryReader { g in Color.clear.preference(key: HoverRectsKey.self, value: [id: g.frame(in: .global)]) })
-        if hasButtons { tracked.interactive() } else { tracked }
+extension View {
+    /// Click, keyboard and hover rects reported from inside, cut to `r` (window points, y down): nothing outside the
+    /// column takes clicks, the keyboard or hover.
+    func clipRects(to r: CGRect) -> some View {
+        let cut: (inout [CGRect]) -> Void = { $0 = $0.map { $0.intersection(r) }.filter { !$0.isEmpty } }
+        return transformPreference(InteractiveRectsKey.self, cut).transformPreference(KeyRectsKey.self, cut)
+            .transformPreference(HoverRectsKey.self) { h in h = h.compactMapValues { let c = $0.intersection(r); return c.isEmpty ? nil : c } }
+    }
+}
+
+struct PinnedRow: LayoutValueKey { static let defaultValue = false }
+
+/// The bubble column, top to bottom, packed against her side (at the bottom when it's above her). `fitRows` picks the
+/// rows: pinned ones first, then the newest that fit. A row left out is parked far outside the bounds, where the
+/// column's clip hides it, its content shape keeps it from being clicked, and `clipRects` drops its rects.
+struct BubbleColumn: SwiftUI.Layout {
+    let columnUp: Bool, spacing: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize { proposal.replacingUnspecifiedDimensions() }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height }
+        let oldestFirst = columnUp ? Array(subviews.indices) : subviews.indices.reversed() // below her, the newest is on top
+        let fit = fitRows(heights: oldestFirst.map { heights[$0] }, pinned: oldestFirst.map { subviews[$0][PinnedRow.self] },
+                          budget: bounds.height, spacing: spacing)
+        let shown = Set(zip(oldestFirst, fit).filter(\.1).map(\.0))
+        let total = shown.map { heights[$0] }.reduce(0, +) + spacing * CGFloat(max(0, shown.count - 1))
+        var y = columnUp ? bounds.maxY - total : bounds.minY // overflow (pinned rows, or one tall bubble) clips the far end
+        for i in subviews.indices {
+            let p = ProposedViewSize(width: bounds.width, height: heights[i])
+            if shown.contains(i) { subviews[i].place(at: CGPoint(x: bounds.minX, y: y), proposal: p); y += heights[i] + spacing }
+            else { subviews[i].place(at: CGPoint(x: bounds.minX, y: bounds.maxY + 10_000), proposal: p) }
+        }
     }
 }
 

@@ -11,6 +11,10 @@ public enum NellBlock {
     /// Her desk in sprite points: on the idle frame's desk-top rows (104–117) the desk runs from art x 2 to 125.
     public static let desk: ClosedRange<CGFloat> = 4...252
     public static let chipGap: CGFloat = 8
+    /// The bubble column at its tallest; bubbles wrap at 264 inside it.
+    public static let column = CGSize(width: 270, height: 320)
+    /// The minimised console strip, inline with the bar row.
+    public static let minimised = CGSize(width: 340, height: barHeight)
 
     /// The sprite sits against the laptop side; the free strip on the chair side holds the chips.
     public static func spriteX(mirrored: Bool) -> CGFloat { mirrored ? size.width - sprite : 0 }
@@ -142,10 +146,7 @@ public struct DragLatch: Sendable {
     public mutating func reset() { gesture = nil }
 }
 
-/// Whether a click at `p` may make Nell's panel key (take the keyboard). Not on her sprite alone: clicking her (for the
-/// right-click menu) must leave your typing where it was. Controls, the bar included, still may.
-/// `passiveRects` are controls that only show a tooltip (the usage gauges): they take clicks but never the keyboard.
-public func clickTakesKeyboard(_ p: CGPoint, rects: [CGRect], grabRects: [CGRect], passiveRects: [CGRect] = []) -> Bool {
-    if passiveRects.contains(where: { $0.contains(p) }) { return false }
-    return rects.contains { $0.contains(p) } || !grabRects.contains { $0.contains(p) }
-}
+/// Whether a click at `p` may make Nell's panel key (take the keyboard from the app you're typing in). Opt-in: only the
+/// message bar and selectable Chat replies report key rects. Buttons, chips, the console title and her sprite work
+/// without the keyboard.
+public func clickTakesKeyboard(_ p: CGPoint, keyRects: [CGRect]) -> Bool { keyRects.contains { $0.contains(p) } }

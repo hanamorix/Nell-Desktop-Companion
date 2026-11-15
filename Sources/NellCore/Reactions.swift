@@ -102,9 +102,10 @@ public func contextAction(for e: HookEvent, mode: Mode) -> ContextAction? {
 /// The sprite stops while the screen is locked or the display sleeps. The two are tracked apart, because the display
 /// can wake on the lock screen.
 public struct PauseState: Sendable {
-    public var locked = false, asleep = false
+    /// `hidden`: minimised (ordered out), so there's nothing on screen to animate or hit-test.
+    public var locked = false, asleep = false, hidden = false
     public init() {}
-    public var paused: Bool { locked || asleep }
+    public var paused: Bool { locked || asleep || hidden }
 }
 
 /// The bubble text for a `StopFailure`. A usage limit is a nap, not a failure, with the reset time when Claude gave one

@@ -273,4 +273,6 @@ private func tickUntil(_ a: inout Animator, _ now: inout Date, max: Int = 400, _
     p.asleep = false; #expect(p.paused, "display wakes on the lock screen: still locked")
     p.locked = false; #expect(!p.paused)
     p.asleep = true; #expect(p.paused)
+    p.asleep = false; p.hidden = true; #expect(p.paused, "minimised: nothing on screen to animate")
+    p.hidden = false; #expect(!p.paused)
 }

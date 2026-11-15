@@ -57,9 +57,9 @@ private let face = CGRect(x: 42, y: 36, width: 48, height: 35) // the face slice
 
 @Test func minimisedStripSharesTheBarRow() throws {
     for origin in [CGPoint(x: 1400, y: 16), CGPoint(x: 16, y: 16), CGPoint(x: 700, y: 500)] {
-        let l = layout(LayoutInput(screen: screen, nellOrigin: origin, nellSize: NellBlock.size, columnSize: CGSize(width: 270, height: 320),
+        let l = layout(LayoutInput(screen: screen, nellOrigin: origin, nellSize: NellBlock.size, columnSize: NellBlock.column,
                                    console: .minimised, cell: CGSize(width: 10, height: 21), consoleChrome: CGSize(width: 8, height: 32),
-                                   minimisedSize: CGSize(width: 340, height: NellBlock.barHeight)))
+                                   minimisedSize: NellBlock.minimised))
         let strip = try #require(l.minimisedFrame)
         let bar = NellBlock.bar(mirrored: l.faceRight) // y-down in the block; the block's bottom is nellFrame.minY on screen
         #expect(strip.minY == l.nellFrame.minY + (NellBlock.size.height - bar.maxY))
@@ -159,9 +159,9 @@ private func layoutWith(columnUp: Bool) -> Layout {
 // MARK: Task 12 fix round 1
 
 private func blockInput(_ origin: CGPoint) -> LayoutInput {
-    LayoutInput(screen: screen, nellOrigin: origin, nellSize: NellBlock.size, columnSize: CGSize(width: 270, height: 320),
+    LayoutInput(screen: screen, nellOrigin: origin, nellSize: NellBlock.size, columnSize: NellBlock.column,
                 console: .hidden, cell: CGSize(width: 10, height: 21), consoleChrome: CGSize(width: 8, height: 32),
-                minimisedSize: CGSize(width: 340, height: NellBlock.barHeight))
+                minimisedSize: NellBlock.minimised)
 }
 private func spriteX(_ l: Layout) -> CGFloat { l.nellFrame.minX + NellBlock.spriteX(mirrored: l.faceRight) }
 
@@ -177,6 +177,16 @@ private func spriteX(_ l: Layout) -> CGFloat { l.nellFrame.minX + NellBlock.spri
     let back = layoutKeepingHerStill(blockInput(CGPoint(x: 1000, y: 40)), wasFaceRight: true)
     #expect(!back.faceRight)
     #expect(spriteX(back) == 1000 + NellBlock.spriteX(mirrored: true))
+}
+
+@Test func relaunchPutsHerWhereSheWasAfterATurningDrag() {
+    // D4: dropped across the midline, she turns and the block shifts; the origin saved must be the shifted one
+    let before = layoutKeepingHerStill(blockInput(CGPoint(x: 1300, y: 40)), wasFaceRight: nil)
+    let afterDrop = layoutKeepingHerStill(blockInput(CGPoint(x: 700, y: 40)), wasFaceRight: before.faceRight)
+    let relaunched = layoutKeepingHerStill(blockInput(afterDrop.nellFrame.origin), wasFaceRight: nil)
+    #expect(spriteX(relaunched) == spriteX(afterDrop) && relaunched.faceRight == afterDrop.faceRight)
+    let fromRawDrop = layoutKeepingHerStill(blockInput(CGPoint(x: 700, y: 40)), wasFaceRight: nil)
+    #expect(spriteX(fromRawDrop) != spriteX(afterDrop), "saving the raw drop point moves her on relaunch")
 }
 
 @Test func turningIsStableNearTheMidline() {
@@ -203,12 +213,19 @@ private func spriteX(_ l: Layout) -> CGFloat { l.nellFrame.minX + NellBlock.spri
     #expect(!afterReset)
 }
 
-@Test func clickingHerDoesNotTakeTheKeyboard() {
-    let sprite = [CGRect(x: 0, y: 0, width: 256, height: 256)], bar = [CGRect(x: 4, y: 262, width: 248, height: 34)]
-    #expect(!clickTakesKeyboard(CGPoint(x: 130, y: 100), rects: bar, grabRects: sprite), "her sprite")
-    #expect(clickTakesKeyboard(CGPoint(x: 130, y: 280), rects: bar, grabRects: sprite), "the bar")
-    #expect(clickTakesKeyboard(CGPoint(x: 130, y: 250), rects: [CGRect(x: 100, y: 240, width: 60, height: 20)], grabRects: sprite),
-            "a control drawn over her still works")
+@Test func onlyTheBarAndRepliesTakeTheKeyboard() {
+    // opt-in: only views that report a key rect (the bar, a selectable Chat reply) may make the panel key
+    let bar = CGRect(x: 4, y: 262, width: 248, height: 34), reply = CGRect(x: 20, y: -200, width: 264, height: 120)
+    let keys = [bar, reply]
+    #expect(clickTakesKeyboard(CGPoint(x: bar.midX, y: bar.midY), keyRects: keys), "the bar")
+    #expect(clickTakesKeyboard(CGPoint(x: reply.midX, y: reply.midY), keyRects: keys), "a Chat reply, for selection and ⌘C")
+    let chips = NellBlock.chips(CGSize(width: 38, height: 30), mirrored: false), u = NellBlock.usageChips(CGSize(width: 38, height: 30), mirrored: false)
+    let allow = CGRect(x: 30, y: -40, width: 71, height: 30), title = CGRect(x: -700, y: -400, width: 680, height: 28)
+    for (name, r) in [("Allow", allow), ("Chat chip", chips.chat), ("Code chip", chips.code), ("gauge", u.weekly), ("console title", title)] {
+        #expect(!clickTakesKeyboard(CGPoint(x: r.midX, y: r.midY), keyRects: keys), "\(name)")
+    }
+    #expect(!clickTakesKeyboard(CGPoint(x: 130, y: 100), keyRects: keys), "her sprite")
+    #expect(!clickTakesKeyboard(CGPoint(x: -300, y: 500), keyRects: keys), "an empty point")
 }
 
 @Test func usageChipsStackAboveChat() {
@@ -223,17 +240,5 @@ private func spriteX(_ l: Layout) -> CGFloat { l.nellFrame.minX + NellBlock.spri
         for r in [u.weekly, u.session] {
             #expect(!r.intersects(NellBlock.bar(mirrored: mirrored)) && !r.intersects(sprite))
         }
-    }
-}
-
-@Test func clickingAUsageChipDoesNotTakeTheKeyboard() {
-    let chip = CGSize(width: 38, height: 30)
-    for mirrored in [false, true] {
-        let u = NellBlock.usageChips(chip, mirrored: mirrored)
-        for r in [u.weekly, u.session] {
-            #expect(!clickTakesKeyboard(CGPoint(x: r.midX, y: r.midY), rects: [r], grabRects: [], passiveRects: [r]))
-        }
-        let chat = NellBlock.chips(chip, mirrored: mirrored).chat
-        #expect(clickTakesKeyboard(CGPoint(x: chat.midX, y: chat.midY), rects: [chat], grabRects: [], passiveRects: [u.weekly]), "Chat still does")
     }
 }

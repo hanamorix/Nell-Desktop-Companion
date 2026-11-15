@@ -17,6 +17,9 @@ import SwiftUI
     private var timer: Timer?
     private var pause = PauseState()
     private var runner: ShowcaseRunner?
+    /// Only the instance holding the socket's lock owns state.json: a second Nell refused at start must not write back
+    /// the stale copy it loaded over the live one's. The showcase owns its sandbox.
+    private var ownsState = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
         try? FileManager.default.createDirectory(at: paths.support, withIntermediateDirectories: true)
@@ -42,6 +45,7 @@ import SwiftUI
             do { try server.start() } catch { return fail("Nell couldn't open her socket: \(error)") }
             self.server = server
         }
+        ownsState = true
 
         Fonts.register()
         if showcase == nil {
@@ -68,7 +72,7 @@ import SwiftUI
         controller.onHover = { [weak self] id in self?.model.hovered = id }
         controller.spriteOpaque = { [weak model] p in model?.sprite.mask?.opaque(at: p, scale: 2) ?? false }
         let cell = consoleCell()
-        model.relayout = { [weak self] phase in self?.controller.relayout(phase, cell: cell) ?? model.layout! }
+        model.relayout = { [weak self] phase in self?.controller.relayout(phase, cell: cell) }
         model.displayFrame = { NSScreen.screens.first?.frame ?? .zero } // the same display the layout uses
         model.relayoutNow()
         controller.startClickThrough()
@@ -76,7 +80,7 @@ import SwiftUI
 
         let chime = showcase == nil // a looping showcase would chime every few seconds
         model.onNeedsYou = { [weak self] in
-            self?.panel.orderFrontRegardless() // comes back from "Hide Nell"
+            self?.show() // comes back from "Hide Nell"
             if chime, NSWorkspace.shared.frontmostApplication?.bundleIdentifier != "net.kovidgoyal.kitty" { NSSound(named: "Tink")?.play() }
         }
         if showcase == nil { model.onOpenProject = { [weak self] in self?.openProject() } }
@@ -84,13 +88,14 @@ import SwiftUI
         model.onHide = { [weak self] in // the console goes with her; it comes back minimised
             if self?.model.console.phase == .open { self?.model.minimiseConsole() }
             self?.panel.orderOut(nil)
+            self?.setPause { $0.hidden = true }
         }
         model.onQuit = { NSApp.terminate(nil) }
         if showcase == nil {
             Hotkey.register { [weak self] in
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    self.panel.orderFrontRegardless()
+                    self.show()
                     self.panel.ignoresMouseEvents = false
                     self.panel.makeKey()
                     NotificationCenter.default.post(name: .nellFocusBar, object: nil)
@@ -134,17 +139,25 @@ import SwiftUI
         return CGSize(width: ceil(w), height: ceil(f.ascender - f.descender + f.leading))
     }
 
-    private func save() { try? model?.state.save(paths.stateFile) }
+    private func save() { if ownsState { try? model?.state.save(paths.stateFile) } }
 
-    /// Stop animating and polling the mouse while the screen is locked or asleep.
-    /// Locked and asleep are tracked apart: the display can wake on the lock screen.
+    private func show() {
+        panel.orderFrontRegardless()
+        setPause { $0.hidden = false }
+    }
+
+    /// Stops the sprite and the 10 Hz mouse poll (the 1 Hz model clock keeps running: its watchdogs hand held text back).
+    private func setPause(_ change: (inout PauseState) -> Void) {
+        change(&pause)
+        model.paused = pause.paused; controller.paused = pause.paused
+    }
+
+    /// Pause while the screen is locked or asleep. Locked and asleep are tracked apart: the display can wake on the lock screen.
     private func observePauses() {
         let set: @Sendable (_ lock: Bool, _ on: Bool) -> Void = { [weak self] lock, on in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self else { return }
-                    if lock { self.pause.locked = on } else { self.pause.asleep = on }
-                    self.model.paused = self.pause.paused; self.controller.paused = self.pause.paused
+                    self?.setPause { if lock { $0.locked = on } else { $0.asleep = on } }
                 }
             }
         }

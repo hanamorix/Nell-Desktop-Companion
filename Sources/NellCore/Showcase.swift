@@ -196,6 +196,16 @@ public enum Showcase {
             Step($0.id, [.theme($0.id), .openConsole], shows: [.theme($0.id), .console(.open)]),
             Step("\($0.id) minimised", [.minimiseConsole], shows: [.console(.minimised)]),
         ] }),
+        // a pending approval under tall Chat bubbles: the column keeps it whole (Allow/Deny on screen), above her and below
+        Scene(name: "crowded", steps: [
+            Step("approval under tall bubbles", [prompt(.code, "clean up")] + permission(.code, "r1", "u1", "rm -rf build")
+                    + [.say(longUser), prompt(.chat, longUser), stop(.chat, reply: longChat), .say("and a short one"),
+                       prompt(.chat, "and a short one"), stop(.chat, reply: "Short reply.")],
+                 shows: [.bubble(.approval), .bubble(.reply), .bubble(.user)]),
+            Step("column below her", [.place(x: 0.75, y: 1)], shows: [.bubble(.approval)]),
+            Step("console open", [.place(x: 1, y: 0), .openConsole], shows: [.bubble(.approval), .console(.open)]),
+            Step("question with dismiss", [.minimiseConsole] + question("q1"), shows: [.bubble(.question)]),
+        ]),
         Scene(name: "placement", steps: [
             ("bottom-left quadrant", 0.25, 0.25), ("bottom-right quadrant", 0.75, 0.25),
             ("top-left quadrant", 0.25, 0.75), ("top-right quadrant", 0.75, 0.75),

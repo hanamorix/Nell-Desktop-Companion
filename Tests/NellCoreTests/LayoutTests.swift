@@ -1,13 +1,26 @@
 import CoreGraphics
+import CoreText
+import Foundation
 import Testing
 @testable import NellCore
 
 let screen = CGRect(x: 0, y: 0, width: 1800, height: 1130)
 
+/// AppDelegate's `consoleCell()`: one Departure Mono cell at kitty's 16.5 pt, from the bundled font.
+let realCell: CGSize = {
+    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/Nell/Resources/fonts/DepartureMono-Regular.otf")
+    let d = (CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor])!.first!
+    let f = CTFontCreateWithFontDescriptor(d, 16.5, nil)
+    var g = CGGlyph(0), m = UniChar(77) // "M"
+    CTFontGetGlyphsForCharacters(f, &m, &g, 1)
+    let w = CTFontGetAdvancesForGlyphs(f, .horizontal, &g, nil, 1)
+    return CGSize(width: ceil(w), height: ceil(CTFontGetAscent(f) + CTFontGetDescent(f) + CTFontGetLeading(f)))
+}()
+
+/// The app's real geometry: Nell's block, the bubble column, the console cell and chrome (ConsoleChrome 4 pt border, 24 pt title).
 func input(_ origin: CGPoint, _ phase: ConsolePhase, screen s: CGRect = screen) -> LayoutInput {
-    LayoutInput(screen: s, nellOrigin: origin, nellSize: CGSize(width: 160, height: 200), columnSize: CGSize(width: 270, height: 300),
-                console: phase, cell: CGSize(width: 7, height: 14), consoleChrome: CGSize(width: 12, height: 34),
-                minimisedSize: CGSize(width: 320, height: 34))
+    LayoutInput(screen: s, nellOrigin: origin, nellSize: NellBlock.size, columnSize: NellBlock.column,
+                console: phase, cell: realCell, consoleChrome: CGSize(width: 8, height: 32), minimisedSize: NellBlock.minimised)
 }
 
 func inside(_ r: CGRect, _ s: CGRect) -> Bool { s.insetBy(dx: -0.5, dy: -0.5).contains(r) }
@@ -65,21 +78,32 @@ func inside(_ r: CGRect, _ s: CGRect) -> Bool { s.insetBy(dx: -0.5, dy: -0.5).co
     #expect(layout(input(CGPoint(x: 1620, y: 16), .hidden)).minimisedFrame == nil)
 }
 
+@Test func realCellIsDepartureMonoAt16_5() {
+    #expect(realCell == CGSize(width: 11, height: 22), "the cell the red team measured in the app")
+}
+
 @Test func allFramesInsideScreenAcrossGrid() {
-    for phase in [ConsolePhase.hidden, .open, .minimised] {
-        for x in stride(from: 0.0, through: 1800, by: 50) {
-            for y in stride(from: 0.0, through: 1130, by: 50) {
-                let l = layout(input(CGPoint(x: x, y: y), phase))
+    // the laptop screen, a Dock-left screen, a Dock-bottom one, and a second display left of the primary
+    let screens = [screen, CGRect(x: 80, y: 0, width: 1360, height: 875), CGRect(x: 0, y: 70, width: 1280, height: 705),
+                   CGRect(x: -1920, y: 0, width: 1920, height: 1055)]
+    for sc in screens {
+      for phase in [ConsolePhase.hidden, .open, .minimised] {
+        for x in stride(from: sc.minX - 100, through: sc.maxX, by: 50) {
+            for y in stride(from: sc.minY - 100, through: sc.maxY, by: 50) {
+                let l = layout(input(CGPoint(x: x, y: y), phase, screen: sc))
                 for r in [l.nellFrame, l.columnFrame] + [l.consoleFrame, l.minimisedFrame].compactMap({ $0 }) {
-                    #expect(inside(r, screen), "\(phase) at \(x),\(y): \(r)")
+                    #expect(inside(r, sc), "\(phase) at \(x),\(y): \(r)")
                 }
                 for c in [l.consoleFrame, l.minimisedFrame].compactMap({ $0 }) {
                     #expect(!c.intersects(l.nellFrame), "\(phase) at \(x),\(y)")
                     #expect(!c.intersects(l.columnFrame), "\(phase) at \(x),\(y)")
                 }
                 #expect(l.panelFrame.contains(l.nellFrame))
+                #expect(l.columnFrame.height >= 80, "room for a pending approval")
+                if phase == .open { #expect(l.consoleFrame != nil, "\(sc) at \(x),\(y): the console fits beside her") }
             }
         }
+      }
     }
 }
 
