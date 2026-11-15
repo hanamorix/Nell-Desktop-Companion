@@ -34,6 +34,11 @@ public enum Showcase {
     public struct Scene: Sendable {
         public let name: String
         public let steps: [Step]
+        /// Seconds between steps.
+        public let stepDuration: TimeInterval
+        public init(name: String, steps: [Step], stepDuration: TimeInterval = Showcase.stepDuration) {
+            self.name = name; self.steps = steps; self.stepDuration = stepDuration
+        }
     }
 
     public static let stepDuration: TimeInterval = 3
@@ -45,7 +50,7 @@ public enum Showcase {
         return .some(next.flatMap { $0.hasPrefix("-") ? nil : $0 })
     }
 
-    public static func scene(named name: String) -> Scene? { scenes.first { $0.name == name } }
+    public static func scene(named name: String) -> Scene? { (scenes + stressScenes).first { $0.name == name } }
 
     // MARK: Hook JSON helpers
 
@@ -165,6 +170,33 @@ public enum Showcase {
                  shows: [.placement(name), .bubble(.user), .bubble(.reply)])
         }),
     ]
+}
+
+extension Showcase {
+    /// Load for `scripts/stress.sh`, played only by name: `idle` sits with no events past the 600 s long-quiet switch;
+    /// `burst` fires about 20 hook events a second, with a console toggle and a placement change about once a second.
+    public static let stressScenes: [Scene] = [
+        Scene(name: "idle", steps: [Step("no events", [])], stepDuration: 24 * 3600),
+        Scene(name: "burst", steps: (0..<200).map(burstStep), stepDuration: 0.05),
+    ]
+
+    static func burstStep(_ i: Int) -> Step {
+        var a: [Action]
+        switch i % 10 {
+        case 0: a = [prompt(.code, "burst \(i)")]
+        case 1: a = [pre("b\(i)", "ls")]
+        case 2: a = [post("b\(i - 1)", "ls", stdout: "README.md")]
+        case 3: a = [pre("t\(i)", "swift test")]
+        case 4: a = [post("t\(i - 1)", "swift test", stdout: passOut)]
+        case 5: a = [failed("f\(i)", "ls nope", error: "Exit code 1\nls: nope: No such file or directory")]
+        case 6: a = [stop(.chat, reply: "Burst reply \(i)")]
+        case 7: a = Array(permission(.code, "r\(i)", "p\(i)", "rm -rf build").suffix(1)) // the PermissionRequest
+        case 8: a = [.settle(.code, requestId: "r\(i - 1)", .allow), prompt(.chat, "and \(i)")]
+        default: a = [.stopWithContext(tokens: (i % 7) * 100_000)]
+        }
+        if i % 20 == 0 { a += [i % 40 == 0 ? .codeChip : .minimiseConsole, .place(x: Double(i % 7) / 6, y: Double(i % 5) / 4)] }
+        return Step("burst \(i)", a)
+    }
 }
 
 /// `BubbleKind` without its payload, so scenes can name kinds and a test can enumerate them.

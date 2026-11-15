@@ -2,7 +2,7 @@ import AppKit
 import NellCore
 
 if Showcase.requested(CommandLine.arguments) == .some("list") {
-    print(Showcase.scenes.map(\.name).joined(separator: "\n"))
+    print((Showcase.scenes + Showcase.stressScenes).map(\.name).joined(separator: "\n"))
     exit(0)
 }
 let app = NSApplication.shared

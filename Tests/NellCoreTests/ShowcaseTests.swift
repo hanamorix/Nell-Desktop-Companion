@@ -60,3 +60,28 @@ private let shows = Set(Showcase.scenes.flatMap { $0.steps.flatMap(\.shows) })
     #expect(Showcase.scene(named: "paper")?.steps.count == 6)
     #expect(Showcase.scene(named: "nope") == nil)
 }
+
+// MARK: Stress scenes (by name only; not in the showcase cycle)
+
+@Test func idleSceneHoldsWithNoEvents() throws {
+    let idle = try #require(Showcase.scene(named: "idle"))
+    #expect(idle.steps.count == 1 && idle.steps[0].actions.isEmpty)
+    #expect(idle.stepDuration >= 3600, "never resets during a 10 min idle phase")
+    #expect(!Showcase.scenes.contains { $0.name == "idle" || $0.name == "burst" }, "the default cycle skips the stress scenes")
+}
+
+@Test func burstSceneIsAbout20EventsASecond() throws {
+    let burst = try #require(Showcase.scene(named: "burst"))
+    let perSecond = 1 / burst.stepDuration
+    let hooks = burst.steps.reduce(0) { n, s in n + s.actions.filter { if case .hook = $0 { true } else if case .stopWithContext = $0 { true } else { false } }.count }
+    let rate = Double(hooks) / (Double(burst.steps.count) / perSecond)
+    #expect(rate >= 18 && rate <= 30, "\(rate) hook events per second")
+    let moves = burst.steps.filter { $0.actions.contains { if case .place = $0 { true } else { false } } }.count
+    let seconds = Double(burst.steps.count) / perSecond
+    #expect(Double(moves) / seconds >= 0.9 && Double(moves) / seconds <= 1.1, "a placement change about once a second")
+    let console = burst.steps.filter { $0.actions.contains { $0 == .codeChip || $0 == .minimiseConsole } }.count
+    #expect(Double(console) / seconds >= 0.9, "console open/minimise about once a second")
+    for kind in ["PreToolUse", "PostToolUse", "PostToolUseFailure", "Stop", "PermissionRequest", "UserPromptSubmit"] {
+        #expect(burst.steps.contains { $0.actions.contains { if case .hook(_, let f, _) = $0 { f["hook_event_name"] == .string(kind) } else { false } } }, "\(kind)")
+    }
+}

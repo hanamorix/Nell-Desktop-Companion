@@ -12,6 +12,7 @@ import NellCore
     private var scene = 0, step = -1
     private var previousBody = Body.idle
     private var timer: Timer?
+    private var due: Date?
 
     init(model: NellModel, controller: PanelController, scenes: [Showcase.Scene], sandbox: URL) {
         self.model = model; self.controller = controller; self.scenes = scenes; self.sandbox = sandbox
@@ -22,21 +23,25 @@ import NellCore
     func start() {
         log("sandbox \(sandbox.path)")
         next()
-        timer = Timer.scheduledTimer(withTimeInterval: Showcase.stepDuration, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.next() }
-        }
     }
 
     private func next() {
+        // stress check: a main-thread timer firing more than 1 s late is a UI stall
+        let now = Date()
+        if let due = due, now.timeIntervalSince(due) > 1 { log(String(format: "STALL %.2f s late", now.timeIntervalSince(due))) }
         step += 1
         if step >= scenes[scene].steps.count { step = 0; scene = (scene + 1) % scenes.count }
         let sc = scenes[scene], st = sc.steps[step]
+        due = now + sc.stepDuration
+        timer = Timer.scheduledTimer(withTimeInterval: sc.stepDuration, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.next() }
+        }
         if step == 0 {
             controller.nellOrigin = home
             model.resetForShowcase()
             previousBody = model.pose.body
         }
-        log("\(sc.name) / \(st.name)")
+        if sc.stepDuration >= 1 || step % 20 == 0 { log("\(sc.name) / \(st.name)") } // a burst logs once a second
         for a in st.actions { run(a) }
         check(st)
         previousBody = model.pose.body
