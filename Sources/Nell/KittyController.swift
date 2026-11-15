@@ -90,7 +90,8 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         for s in sockets where s != live { unlink(s) }
         if let live {
             socket = "unix:" + live
-            codeAway = !state.ownsCodeSession(cwd: projectDir) // its Code may still be in the chat-folder fallback
+            // its Code may still be in the chat-folder fallback: ask kitty where it really runs (none yet: ensureTab decides)
+            codeAway = windowCwd(lsJSON: ls.out, mode: .code).map { !state.ownsCodeSession(cwd: $0) } ?? false
             hideConsole() // the console phase always starts hidden
             applyTheme(theme)
         } else {

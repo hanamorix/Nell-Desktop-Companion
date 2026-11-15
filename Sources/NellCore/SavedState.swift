@@ -37,7 +37,10 @@ public struct SavedState: Codable, Equatable, Sendable {
 
     /// Whether a Code launch in `cwd` records its session id as the project's: only one in the saved project folder (or
     /// any, with none saved). Code that fell back to the chat folder must not stop the project's session resuming.
-    public func ownsCodeSession(cwd: String) -> Bool { projectDir == nil || projectDir == cwd }
+    public func ownsCodeSession(cwd: String) -> Bool {
+        func real(_ p: String) -> String { URL(fileURLWithPath: p).resolvingSymlinksInPath().path } // kitty reports real paths
+        return projectDir.map { real($0) == real(cwd) } ?? true
+    }
 
     /// Picking a project folder: a different one starts a fresh Code session; the same one (re-picked to recover from the
     /// chat-folder fallback) keeps its session so it resumes.

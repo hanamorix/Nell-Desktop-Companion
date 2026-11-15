@@ -1,0 +1,47 @@
+[
+ {
+  "id": 1,
+  "is_active": true,
+  "is_focused": false,
+  "tabs": [
+   {
+    "id": 1,
+    "is_active": true,
+    "title": "claude",
+    "windows": [
+     {
+      "id": 1,
+      "cwd": "/Users/x/Library/Application Support/Nell/chat",
+      "pid": 101,
+      "title": "claude",
+      "user_vars": {
+       "nell_mode": "code"
+      },
+      "cmdline": [
+       "/Users/x/.local/bin/claude"
+      ]
+     }
+    ]
+   },
+   {
+    "id": 2,
+    "is_active": false,
+    "title": "claude",
+    "windows": [
+     {
+      "id": 2,
+      "cwd": "/Users/x/Library/Application Support/Nell/chat",
+      "pid": 102,
+      "title": "claude",
+      "user_vars": {
+       "nell_mode": "chat"
+      },
+      "cmdline": [
+       "/Users/x/.local/bin/claude"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]

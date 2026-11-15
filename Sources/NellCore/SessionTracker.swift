@@ -86,7 +86,6 @@ public struct SessionTracker: Sendable {
         let isQuestionTool = e.toolName == "AskUserQuestion"
         let isPost = e.name == "PostToolUse" || e.name == "PostToolUseFailure"
         let turnEnds = Self.endsTurn(e)
-        let promptOpen = !pendingApprovals.isEmpty || pendingQuestion != nil // before this event settles or clears them
         // Only the tool that opened a prompt in kitty (or the end of the turn) closes it; parallel tools don't.
         if turnEnds || (isPost && hold != nil && (hold?.toolUseId == nil ? false : hold?.toolUseId == e.toolUseId)) { hold = nil }
         if turnEnds || (isPost && isQuestionTool) { pendingQuestion = nil }
@@ -142,11 +141,9 @@ public struct SessionTracker: Sendable {
             base = .alert
         case "Stop":
             finalized = true; base = .idle
-            holdIfPromptOpen(promptOpen, now)
             return settleAll()
         case "StopFailure":
             finalized = true; base = .error
-            holdIfPromptOpen(promptOpen, now)
             if e.error == "rate_limit" { usageLimited = true }
             return settleAll()
         case "SessionEnd":
@@ -177,11 +174,6 @@ public struct SessionTracker: Sendable {
         for id in settled { pendingApprovals.removeValue(forKey: id) }
         return settled.sorted()
     }
-
-    /// The turn ended with an approval or question still open: its hook gets no decision, but Claude's own prompt or
-    /// picker may still be up in kitty, so hold (as a no-decision settle does) until an event shows Claude moved on or the
-    /// watchdog hands the text back. A new prompt or a new Claude process needs no hold: no prompt can be open then.
-    private mutating func holdIfPromptOpen(_ open: Bool, _ now: Date) { if open { hold = (nil, now) } }
 
     private mutating func settleAll() -> [String] {
         let ids = pendingApprovals.keys.sorted(); pendingApprovals = [:]; return ids

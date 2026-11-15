@@ -63,14 +63,19 @@ public func pickKittySocket(_ paths: [String], isLive: (String, Int32) -> Bool) 
         .sorted { $0.1 > $1.1 }.first { isLive($0.0, $0.1) }?.0
 }
 
-public func windowExists(lsJSON: Data, mode: Mode) -> Bool {
-    guard let osWindows = try? JSONSerialization.jsonObject(with: lsJSON) as? [[String: Any]] else { return false }
+/// The working directory kitty reports for the window tagged with this mode, if there is one.
+public func windowCwd(lsJSON: Data, mode: Mode) -> String? { taggedWindow(lsJSON, mode)?["cwd"] as? String }
+
+public func windowExists(lsJSON: Data, mode: Mode) -> Bool { taggedWindow(lsJSON, mode) != nil }
+
+private func taggedWindow(_ lsJSON: Data, _ mode: Mode) -> [String: Any]? {
+    guard let osWindows = try? JSONSerialization.jsonObject(with: lsJSON) as? [[String: Any]] else { return nil }
     for o in osWindows {
         for t in o["tabs"] as? [[String: Any]] ?? [] {
             for w in t["windows"] as? [[String: Any]] ?? [] where (w["user_vars"] as? [String: String])?["nell_mode"] == mode.rawValue {
-                return true
+                return w
             }
         }
     }
-    return false
+    return nil
 }

@@ -143,42 +143,17 @@ private func src(_ name: String, _ s: String) -> HookEvent { var e = ev(name); e
     #expect(s.sent.map(\.1) == ["after"])
 }
 
-// 1 (i): Stop hands a still-pending approval to kitty with no decision; Claude's own prompt may be open, so it holds.
-@Test func approvalPendingAtStopHoldsTheBar() {
+// A turn end releases the bar even with an approval still pending: answering in kitty doesn't close the hook
+// (pipeline spike, fact 3), so a kitty denial is still pending at Stop, and holding then would leave "Waiting…" for minutes.
+@Test func approvalPendingAtStopReleasesTheBar() {
     var s = Sim(); s.start(.code, now: t0)
-    s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u8"), now: at(1))
-    s.handle(.code, ev("PermissionRequest", tool: "Bash", input: rm), rid: "r8", now: at(1))
+    s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u1"), now: at(1))
+    s.handle(.code, ev("PermissionRequest", tool: "Bash", input: rm), rid: "r1", now: at(1))
     s.handle(.code, ev("Stop"), now: at(2))
-    #expect(s.releasedHooks.map(\.1) == ["r8"])
-    s.settle(.code, "r8", .none, now: at(2))
-    s.submit("typed")
-    #expect(s.sent.isEmpty, "sent \(s.sent) while Claude's prompt may be open")
-    s.tick(now: at(2 + Timings.typingWatchdog - 1)); #expect(s.draft.isEmpty)
-    s.tick(now: at(2 + Timings.typingWatchdog))
-    #expect(s.sent.isEmpty); #expect(s.draft == "typed", "the watchdog hands it back, never sends it")
-}
-
-// 1 (ii): Stop with a question's picker still open holds the bar too.
-@Test func questionPendingAtStopHoldsTheBar() {
-    var s = Sim(); s.start(.code, now: t0)
-    s.handle(.code, ev("PreToolUse", tool: "AskUserQuestion", input: ask, id: "q1"), now: at(1))
-    s.handle(.code, ev("PermissionRequest", tool: "AskUserQuestion", input: ask), rid: "rq", now: at(1))
-    s.handle(.code, ev("Stop"), now: at(2))
-    s.submit("typed")
-    #expect(s.sent.isEmpty, "sent \(s.sent) into an open picker")
-    s.handle(.code, ev("UserPromptSubmit"), now: at(9)) // you answered in kitty and Claude moved on
-    #expect(s.sent.map(\.1) == ["typed"])
-}
-
-// 1: a turn end with nothing pending releases as before.
-@Test func stopWithNothingPendingDoesNotHold() {
-    for end in ["Stop", "StopFailure"] {
-        var s = Sim(); s.start(.code, now: t0)
-        s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u1"), now: at(1))
-        s.handle(.code, ev("PostToolUse", tool: "Bash", input: rm, id: "u1"), now: at(2))
-        s.handle(.code, ev(end), now: at(3))
-        s.submit("goes straight out"); #expect(s.sent.count == 1, "\(end)")
-    }
+    #expect(s.releasedHooks.map(\.1) == ["r1"])
+    s.settle(.code, "r1", .none, now: at(2))
+    #expect(s.t[.code]!.inputHeld == false)
+    s.submit("goes straight out"); #expect(s.sent.count == 1)
 }
 
 @Test func rtfResumeClearsQuestionAndHold() {
@@ -349,6 +324,7 @@ private func src(_ name: String, _ s: String) -> HookEvent { var e = ev(name); e
     s.projectDir = "/p"
     #expect(s.ownsCodeSession(cwd: "/p"))
     #expect(!s.ownsCodeSession(cwd: "/chat"), "a fallback Code's id would stop the project resuming")
+    #expect(s.ownsCodeSession(cwd: "/p/"), "kitty may report the same folder spelled differently")
 }
 
 // e) the give-back bubble isn't stacked either
@@ -365,4 +341,13 @@ private func src(_ name: String, _ s: String) -> HookEvent { var e = ev(name); e
     s.chooseProject("/Users/x/proj/"); #expect(s.codeSessionId == "c", "same folder, trailing slash")
     s.chooseProject("/Users/x/./proj"); #expect(s.codeSessionId == "c")
     s.chooseProject("/Users/x/other"); #expect(s.codeSessionId == nil); #expect(s.projectDir == "/Users/x/other")
+}
+
+// the reused kitty's Code window says where it really runs (kitty 0.50 `ls` shape)
+@Test func windowCwdReadsTheTaggedWindow() throws {
+    let ls = try fixture("kitty-ls-cwd")
+    #expect(windowCwd(lsJSON: ls, mode: .code) == "/Users/x/Library/Application Support/Nell/chat")
+    #expect(windowCwd(lsJSON: ls, mode: .chat) == "/Users/x/Library/Application Support/Nell/chat")
+    #expect(windowCwd(lsJSON: try fixture("kitty-ls"), mode: .code) == nil, "no code-tagged window")
+    #expect(windowCwd(lsJSON: Data("garbage".utf8), mode: .code) == nil)
 }
