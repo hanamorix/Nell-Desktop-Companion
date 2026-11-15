@@ -101,3 +101,12 @@ private let shows = Set(Showcase.scenes.flatMap { $0.steps.flatMap(\.shows) })
     }
     #expect(tired)
 }
+
+@Test func showcaseVisitsEveryTheme() throws {
+    let scene = try #require(Showcase.scene(named: "themes"))
+    for t in Themes.all {
+        #expect(scene.steps.contains { $0.shows.contains(.theme(t.id)) && $0.actions.contains(.theme(t.id)) }, "\(t.id)")
+    }
+    let shown = scene.steps.flatMap(\.shows)
+    #expect(shown.contains(.bubble(.user)) && shown.contains(.bubble(.reply)) && shown.contains(.gauge(.session, .high)))
+}

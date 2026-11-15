@@ -29,6 +29,7 @@ import SwiftUI
                           sprite: SpriteDriver(sheet: sheet, image: image))
 
         let model = self.model!
+        kitty.theme = model.theme // before ensureRunning installs kitty.conf
         if showcase == nil {
             let server = HookServer(socketPath: paths.nellSocket.path, registry: registry,
                 onEvent: { m, e, id in

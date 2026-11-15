@@ -24,6 +24,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     /// Published separately so the view redraws when a reset passes, though `usage` itself doesn't change.
     @Published private(set) var weeklyGauge = gauge(nil, .weekly, now: Date())
     @Published private(set) var sessionGauge = gauge(nil, .session, now: Date())
+    /// The colour theme; `PN` reads the same one, and the root view rebuilds when this changes.
+    @Published private(set) var theme: Theme
     var hovered: UUID?
     /// Recomputes where everything goes for a console phase and moves Nell's window (set by the app delegate).
     var relayout: ((ConsolePhase) -> NellCore.Layout)?
@@ -57,6 +59,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
     init(kitty: KittyController, registry: ApprovalRegistry, paths: Paths, state: SavedState, sprite: SpriteDriver) {
         self.kitty = kitty; self.registry = registry; self.paths = paths; self.state = state; self.sprite = sprite
+        theme = Themes.named(state.theme); PN.theme = theme
     }
 
     func cwd(_ m: Mode) -> String { m == .code ? (state.projectDir ?? paths.chatDir.path) : paths.chatDir.path }
@@ -236,7 +239,14 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     }
 
     /// Showcase only: start a scene from a fresh Nell. No real path clears every session, bubble and the console at once.
+    func setTheme(_ name: String) {
+        let t = Themes.named(name)
+        PN.theme = t; theme = t; state.theme = t.id; onStateChanged?()
+        kitty.applyTheme(t)
+    }
+
     func resetForShowcase() {
+        setTheme(Themes.plumNight.id)
         trackers = [.code: SessionTracker(), .chat: SessionTracker()]
         bubbles = BubbleStore()
         queues = [.code: InputQueue(), .chat: InputQueue()]

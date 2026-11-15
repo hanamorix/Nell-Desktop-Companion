@@ -17,12 +17,14 @@ public enum Showcase {
         case place(x: Double, y: Double)
         /// A status-line reading (percent used; nil leaves that window as it was) whose windows reset in `resetsIn` seconds.
         case usage(session: Double?, weekly: Double?, resetsIn: TimeInterval)
+        /// Switches the colour theme by name, as the Settings menu does.
+        case theme(String)
     }
 
     /// What a step is there to show. The app checks each one after the step and logs any mismatch.
     public enum Visual: Hashable, Sendable {
         case face(Face), emoji(Emoji), body(Body), between(String), paper(Int), bubble(BubbleKindName), badge,
-             console(ConsolePhase), placement(String), gauge(UsageKind, UsageLevel)
+             console(ConsolePhase), placement(String), gauge(UsageKind, UsageLevel), theme(String)
     }
 
     public struct Step: Sendable {
@@ -184,6 +186,11 @@ public enum Showcase {
             Step("reset passed", [.usage(session: 95, weekly: 50, resetsIn: -60)],
                  shows: [.gauge(.session, .low), .gauge(.weekly, .low), .face(.idle)]),
         ]),
+        Scene(name: "themes", steps: [
+            Step("dressed", permission(.chat, "r1", "u1", "rm -rf build")
+                    + [.say("Could you tidy the build folder?"), stop(.chat, reply: "Sure, I'll sort that out."), .usage(session: 85, weekly: 60, resetsIn: 3600)],
+                 shows: [.bubble(.user), .bubble(.reply), .bubble(.approval), .gauge(.session, .high), .gauge(.weekly, .mid)]),
+        ] + Themes.all.map { Step($0.id, [.theme($0.id)], shows: [.theme($0.id)]) }),
         Scene(name: "placement", steps: [
             ("bottom-left quadrant", 0.25, 0.25), ("bottom-right quadrant", 0.75, 0.25),
             ("top-left quadrant", 0.25, 0.75), ("top-right quadrant", 0.75, 0.75),

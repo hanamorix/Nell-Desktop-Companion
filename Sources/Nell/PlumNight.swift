@@ -10,19 +10,32 @@ extension PlumNight {
     /// One art pixel.
     static let px: CGFloat = 2
 
-    static func color(_ name: String) -> Color {
-        let v = UInt32(palette[name]!.dropFirst(), radix: 16)!
+    /// The theme the interface is drawn in; switching it and rebuilding the views recolours everything.
+    @MainActor static var theme = Themes.plumNight
+    @MainActor static func color(_ name: String) -> Color {
+        let v = UInt32(theme.palette[name]!.dropFirst(), radix: 16)!
         return Color(.sRGB, red: Double(v >> 16 & 0xff) / 255, green: Double(v >> 8 & 0xff) / 255, blue: Double(v & 0xff) / 255)
     }
-    static let outline = color("outline")
-    static let plum900 = color("plum-900"), plum800 = color("plum-800"), plum700 = color("plum-700")
-    static let plum600 = color("plum-600"), plum500 = color("plum-500")
-    static let hair700 = color("hair-700"), hair500 = color("hair-500")
-    static let cream = color("cream"), snow = color("snow"), muted = color("muted"), blush = color("blush")
-    static let pink400 = color("pink-400"), pink600 = color("pink-600")
-    static let berry = color("berry"), wine = color("wine")
-    static let leaf = color("leaf"), leaf700 = color("leaf-700")
-    static let gold = color("gold"), gold700 = color("gold-700")
+    @MainActor static var outline: Color { color("outline") }
+    @MainActor static var plum900: Color { color("plum-900") }
+    @MainActor static var plum800: Color { color("plum-800") }
+    @MainActor static var plum700: Color { color("plum-700") }
+    @MainActor static var plum600: Color { color("plum-600") }
+    @MainActor static var plum500: Color { color("plum-500") }
+    @MainActor static var hair700: Color { color("hair-700") }
+    @MainActor static var hair500: Color { color("hair-500") }
+    @MainActor static var cream: Color { color("cream") }
+    @MainActor static var snow: Color { color("snow") }
+    @MainActor static var muted: Color { color("muted") }
+    @MainActor static var blush: Color { color("blush") }
+    @MainActor static var pink400: Color { color("pink-400") }
+    @MainActor static var pink600: Color { color("pink-600") }
+    @MainActor static var berry: Color { color("berry") }
+    @MainActor static var wine: Color { color("wine") }
+    @MainActor static var leaf: Color { color("leaf") }
+    @MainActor static var leaf700: Color { color("leaf-700") }
+    @MainActor static var gold: Color { color("gold") }
+    @MainActor static var gold700: Color { color("gold-700") }
 }
 
 /// The 1-art-pixel outline on four sides, corner pixels left empty: the notch.

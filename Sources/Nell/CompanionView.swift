@@ -24,6 +24,7 @@ struct CompanionView: View {
                 nell(l).place(local(l.nellFrame, in: l))
             }
             .frame(width: l.panelFrame.width, height: l.panelFrame.height)
+            .id(model.theme.id) // rebuild every view so no colour is left from the old theme
             .font(Fonts.ui())
             .onPreferenceChange(InteractiveRectsKey.self) { r in MainActor.assumeIsolated { controller.rects = r } }
             .onPreferenceChange(GrabRectsKey.self) { r in MainActor.assumeIsolated { controller.grabRects = r } }
@@ -83,6 +84,13 @@ struct CompanionView: View {
                     // the shortcut only brings her back, so it's named in the label rather than shown as this item's key
                     Button("Minimise (⌥⌘N to return)") { model.onHide?() }
                     Button("Choose project folder…") { model.onOpenProject?() }
+                    Menu("Settings") {
+                        ForEach(Themes.all) { t in
+                            Button { model.setTheme(t.id) } label: {
+                                if t == model.theme { Label(t.id, systemImage: "checkmark") } else { Text(t.id) }
+                            }
+                        }
+                    }
                     Divider()
                     Button("Quit Nell") { model.onQuit?() }
                 }
