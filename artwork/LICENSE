@@ -1,0 +1,26 @@
+Nell artwork
+Copyright (c) 2026 hanamorix
+
+The artwork is licensed under the Creative Commons Attribution-NonCommercial 4.0
+International licence (CC BY-NC 4.0). The code is MIT-licensed separately (see
+LICENSE at the repository root); this licence covers only the art.
+
+Covered by this licence:
+  - artwork/                                   (all of it: concept art, sprite masters, icon sources, exports)
+  - concept-nell-design-system/                (its art and design: character, icons, components, tokens),
+                                               except the Departure Mono font and its licence file
+  - Sources/Nell/Resources/sprites/            (Nell's sprite sheet and its frame data)
+  - Sources/Nell/Resources/icons/              (the interface icons)
+  - Sources/Nell/Resources/AppIcon.icns        (the app icon)
+
+You may share and adapt the art for non-commercial purposes, as long as you give
+appropriate credit ("Nell artwork by hanamorix"), link to the licence, and say if
+you made changes. Commercial use needs permission.
+
+Human-readable summary: https://creativecommons.org/licenses/by-nc/4.0/
+Full legal code (this is the licence that applies):
+https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
+Departure Mono (in Sources/Nell/Resources/fonts/ and concept-nell-design-system/fonts/)
+is not covered here: it is by Helena Zhang under the SIL Open Font License 1.1.
+See THIRD_PARTY.md.
