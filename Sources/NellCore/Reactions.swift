@@ -40,7 +40,7 @@ public func body(code: SessionTracker, chat: SessionTracker, selected: Mode) -> 
     return (selected == .code ? code : chat).turnRunning ? .typing : .idle
 }
 
-public func face(body: Body, emoji: Emoji?) -> Face {
+public func face(body: Body, emoji: Emoji?, tired: Bool = false) -> Face {
     switch emoji {
     case .heart: return .happy
     case .thumbsup: return .smile
@@ -48,7 +48,7 @@ public func face(body: Body, emoji: Emoji?) -> Face {
     case .warning: return .scared
     default:
         switch body {
-        case .idle: return .idle
+        case .idle: return tired ? .exhausted : .idle
         case .typing: return .intent
         case .yawning, .sleeping: return .exhausted
         }

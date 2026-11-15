@@ -62,3 +62,10 @@ import Testing
 private extension SessionTracker {
     func stopped() -> SessionTracker { var t = self; t.handle(ev("Stop"), requestId: nil, now: at(1)); t.tick(now: at(10)); return t }
 }
+
+@Test func tiredFaceOnlyWhenIdle() {
+    #expect(face(body: .idle, emoji: nil, tired: true) == .exhausted)
+    #expect(face(body: .typing, emoji: nil, tired: true) == .intent)
+    #expect(face(body: .idle, emoji: .heart, tired: true) == .happy)
+    #expect(face(body: .idle, emoji: nil) == .idle)
+}

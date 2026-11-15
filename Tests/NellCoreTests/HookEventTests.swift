@@ -10,7 +10,7 @@ func fixture(_ name: String) throws -> Data {
 @Test func decodesEveryFixture() throws {
     let dir = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
     let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-        .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix("kitty-") && !$0.lastPathComponent.hasPrefix("sprite-") }
+        .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix("kitty-") && !$0.lastPathComponent.hasPrefix("sprite-") && $0.lastPathComponent != "statusline.json" }
     #expect(files.count >= 10)
     for f in files {
         let e = try HookEvent.decode(Data(contentsOf: f))
