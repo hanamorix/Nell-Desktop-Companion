@@ -34,6 +34,13 @@ extension PlumNight {
     @MainActor static var wine: Color { color("wine") }
     @MainActor static var leaf: Color { color("leaf") }
     @MainActor static var leaf700: Color { color("leaf-700") }
+    /// The Allow button's top highlight: the theme's leaf halfway to white (Plum Night keeps its drawn #c6efb7).
+    @MainActor static var leafHi: Color {
+        if theme == Themes.plumNight { return Color(.sRGB, red: 0xc6 / 255, green: 0xef / 255, blue: 0xb7 / 255) }
+        let v = UInt32(theme.palette["leaf"]!.dropFirst(), radix: 16)!
+        let mix = { (c: UInt32) in (Double(c & 0xff) + 255) / 2 / 255 }
+        return Color(.sRGB, red: mix(v >> 16), green: mix(v >> 8), blue: mix(v))
+    }
     @MainActor static var gold: Color { color("gold") }
     @MainActor static var gold700: Color { color("gold-700") }
 }
@@ -156,7 +163,7 @@ struct PixelButton: ButtonStyle {
     private var colors: (Color, Color, Color, Color) {
         guard enabled else { return (PN.plum800, PN.plum800, PN.plum800, PN.plum500) }
         switch kind {
-        case .allow: return (PN.leaf, Color(.sRGB, red: 0xc6 / 255, green: 0xef / 255, blue: 0xb7 / 255), PN.leaf700, PN.outline)
+        case .allow: return (PN.leaf, PN.leafHi, PN.leaf700, PN.outline)
         case .deny: return (PN.berry, PN.pink600, PN.wine, PN.snow)
         case .quiet: return (PN.plum800, PN.plum600, PN.plum900, PN.cream)
         case .plain: return (PN.plum600, PN.pink400, PN.plum800, PN.cream)

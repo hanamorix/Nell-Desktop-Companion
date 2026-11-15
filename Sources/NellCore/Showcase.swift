@@ -187,9 +187,11 @@ public enum Showcase {
                  shows: [.gauge(.session, .low), .gauge(.weekly, .low), .face(.idle)]),
         ]),
         Scene(name: "themes", steps: [
-            Step("dressed", permission(.chat, "r1", "u1", "rm -rf build")
-                    + [.say("Could you tidy the build folder?"), stop(.chat, reply: "Sure, I'll sort that out."), .usage(session: 85, weekly: 60, resetsIn: 3600)],
-                 shows: [.bubble(.user), .bubble(.reply), .bubble(.approval), .gauge(.session, .high), .gauge(.weekly, .mid)]),
+            // the Stop comes first: it settles any open Chat approval, and the Allow/Deny buttons must stay on screen
+            Step("dressed", [.say("Could you tidy the build folder?"), stop(.chat, reply: "Sure, I'll sort that out.")]
+                    + permission(.chat, "r1", "u1", "rm -rf build")
+                    + [.usage(session: 85, weekly: 60, resetsIn: 3600), .openConsole],
+                 shows: [.bubble(.user), .bubble(.reply), .bubble(.approval), .gauge(.session, .high), .gauge(.weekly, .mid), .console(.open)]),
         ] + Themes.all.map { Step($0.id, [.theme($0.id)], shows: [.theme($0.id)]) }),
         Scene(name: "placement", steps: [
             ("bottom-left quadrant", 0.25, 0.25), ("bottom-right quadrant", 0.75, 0.25),

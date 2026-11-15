@@ -86,9 +86,7 @@ struct CompanionView: View {
                     Button("Choose project folder…") { model.onOpenProject?() }
                     Menu("Settings") {
                         ForEach(Themes.all) { t in
-                            Button { model.setTheme(t.id) } label: {
-                                if t == model.theme { Label(t.id, systemImage: "checkmark") } else { Text(t.id) }
-                            }
+                            Toggle(t.id, isOn: Binding(get: { model.theme == t }, set: { _ in model.setTheme(t.id) }))
                         }
                     }
                     Divider()
