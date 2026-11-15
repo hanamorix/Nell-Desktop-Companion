@@ -41,3 +41,9 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 | Notes | [2026-11-14-nell-v3-signal-spike-findings.md](notes/2026-11-14-nell-v3-signal-spike-findings.md) | v3 signal spike: test-result events, context usage in the transcript, `/clear` and `/compact` events, documented usage-limit signals |
 | Notes | [2026-11-15-nell-v3-build-ledger.md](notes/2026-11-15-nell-v3-build-ledger.md) | Every ruling, review fix and deferred minor from the v3 build, the post-check tasks and the final review |
 | Notes | [2026-11-15-nell-v3-performance-findings.md](notes/2026-11-15-nell-v3-performance-findings.md) | CPU and RAM stress test of the v3 build (idle, busy, burst), with the sprite-sheet decode fix |
+
+### Usage chips (2026-11-15)
+
+| Type | Document | What it is |
+|---|---|---|
+| Spec | [2026-11-15-nell-usage-chips-design.md](specs/2026-11-15-nell-usage-chips-design.md) | 5-hour and weekly usage as two gauge chips above Chat and Code, fed by a status line in Nell's own settings, plus the tired face over 90% (approved) |
