@@ -8,11 +8,15 @@ let sock = "unix:/A/Nell/kitty-42.sock"
     // kitten @ send-text applies Python escapes to an argv text (\n, \e, \x41…); --stdin sends it as-is.
     let a = KittyCommands.sendText(socket: sock, mode: .code)
     #expect(a.first == KittyCommands.kitten)
-    #expect(Array(a.dropFirst()) == ["@", "--to", sock, "send-text", "--match", "env:NELL_MODE=code", "--bracketed-paste", "enable", "--stdin"])
+    #expect(Array(a.dropFirst()) == ["@", "--to", sock, "send-text", "--match", "var:nell_mode=code", "--bracketed-paste", "enable", "--stdin"])
 }
 
-@Test func focusUsesEnvMatch() {
-    #expect(KittyCommands.focus(socket: sock, mode: .code).suffix(3) == ["focus-window", "--match", "env:NELL_MODE=code"])
+@Test func commandsMatchThePerWindowVarNotTheInheritedEnv() {
+    // kitty gives the env tag to every new window (a ⌘T shell too); a user var stays on the window it was set on
+    #expect(KittyCommands.focus(socket: sock, mode: .code).suffix(3) == ["focus-window", "--match", "var:nell_mode=code"])
+    #expect(KittyCommands.sendEnter(socket: sock, mode: .chat).suffix(4) == ["send-key", "--match", "var:nell_mode=chat", "enter"])
+    #expect(Array(KittyCommands.tagFirstWindow(socket: sock).dropFirst())
+            == ["@", "--to", sock, "set-user-vars", "--match", "id:1", "nell_mode=code"])
 }
 
 @Test func cleanEnvironmentHasNoClaudeVars() {
@@ -33,7 +37,7 @@ let sock = "unix:/A/Nell/kitty-42.sock"
 @Test func windowExistsFindsModeInLsOutput() throws {
     let ls = try fixture("kitty-ls")
     #expect(windowExists(lsJSON: ls, mode: .chat))
-    #expect(!windowExists(lsJSON: ls, mode: .code))
+    #expect(!windowExists(lsJSON: ls, mode: .code)) // window 1 has the inherited env tag but no var: a stray shell
     #expect(!windowExists(lsJSON: Data("garbage".utf8), mode: .chat))
 }
 

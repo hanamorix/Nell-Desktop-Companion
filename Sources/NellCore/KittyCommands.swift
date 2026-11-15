@@ -1,11 +1,12 @@
 import Foundation
 
-/// argv arrays for kitty / kitten @ — never shell strings. Windows are found by their NELL_MODE env tag (Claude rewrites titles).
+/// argv arrays for kitty / kitten @ — never shell strings. Windows are found by their `nell_mode` user var (Claude rewrites
+/// titles). The NELL_MODE env tag stays for nell-hook.sh, but kitty copies env into every new window, so Nell never matches it.
 public enum KittyCommands {
     public static let kitty = "/Applications/kitty.app/Contents/MacOS/kitty"
     public static let kitten = "/Applications/kitty.app/Contents/MacOS/kitten"
 
-    static func match(_ m: Mode) -> [String] { ["--match", "env:NELL_MODE=\(m.rawValue)"] }
+    static func match(_ m: Mode) -> [String] { ["--match", "var:nell_mode=\(m.rawValue)"] }
     static func at(_ socket: String, _ rest: [String]) -> [String] { [kitten, "@", "--to", socket] + rest }
 
     /// The text goes on stdin: as an argument kitten would apply Python escapes to it (\n, \e, \x41…).
@@ -23,8 +24,11 @@ public enum KittyCommands {
          "--listen-on", "unix:" + paths.support.appending(path: "kitty-{kitty_pid}.sock").path, claude] + args
     }
     public static func launchTab(socket: String, mode: Mode, cwd: String, claude: String, args: [String]) -> [String] {
-        at(socket, ["launch", "--type=tab", "--keep-focus", "--env", "NELL_MODE=\(mode.rawValue)", "--cwd", cwd, claude] + args)
+        at(socket, ["launch", "--type=tab", "--keep-focus", "--var", "nell_mode=\(mode.rawValue)", "--env", "NELL_MODE=\(mode.rawValue)",
+                    "--cwd", cwd, claude] + args)
     }
+    /// `kitten panel` has no --var, so the panel's first window (Code, id 1 in a fresh kitty) is tagged once kitty answers.
+    public static func tagFirstWindow(socket: String) -> [String] { at(socket, ["set-user-vars", "--match", "id:1", "nell_mode=code"]) }
     public static func placePanel(socket: String, request r: PanelRequest) -> [String] {
         at(socket, ["resize-os-window", "--action", "os-panel", "--incremental", "margin-left=\(r.marginLeft)",
                     "margin-top=\(r.marginTop)", "columns=\(r.widthPx)px", "lines=\(r.heightPx)px"])
@@ -63,7 +67,7 @@ public func windowExists(lsJSON: Data, mode: Mode) -> Bool {
     guard let osWindows = try? JSONSerialization.jsonObject(with: lsJSON) as? [[String: Any]] else { return false }
     for o in osWindows {
         for t in o["tabs"] as? [[String: Any]] ?? [] {
-            for w in t["windows"] as? [[String: Any]] ?? [] where (w["env"] as? [String: String])?["NELL_MODE"] == mode.rawValue {
+            for w in t["windows"] as? [[String: Any]] ?? [] where (w["user_vars"] as? [String: String])?["nell_mode"] == mode.rawValue {
                 return true
             }
         }

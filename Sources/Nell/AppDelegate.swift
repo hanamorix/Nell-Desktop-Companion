@@ -46,9 +46,13 @@ import SwiftUI
         Fonts.register()
         if showcase == nil {
             Fonts.installForKitty() // approved by the user: kitty only loads installed fonts
-            if model.state.projectDir == nil { model.state.projectDir = pickFolder() ?? FileManager.default.homeDirectoryForCurrentUser.path }
+            guard FileManager.default.isExecutableFile(atPath: kitty.claude) else {
+                return fail("Claude Code isn't installed at \(kitty.claude), where Nell runs it from.")
+            }
+            // a moved or deleted folder asks again; Cancel leaves none, and Code works in the chat folder until one is picked
+            if model.state.usableProjectDir == nil { model.state.projectDir = pickFolder() }
             do {
-                let reused = try kitty.ensureRunning(projectDir: model.state.projectDir!, state: &model.state)
+                let reused = try kitty.ensureRunning(projectDir: model.cwd(.code), state: &model.state)
                 if !reused { model.markLaunched(Mode.allCases) }
             } catch { return fail("Nell couldn't start kitty: \(error)") }
         } else {
