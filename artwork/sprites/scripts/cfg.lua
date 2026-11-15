@@ -45,7 +45,7 @@ LOGO={x=24,y=88,rows={"C...C","CC.CC","CCCCC","CCCCC",".CCC."}}
 DESK_SHADOW={{84,106,104}}
 ORPH_SKIP={{49,93,13,9},{65,95,16,9},{58,60,9,4}} -- plus the sclera ellipses of EYE_SPEC (orphans.lua)
 EMOJI={28,14,16,16}
-PAPER={102,92,20,16}
+PAPER={90,74,34,34}             -- round 3; round 2 was {100,74,24,34}, round 1 {102,92,20,16}
 -- round 2 hand touch-ups (after the automatic outline pass): lid edge bump, desk right top corner
 PATCHES={
  {layer="body", x=7, y=82, rows={".x","xx",".x"}, legend={x="#00000000"}},
@@ -159,4 +159,148 @@ TYPING_FX = {
   Lo = {{48, 89, "#F4B6AC"}, {60, 89, "#F4B6AC"}},
   Rt = {{68, 93, "#FFF4EC"}, {67, 92, "#FFF4EC"}, {66, 91, "#F4B6AC"}, {77, 93, "#FFF4EC"}, {78, 92, "#FFF4EC"}, {79, 91, "#F4B6AC"}},
   Ro = {{65, 90, "#F4B6AC"}, {80, 90, "#F4B6AC"}},
+}
+-- Task 9 props (props.lua): one frame per item after the body frames, drawn on the props layer at its slice.
+-- One legend for all of them: Plum Night tokens and colours already in the sprite.
+PROP_INK = {K = "#120D0E", W = "#FFF4EC", C = "#F5D4C9", L = "#D5A3A2", A = "#AF9295", B = "#F4B6AC", J = "#B47D83",
+  P = "#EC9394", Q = "#CF7D8B", R = "#A74F5E", N = "#622C36", U = "#6F8FD0", V = "#3E5C9E", G = "#E9B45F", O = "#A8762F",
+  H = "#4A3532", M = "#3F3039", X = "#483942", Y = "#261A22"}
+-- paper tower (round 3, 34x34 at the paper slice, sheets 28 px wide): paper:k draws the first k bundles of PAPER_TOWER, bottom first,
+-- each {left, right} outline column with optional `extra` {dx, dy, rows} patches relative to (left, the bundle's top row).
+-- A bundle is the page edge: PAPER_PAGES rows top to bottom (cream pages, #D5A3A2 sheet lines, a #AF9295 line under
+-- the bundle), with the right column shaded #AF9295. On top: a snow back edge and a cream top face, notched corners,
+-- and from PAPER_DOGEAR.from bundles on, a dog-eared top right corner. The base row sits on the desk top at y 106,
+-- with a desk-shadow row under it.
+PAPER_BASE = 32
+PAPER_PAGES = {"L", "C", "L", "C", "A"}
+PAPER_TOWER = {
+  {5, 32},
+  {6, 33},
+  {4, 31, extra = {-4, 2, {".KKKK", "KCCCC", ".KKKK"}}},   -- a loose sheet poking out to the left
+  {6, 32},
+  {5, 33},
+}
+PAPER_DOGEAR = {from = 4, rows = {"KK___", "WWK__", "CLLK_", "LAALK"}}   -- right-aligned on the top outline row; _ clears
+-- emoji (16x16 at the emoji slice), in priority order. Round 4: one footprint for all, 12 px wide (the thin ? and !
+-- narrower) and 11 px tall (heart 10), outline included, on the same bottom row (13) and centred near x 7.5
+EMOJI_ART = {
+  {name = "warning", rows = {
+    "................",
+    "................",
+    "................",
+    ".......KK.......",
+    "......KWGK......",
+    "......KGOK......",
+    ".....KGKKOK.....",
+    ".....KGKKOK.....",
+    "....KGGKKGOK....",
+    "....KGGKKGOK....",
+    "...KGGGGGGGOK...",
+    "...KGGGKKGGOK...",
+    "..KGGGGGGGGGOK..",
+    "..KKKKKKKKKKKK..",
+    "................",
+    "................"}},
+  {name = "question", rows = {
+    "................",
+    "................",
+    "................",
+    "....KKKKKK......",
+    "...KWUUUUUK.....",
+    "...KUKKKKUVK....",
+    "...KKK..KUVK....",
+    ".......KUVK.....",
+    "......KUVK......",
+    "......KUVK......",
+    "......KKKK......",
+    "......KUVK......",
+    "......KVVK......",
+    "......KKKK......",
+    "................",
+    "................"}},
+  {name = "plug", rows = {
+    "................",
+    "................",
+    "................",
+    ".....K....K.....",
+    "....KGK..KGK....",
+    "....KOK..KOK....",
+    "...KKKKKKKKKK...",
+    "...KWCCCCCCLK...",
+    "...KCCCCCCCLK...",
+    "....KCCCCCLK....",
+    ".....KKCLKK.....",
+    "......KCLK......",
+    ".....KCLK.......",
+    ".....KKKK.......",
+    "................",
+    "................"}},
+  {name = "alert", rows = {
+    "................",
+    "................",
+    "................",
+    "......KKK.......",
+    ".....KPRNK......",
+    ".....KRRNK......",
+    ".....KRRNK......",
+    ".....KRRNK......",
+    ".....KRRNK......",
+    "......KKK.......",
+    "......KKK.......",
+    ".....KRRNK......",
+    ".....KNNNK......",
+    "......KKK.......",
+    "................",
+    "................"}},
+  {name = "crying", rows = {
+    "................",
+    "................",
+    "................",
+    ".....KKKKKK.....",
+    "...KKWWCCCCKK...",
+    "...KWKCCCCKCK...",
+    "..KCKCCCCCCKCK..",
+    "..KCCKCCCCKCCK..",
+    "..KCVKCCCCKBCK..",
+    "..KVUVCKKCCBLK..",
+    "..KVWVKCCKCCLK..",
+    "...KVCCCCCCLK...",
+    "...KKCCCCCLKK...",
+    ".....KKKKKK.....",
+    "................",
+    "................"}},
+  {name = "heart", rows = {
+    "................",
+    "................",
+    "................",
+    "................",
+    "....KK....KK....",
+    "...KBPK..KPPK...",
+    "..KBWPPKKPPPQK..",
+    "..KBPPPPPPPPQK..",
+    "..KPPPPPPPPPQK..",
+    "...KPPPPPPPQK...",
+    "....KPPPPPQK....",
+    ".....KPPPQK.....",
+    "......KQRK......",
+    ".......KK.......",
+    "................",
+    "................"}},
+  {name = "thumbsup", rows = {
+    "................",
+    "................",
+    "................",
+    "......KK........",
+    ".....KCCK.......",
+    ".....KCCK.......",
+    "....KCCCKKKK....",
+    "..KKKCCCCCCCK...",
+    "..KXKCCCCJJJJK..",
+    "..KMKCCCCCCCLK..",
+    "..KMKCCCCJJJJK..",
+    "..KMKCCCCCCCLK..",
+    "..KYKBCCCJJJK...",
+    "..KKKKKKKKKKK...",
+    "................",
+    "................"}},
 }

@@ -11,7 +11,8 @@
 --  * a move must not open holes in the partitioned layers: any pixel opaque on frame 1 but transparent now is filled
 --    from the pixel it came from (below for a lift, above for a slump), on the layer that owns that pixel (FILL).
 --  Chair, desk and laptop never move. Slice keys for face, eyes and emoji are written per body frame (slicekeys.lua).
--- Safe to re-run: frames 10.. and body:* / between:* tags are rebuilt. Re-running faces.lua deletes these frames; run this after it.
+-- Safe to re-run: frames 10.. and body:* / between:* tags are rebuilt (paper:* / emoji:* frames and tags are dropped: run
+-- props.lua after this). Re-running faces.lua deletes these frames; run this after it.
 local SCRIPTS_DIR = app.fs.filePath(debug.getinfo(1, "S").source:gsub("^@", ""))
 if not EYE_SPEC then dofile(app.fs.joinPath(SCRIPTS_DIR, "cfg.lua")) end
 dofile(app.fs.joinPath(SCRIPTS_DIR, "slicekeys.lua"))
@@ -37,7 +38,7 @@ local function DECK_L(x, y)
 end
 
 -- reset to the 9 face/eyes frames
-for i = #spr.tags, 1, -1 do local n = spr.tags[i].name; if n:match("^body:") or n:match("^between:") then spr:deleteTag(spr.tags[i]) end end
+for i = #spr.tags, 1, -1 do local n = spr.tags[i].name; if n:match("^body:") or n:match("^between:") or n:match("^paper:") or n:match("^emoji:") then spr:deleteTag(spr.tags[i]) end end
 while #spr.frames > BASE_FRAMES do spr:deleteFrame(#spr.frames) end
 
 local LAYERS, BY = {}, {}
