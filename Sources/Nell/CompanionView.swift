@@ -75,7 +75,7 @@ struct CompanionView: View {
             SpriteCompositor(driver: model.sprite) // mirrored inside when she faces right, so the emoji stays readable
                 .grabbable()
                 .gesture(DragGesture(minimumDistance: 2) // only with ⌥ held: PanelController ignores plain drags
-                    .onChanged { _ in if controller.dragChanged() { model.dragBegan() } }
+                    .onChanged { v in if controller.dragChanged(start: v.startLocation) { model.dragBegan() } }
                     .onEnded { _ in if controller.dragEnded() { model.dragEnded() } })
                 .contextMenu {
                     // the shortcut only brings her back, so it's named in the label rather than shown as this item's key

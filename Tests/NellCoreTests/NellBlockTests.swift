@@ -155,3 +155,58 @@ private func layoutWith(columnUp: Bool) -> Layout {
     let a = try #require(SpriteMask(image: eyes))
     #expect(a.alpha.filter { $0 > 0 }.count == 259, "the closed-eyes patch survives decoding unchanged")
 }
+
+// MARK: Task 12 fix round 1
+
+private func blockInput(_ origin: CGPoint) -> LayoutInput {
+    LayoutInput(screen: screen, nellOrigin: origin, nellSize: NellBlock.size, columnSize: CGSize(width: 270, height: 320),
+                console: .hidden, cell: CGSize(width: 10, height: 21), consoleChrome: CGSize(width: 8, height: 32),
+                minimisedSize: CGSize(width: 340, height: NellBlock.barHeight))
+}
+private func spriteX(_ l: Layout) -> CGFloat { l.nellFrame.minX + NellBlock.spriteX(mirrored: l.faceRight) }
+
+@Test func sheStaysPutWhenSheTurns() {
+    // dropped just left of the midline while facing left: she turns to face right and must not jump
+    let before = layoutKeepingHerStill(blockInput(CGPoint(x: 1300, y: 40)), wasFaceRight: nil)
+    #expect(!before.faceRight)
+    let dropped = CGPoint(x: 700, y: 40) // block midX 860 < 900: she turns
+    let after = layoutKeepingHerStill(blockInput(dropped), wasFaceRight: before.faceRight)
+    #expect(after.faceRight)
+    #expect(spriteX(after) == dropped.x + NellBlock.spriteX(mirrored: false), "sprite stays where she was dropped")
+    // and back again
+    let back = layoutKeepingHerStill(blockInput(CGPoint(x: 1000, y: 40)), wasFaceRight: true)
+    #expect(!back.faceRight)
+    #expect(spriteX(back) == 1000 + NellBlock.spriteX(mirrored: true))
+}
+
+@Test func turningIsStableNearTheMidline() {
+    // after the shift she stays turned: relaying out the same spot doesn't flip her back
+    let a = layoutKeepingHerStill(blockInput(CGPoint(x: 735, y: 40)), wasFaceRight: false)
+    let again = layoutKeepingHerStill(blockInput(a.nellFrame.origin), wasFaceRight: a.faceRight)
+    #expect(again.faceRight == a.faceRight && again.nellFrame == a.nellFrame)
+    #expect(layoutKeepingHerStill(blockInput(CGPoint(x: 1300, y: 40)), wasFaceRight: nil).nellFrame.minX == 1300, "no turn, no shift")
+}
+
+@Test func dragDecidesOptionAtItsStart() {
+    var latch = DragLatch()
+    let start = CGPoint(x: 10, y: 10), other = CGPoint(x: 50, y: 50)
+    let plain = latch.allows(start: start, optionHeld: false)
+    let optionMidGesture = latch.allows(start: start, optionHeld: true)
+    let newWithOption = latch.allows(start: other, optionHeld: true)
+    let releasedMidDrag = latch.allows(start: other, optionHeld: false)
+    latch.reset()
+    let afterReset = latch.allows(start: other, optionHeld: false)
+    #expect(!plain)
+    #expect(!optionMidGesture, "⌥ pressed mid-gesture doesn't start moving her")
+    #expect(newWithOption, "a new gesture decides again")
+    #expect(releasedMidDrag, "releasing ⌥ mid-drag keeps the drag")
+    #expect(!afterReset)
+}
+
+@Test func clickingHerDoesNotTakeTheKeyboard() {
+    let sprite = [CGRect(x: 0, y: 0, width: 256, height: 256)], bar = [CGRect(x: 4, y: 262, width: 248, height: 34)]
+    #expect(!clickTakesKeyboard(CGPoint(x: 130, y: 100), rects: bar, grabRects: sprite), "her sprite")
+    #expect(clickTakesKeyboard(CGPoint(x: 130, y: 280), rects: bar, grabRects: sprite), "the bar")
+    #expect(clickTakesKeyboard(CGPoint(x: 130, y: 250), rects: [CGRect(x: 100, y: 240, width: 60, height: 20)], grabRects: sprite),
+            "a control drawn over her still works")
+}

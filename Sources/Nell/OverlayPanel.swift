@@ -15,7 +15,17 @@ final class OverlayPanel: NSPanel {
         hidesOnDeactivate = false
         ignoresMouseEvents = true
     }
-    override var canBecomeKey: Bool { true }
+    /// True for a window point (AppKit coords) that's on her sprite and on no control: clicking there must not take the
+    /// keyboard from the app you're typing in. (`becomesKeyOnlyIfNeeded` can't tell: SwiftUI's hosting view always
+    /// says it needs the keyboard.)
+    var isSpriteOnly: (NSPoint) -> Bool = { _ in false }
+    private var keyAllowed = true
+    override var canBecomeKey: Bool { keyAllowed }
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown || event.type == .rightMouseDown { keyAllowed = !isSpriteOnly(event.locationInWindow) }
+        super.sendEvent(event) // makes the panel key here, if it's allowed to
+        keyAllowed = true // the bar, a button or ⌥⌘N
+    }
     override var canBecomeMain: Bool { false }
 }
 
@@ -63,13 +73,23 @@ extension View {
     var onHitChange: ((Bool) -> Void)?
     private var timer: Timer?
     private var dragStart: (mouse: NSPoint, origin: NSPoint, nell: CGPoint)?
+    private var dragLatch = DragLatch()
+    /// Which way she faced at the last layout, so turning around doesn't move her sprite.
+    private var faceRight: Bool?
 
     /// 320 wide = the 256 pt sprite + the chip strip on her chair side; 296 tall = the sprite + 6 pt gap + the 34 pt bar.
     static let nellSize = NellBlock.size
     static let columnSize = CGSize(width: 270, height: 320)
     static let minimisedSize = CGSize(width: 340, height: NellBlock.barHeight) // inline with the bar row
 
-    init(panel: OverlayPanel) { self.panel = panel }
+    init(panel: OverlayPanel) {
+        self.panel = panel
+        panel.isSpriteOnly = { [weak self] w in
+            guard let self, let content = panel.contentView else { return false }
+            let p = CGPoint(x: w.x, y: content.bounds.height - w.y)
+            return !clickTakesKeyboard(p, rects: rects, grabRects: grabRects)
+        }
+    }
 
     /// shortcut: Nell stays on the primary display (the menu-bar one), where kitty's panel lives — kitty isn't told an
     /// --output-name yet. Dropping her on another display pulls her back. Upgrade when multi-display is designed.
@@ -78,10 +98,12 @@ extension View {
     /// Lays everything out for `phase` around Nell and moves the window there.
     func relayout(_ phase: ConsolePhase, cell: CGSize) -> NellCore.Layout {
         let s = screen?.visibleFrame ?? .zero
-        let l = layout(LayoutInput(screen: s, nellOrigin: nellOrigin, nellSize: Self.nellSize, columnSize: Self.columnSize, console: phase,
-                                   cell: cell, consoleChrome: CGSize(width: 2 * ConsoleChrome.border, height: 2 * ConsoleChrome.border + ConsoleChrome.title),
-                                   minimisedSize: Self.minimisedSize))
-        nellOrigin = l.nellFrame.origin // the layout may have clamped her back on screen
+        let l = layoutKeepingHerStill(LayoutInput(screen: s, nellOrigin: nellOrigin, nellSize: Self.nellSize, columnSize: Self.columnSize,
+                                                  console: phase, cell: cell,
+                                                  consoleChrome: CGSize(width: 2 * ConsoleChrome.border, height: 2 * ConsoleChrome.border + ConsoleChrome.title),
+                                                  minimisedSize: Self.minimisedSize), wasFaceRight: faceRight)
+        faceRight = l.faceRight
+        nellOrigin = l.nellFrame.origin // the layout may have clamped her back on screen, or shifted the block as she turned
         panel.setFrame(l.panelFrame, display: true)
         return l
     }
@@ -109,8 +131,9 @@ extension View {
     }
 
     /// Returns true on the first call of a drag, so the caller can hide the console.
-    func dragChanged() -> Bool {
-        if dragStart == nil, !NSEvent.modifierFlags.contains(.option) { return false } // a plain drag on her does nothing
+    /// `start` is the gesture's start location: ⌥ is decided once, when the gesture starts, so a plain drag never moves her.
+    func dragChanged(start: CGPoint) -> Bool {
+        guard dragLatch.allows(start: start, optionHeld: NSEvent.modifierFlags.contains(.option)) else { return false }
         let m = NSEvent.mouseLocation
         let first = dragStart == nil
         if first { dragStart = (m, panel.frame.origin, nellOrigin) }
@@ -123,6 +146,7 @@ extension View {
 
     /// Returns true if a drag actually happened.
     func dragEnded() -> Bool {
+        dragLatch.reset()
         guard dragStart != nil else { return false }
         dragStart = nil
         onPositionSaved?(displayKey(screen), nellOrigin)

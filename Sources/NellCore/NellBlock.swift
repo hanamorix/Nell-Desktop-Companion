@@ -110,3 +110,32 @@ public func decodedBitmap(_ image: CGImage) -> CGImage? {
     ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
     return ctx.makeImage()
 }
+
+/// `layout`, but if she turns (faceRight flips) her sprite stays where it is: the block shifts by the sprite's change of
+/// offset inside it. The shifted block lands on the turned side of the midline, so she doesn't flip back.
+public func layoutKeepingHerStill(_ input: LayoutInput, wasFaceRight: Bool?) -> Layout {
+    let l = layout(input)
+    guard let was = wasFaceRight, was != l.faceRight else { return l }
+    var turned = input
+    turned.nellOrigin.x = l.nellFrame.minX + NellBlock.spriteX(mirrored: was) - NellBlock.spriteX(mirrored: l.faceRight)
+    return layout(turned)
+}
+
+/// Dragging her needs ⌥ held when the drag starts; the decision holds for the whole gesture.
+public struct DragLatch: Sendable {
+    private var gesture: (start: CGPoint, allowed: Bool)?
+    public init() {}
+    /// `start` identifies the gesture (its start location).
+    public mutating func allows(start: CGPoint, optionHeld: Bool) -> Bool {
+        if let g = gesture, g.start == start { return g.allowed }
+        gesture = (start, optionHeld)
+        return optionHeld
+    }
+    public mutating func reset() { gesture = nil }
+}
+
+/// Whether a click at `p` may make Nell's panel key (take the keyboard). Not on her sprite alone: clicking her (for the
+/// right-click menu) must leave your typing where it was. Controls, the bar included, still may.
+public func clickTakesKeyboard(_ p: CGPoint, rects: [CGRect], grabRects: [CGRect]) -> Bool {
+    rects.contains { $0.contains(p) } || !grabRects.contains { $0.contains(p) }
+}

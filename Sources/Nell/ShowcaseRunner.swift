@@ -104,6 +104,32 @@ import NellCore
         }
         let panel = controller.panel
         guard let content = panel.contentView else { return }
+        // a left click on her must not take the keyboard; the bar's text field still must
+        panel.orderOut(nil); panel.orderFrontRegardless() // start without the keyboard (launching via `open` gives it)
+        log("probe: key before \(panel.isKeyWindow)")
+        let headAt = NSPoint(x: body.x, y: content.bounds.height - body.y)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let e = NSEvent.mouseEvent(with: type, location: headAt, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                panel.sendEvent(e)
+            }
+        }
+        log("probe: left click on her head -> key \(panel.isKeyWindow)")
+        let bar = NellBlock.bar(mirrored: model.layout?.faceRight ?? false)
+        let barAt = CGPoint(x: box.minX - NellBlock.spriteX(mirrored: model.layout?.faceRight ?? false) + bar.midX, y: box.minY + bar.midY)
+        var v = content.hitTest(NSPoint(x: barAt.x, y: content.bounds.height - barAt.y)), wants = false
+        while let view = v, !wants { wants = view.needsPanelToBecomeKey; v = view.superview }
+        log("probe: the bar's view at \(barAt) needsPanelToBecomeKey \(wants)")
+        let barWindow = NSPoint(x: barAt.x, y: content.bounds.height - barAt.y)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let e = NSEvent.mouseEvent(with: type, location: barWindow, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                panel.sendEvent(e)
+            }
+        }
+        log("probe: left click on the bar -> key \(panel.isKeyWindow)")
+        panel.orderOut(nil); panel.orderFrontRegardless() // hand the keyboard straight back
+        log("probe: keyboard handed back -> key \(panel.isKeyWindow)")
         let window = panel.windowNumber
         let escape = Timer(timeInterval: 3, repeats: false) { _ in
             MainActor.assumeIsolated {
