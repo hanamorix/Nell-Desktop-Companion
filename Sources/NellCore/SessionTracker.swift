@@ -89,7 +89,10 @@ public struct SessionTracker: Sendable {
         // Only the tool that opened a prompt in kitty (or the end of the turn) closes it; parallel tools don't.
         if turnEnds || (isPost && hold != nil && (hold?.toolUseId == nil ? false : hold?.toolUseId == e.toolUseId)) { hold = nil }
         if turnEnds || (isPost && isQuestionTool) { pendingQuestion = nil }
-        if turnEnds { testIds = []; openToolUses = [] }
+        if turnEnds { testIds = [] }
+        // a call ends only with its own Post: a background agent's can straddle a turn end, and a stale entry just makes a
+        // match ambiguous (safe). A new Claude process (or its end) is different: the old one's calls are gone with it.
+        if e.name == "SessionEnd" || e.name == "SessionStart" && turnEnds { openToolUses = [] }
         if Self.endsUsageLimit(e) || e.name == "SessionEnd" { usageLimited = false }
         if isPost { testIds.remove(e.toolUseId ?? "") }
         if isPost { openToolUses.removeAll { $0.id != nil && $0.id == e.toolUseId } }
@@ -98,7 +101,10 @@ public struct SessionTracker: Sendable {
 
         // late tool events after the turn don't change her state; a PermissionRequest never is noise: its hook blocks,
         // so a prompt is open. The calls are still tracked, so that prompt's approval can settle on its own tool's Post.
-        if finalized, e.name == "PreToolUse" { return [] }
+        if finalized, e.name == "PreToolUse" { // a background agent's question still opens a picker: hold the bar
+            if isQuestionTool { pendingQuestion = firstQuestion(e.toolInput) ?? "Claude has a question" }
+            return []
+        }
         if finalized, isPost { return settleApprovals(of: e.toolUseId) }
 
         switch e.name {

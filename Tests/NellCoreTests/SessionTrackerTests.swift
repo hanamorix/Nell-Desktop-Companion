@@ -296,14 +296,16 @@ func started() -> SessionTracker {
     #expect(t.inputHeld, "no decision: Claude's own prompt may be open, so it holds")
 }
 
-@Test func unfinishedToolUsesDontOutliveTheirTurnOrDenial() {
+@Test func finishedToolUsesDontOutliveTheirPostOrDenial() {
     var t = started()
-    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u0"), requestId: nil, now: at(1)) // never finishes (Esc)
+    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u0"), requestId: nil, now: at(1))
+    var esc = ev("PostToolUseFailure", tool: "Bash", input: bash, id: "u0"); esc.isInterrupt = true
+    t.handle(esc, requestId: nil, now: at(2)) // Esc ends the call with its own Post
     t.handle(ev("Stop"), requestId: nil, now: at(2))
     t.handle(ev("UserPromptSubmit"), requestId: nil, now: at(3))
     t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(4))
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(4))
-    #expect(t.pendingApprovals["r1"] == "u1", "not the last turn's u0")
+    #expect(t.pendingApprovals["r1"] == "u1", "not the last turn's finished u0")
     t.settleApproval("r1", answer: .deny, now: at(5)) // a denied tool gets no Post: Claude retries the same call
     t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u2"), requestId: nil, now: at(6))
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r2", now: at(6))

@@ -272,3 +272,62 @@ private func src(_ name: String, _ s: String) -> HookEvent { var e = ev(name); e
     b.add(.error, mode: .chat, text: "Claude's console isn't running.", now: at(1))
     #expect(b.bubbles.filter { $0.kind == .error }.count == 2)
 }
+
+// MARK: re-review round
+
+// a) a background call from before the prompt straddles the turn boundary; its approval arrives after an identical new call
+@Test func proofTurnBoundaryStraddleMisbinds() {
+    var s = Sim(); s.start(.code, now: t0)
+    s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u8"), now: at(1)) // background agent, previous turn
+    s.handle(.code, ev("Stop"), now: at(2))
+    s.handle(.code, ev("UserPromptSubmit"), now: at(3))
+    s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u1"), now: at(4)) // auto-allowed, running
+    s.handle(.code, ev("PermissionRequest", tool: "Bash", input: rm), rid: "r8", now: at(5)) // really u8's
+    s.submit("typed")
+    s.handle(.code, ev("PostToolUse", tool: "Bash", input: rm, id: "u1"), now: at(6))
+    #expect(s.releasedHooks.isEmpty, "r8 released by u1's Post: \(s.releasedHooks)")
+    #expect(s.sent.isEmpty, "sent \(s.sent) while u8's prompt may be open")
+}
+
+// a) a new Claude process (startup/resume) or its end forgets the old one's calls
+@Test func newClaudeProcessForgetsOldCalls() {
+    for end in [src("SessionStart", "resume"), src("SessionStart", "startup"), ev("SessionEnd")] {
+        var t = started()
+        t.handle(ev("PreToolUse", tool: "Bash", input: rm, id: "u8"), requestId: nil, now: at(1)) // dies with its process
+        t.handle(end, requestId: nil, now: at(2))
+        t.handle(ev("UserPromptSubmit"), requestId: nil, now: at(3))
+        t.handle(ev("PreToolUse", tool: "Bash", input: rm, id: "u1"), requestId: nil, now: at(4))
+        t.handle(ev("PermissionRequest", tool: "Bash", input: rm), requestId: "r1", now: at(4))
+        #expect(t.pendingApprovals["r1"] == "u1", "\(end.name) \(end.source ?? "")")
+    }
+}
+
+// b) a question after Stop (a background agent's AskUserQuestion)
+@Test func proofQuestionAfterStopHolds() {
+    var s = Sim(); s.start(.code, now: t0)
+    s.handle(.code, ev("Stop"), now: at(1))
+    s.handle(.code, ev("PreToolUse", tool: "AskUserQuestion", input: ask, id: "q1"), now: at(2))
+    s.handle(.code, ev("PermissionRequest", tool: "AskUserQuestion", input: ask), rid: "rq", now: at(2))
+    s.submit("typed")
+    #expect(s.t[.code]!.pendingQuestion != nil)
+    #expect(s.sent.isEmpty, "sent \(s.sent) with a picker open")
+    s.handle(.code, ev("PostToolUse", tool: "AskUserQuestion", input: ask, id: "q1"), now: at(9)) // answered
+    #expect(s.sent.map(\.1) == ["typed"])
+}
+
+// c) Code started outside the saved project folder (the chat-folder fallback) never takes over its session id
+@Test func onlyACodeLaunchInTheProjectOwnsItsSession() {
+    var s = SavedState()
+    #expect(s.ownsCodeSession(cwd: "/chat"), "no project: Code's session is the chat folder's")
+    s.projectDir = "/p"
+    #expect(s.ownsCodeSession(cwd: "/p"))
+    #expect(!s.ownsCodeSession(cwd: "/chat"), "a fallback Code's id would stop the project resuming")
+}
+
+// e) the give-back bubble isn't stacked either
+@Test func identicalAlertBubbleIsNotStacked() {
+    var b = BubbleStore()
+    b.add(.alert, mode: .code, text: "Your message to Code is back in the bar", now: t0)
+    b.add(.alert, mode: .code, text: "Your message to Code is back in the bar", now: at(1))
+    #expect(b.bubbles.count == 1)
+}

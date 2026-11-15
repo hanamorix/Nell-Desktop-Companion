@@ -25,8 +25,8 @@ public struct BubbleStore: Sendable {
     public init() {}
 
     public mutating func add(_ kind: BubbleKind, mode: Mode, text: String, now: Date) {
-        // the same failure again (another send while kitty is down) is already on screen
-        if kind == .error, bubbles.contains(where: { $0.kind == .error && $0.mode == mode && $0.text == text }) { return }
+        // the same failure or notice again (another send while kitty is down, more text handed back) is already on screen
+        if kind == .error || kind == .alert, bubbles.contains(where: { $0.kind == kind && $0.mode == mode && $0.text == text }) { return }
         var t = text
         if kind == .reply, mode == .code { t = truncated(text) }
         let startsNow = kind == .user || kind == .status

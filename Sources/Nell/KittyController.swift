@@ -39,6 +39,8 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     var theme: Theme = Themes.plumNight
     /// kitty couldn't start in this project folder, so Code started in the chat folder instead.
     var onFellBackToChatFolder: ((String) -> Void)?
+    /// Code runs outside the saved project folder (a fallback): its session ids aren't the project's, so none is saved.
+    private(set) var codeAway = false
 
     init(paths: Paths) { self.paths = paths }
 
@@ -228,11 +230,14 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     }
 
     /// `--resume` the saved session if its transcript exists, otherwise a fresh `--session-id`.
+    /// A Code launch outside the saved project gets a fresh id that isn't saved, so the project's session still resumes.
     private func sessionArgs(_ m: Mode, cwd: String, state: inout SavedState) -> [String] {
-        let saved = m == .code ? state.codeSessionId : state.chatSessionId
+        let owns = m == .chat || state.ownsCodeSession(cwd: cwd)
+        if m == .code { codeAway = !owns }
+        let saved = !owns ? nil : m == .code ? state.codeSessionId : state.chatSessionId
         let resume = saved.map { FileManager.default.fileExists(atPath: transcriptPath(home: home, cwd: cwd, sessionId: $0).path) } ?? false
         let id = resume ? saved! : UUID().uuidString.lowercased()
-        if m == .code { state.codeSessionId = id } else { state.chatSessionId = id }
+        if m == .chat { state.chatSessionId = id } else if owns { state.codeSessionId = id }
         return claudeArgs(mode: m, sessionId: id, resume: resume, settings: paths.hooksSettings(m).path)
     }
 }

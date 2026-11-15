@@ -105,7 +105,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
     /// `was` is the console before this click: if kitty can't be brought up, it goes back to that (never an open frame
     /// with nothing in it; minimised if it was already open).
-    private func applyConsole(_ was: ConsoleState) {
+    @discardableResult
+    private func applyConsole(_ was: ConsoleState) -> Bool {
         if console.phase == .open, !consoleTabRunning() {
             console = was
             if console.phase == .open { console.minimise() }
@@ -121,6 +122,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
             kitty.hideConsole()
         }
         refresh()
+        return console.phase == .open
     }
 
     /// Opening the console restarts kitty or its tab's Claude if they're gone, as a send does. False when nothing could start.
@@ -158,9 +160,11 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
     func answer(_ requestId: String, _ a: ApprovalAnswer) { registry.answer(id: requestId, a) }
 
+    /// Hands the approval to Claude's own prompt only once the console is really opening: if kitty can't start, the
+    /// approval stays pending with its Allow/Deny (and the error bubble says why).
     func openTerminal(_ m: Mode, requestId: String?) {
-        if let requestId { registry.answer(id: requestId, .none) }
-        openConsole(tab: m)
+        let was = console; console.open(tab: m)
+        if applyConsole(was), let requestId { registry.answer(id: requestId, .none) }
     }
 
     /// The question was dismissed in kitty (Esc sends no event): drop it, its bubble, and the bar's hold.
@@ -222,7 +226,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         }
         switch e.name {
         case "SessionStart":
-            if m == .code, state.codeSessionId != e.sessionId { state.codeSessionId = e.sessionId; onStateChanged?() }
+            if m == .code, !kitty.codeAway, state.codeSessionId != e.sessionId { state.codeSessionId = e.sessionId; onStateChanged?() }
             if m == .chat, state.chatSessionId != e.sessionId { state.chatSessionId = e.sessionId; onStateChanged?() }
             if m == .chat, console.tab == .chat { // Chat's one-time trust prompt is done: back to Code
                 console.chatConnected()

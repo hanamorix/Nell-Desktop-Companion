@@ -35,6 +35,10 @@ public struct SavedState: Codable, Equatable, Sendable {
         return projectDir
     }
 
+    /// Whether a Code launch in `cwd` records its session id as the project's: only one in the saved project folder (or
+    /// any, with none saved). Code that fell back to the chat folder must not stop the project's session resuming.
+    public func ownsCodeSession(cwd: String) -> Bool { projectDir == nil || projectDir == cwd }
+
     public static func load(_ url: URL) -> SavedState {
         guard let d = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(SavedState.self, from: d) else { return SavedState() }
         return s
