@@ -52,7 +52,7 @@ struct CompanionView: View {
         let head = headX(l), width = l.columnFrame.width
         return VStack(spacing: 8) {
             if l.columnUp { Spacer(minLength: 0) }
-            ForEach(model.shown) { s in // fade each bubble as one, so its drop doesn't show through the fill
+            ForEach(columnOrder(model.shown, columnUp: l.columnUp)) { s in // fade each bubble as one, so its drop doesn't show through the fill
                 // Nell's bubbles sit over her head; your cream ones stay on the far side
                 let mine = s.bubble.kind == .user
                 ColumnRow(width: width, headX: head, mine: mine) {
@@ -61,8 +61,8 @@ struct CompanionView: View {
             }
             if !l.columnUp { Spacer(minLength: 0) }
         }
-        // the newest bubble is last: when they overflow, the oldest are the ones clipped
-        .frame(width: width, height: l.columnFrame.height, alignment: .bottom)
+        // anchored on her side, so when they overflow the oldest (at the far end) are the ones clipped
+        .frame(width: width, height: l.columnFrame.height, alignment: l.columnUp ? .bottom : .top)
         .clipped()
     }
 

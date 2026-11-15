@@ -124,3 +124,10 @@ private func layoutWith(columnUp: Bool) -> Layout {
     #expect(isInteractive(CGPoint(x: 130, y: 110), rects: [], grabRects: sprite, optionHeld: true, opaqueAt: solid), "⌥ grabs the whole box")
     #expect(!isInteractive(CGPoint(x: 10, y: 10), rects: [], grabRects: sprite, optionHeld: true, opaqueAt: solid))
 }
+
+@Test func newestBubbleSitsNearestHer() {
+    // shown is oldest first; the column stacks top to bottom
+    #expect(columnOrder([1, 2, 3], columnUp: true) == [1, 2, 3], "above her: newest at the bottom")
+    #expect(columnOrder([1, 2, 3], columnUp: false) == [3, 2, 1], "below her: newest at the top")
+    #expect(columnOrder([Int](), columnUp: false).isEmpty)
+}

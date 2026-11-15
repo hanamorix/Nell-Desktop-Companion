@@ -69,6 +69,10 @@ public func bubbleX(width: CGFloat, columnWidth: CGFloat, headX: CGFloat, mine: 
     return min(max(headX - TailRule.inset, 0), room)
 }
 
+/// Top-to-bottom order of the column's bubbles (`shown` is oldest first) so the newest is always nearest her:
+/// at the bottom when the column is above her, at the top when it's below.
+public func columnOrder<T>(_ shown: [T], columnUp: Bool) -> [T] { columnUp ? shown : shown.reversed() }
+
 /// The composited frame's alpha, so only her drawn pixels take clicks.
 public struct SpriteMask: Sendable {
     public let width: Int, height: Int
