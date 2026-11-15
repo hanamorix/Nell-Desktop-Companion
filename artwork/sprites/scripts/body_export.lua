@@ -1,15 +1,17 @@
 -- Review exports for the body loops (Task 8), composited the way the app draws them: the body frame, then (unless the
 -- tag's data says face=drawn) a face rect cut from its face frame and pasted at this frame's face slice key, then (when
 -- blinking) the eyes:closed patch at the eyes key. Everything at exactly 2x on a transparent background.
--- BROUND (global, default "r3") names the files REV/body-<BROUND>-<gif>.gif and -frames.png (every body frame).
--- BODY_GIFS (global) picks the GIFs; default {"yawning", "typing-to-yawning"}; also "idle", "typing", "idle-blink".
+-- BROUND (global, default "r5a") names the files REV/body-<BROUND>-<gif>.gif and -frames.png (every body frame).
+-- BODY_GIFS (global) picks the GIFs; default {"sleeping", "idle-to-sleeping-to-idle"}; also "idle", "typing",
+-- "idle-blink", "yawning", "typing-to-yawning", "typing-to-sleeping", "sleeping-plug".
 local SCRIPTS_DIR = app.fs.filePath(debug.getinfo(1, "S").source:gsub("^@", ""))
 if not EYE_SPEC then dofile(app.fs.joinPath(SCRIPTS_DIR, "cfg.lua")) end
 dofile(app.fs.joinPath(SCRIPTS_DIR, "slicekeys.lua"))
-local BR = BROUND or "r3"
+local BR = BROUND or "r5a"
 local pc = app.pixelColor
 local spr = app.activeSprite
-if not spr or spr.filename ~= MASTER then spr = app.open(MASTER) end
+local TARGET = BODY_TARGET or MASTER   -- BODY_TARGET (global): build / check / export another copy (scratch variants)
+if not spr or spr.filename ~= TARGET then spr = app.open(TARGET) end
 local CLEAR, INK, LIGHT = pc.rgba(0, 0, 0, 0), pc.rgba(0x12, 0x0D, 0x0E, 255), pc.rgba(0xe9, 0xe4, 0xdc, 255)
 local function tag(n) for _, t in ipairs(spr.tags) do if t.name == n then return t end end end
 local KEYS = SLICE_KEYS(spr.filename, {__readonly = true})
@@ -56,7 +58,7 @@ local function gif(list, path)
   gs:saveAs(path); gs:close()
 end
 
-local WANT = {}; for _, n in ipairs(BODY_GIFS or {"yawning", "typing-to-yawning"}) do WANT[n] = true end
+local WANT = {}; for _, n in ipairs(BODY_GIFS or {"sleeping", "idle-to-sleeping-to-idle"}) do WANT[n] = true end
 local function loopGif(name, tagName, faceName, times)
   if not WANT[name] then return end
   local list = {}
@@ -79,18 +81,28 @@ if WANT["idle-blink"] then local list, idle = {}, frames("body:idle")
   gif(list, REV .. "body-" .. BR .. "-idle-blink.gif")
 end
 
--- typing (intent face, as the app shows it) twice, then at its resting frame 0 the in-between, two yawns, and back:
--- the yawning loop ends on its resting frame 0, the return in-between, then typing again
-if WANT["typing-to-yawning"] then local list = {}
-  local function add(tagName, faceName, n, upto) local fs = frames(tagName)
-    for _ = 1, n do for i, f in ipairs(fs) do if not upto or i <= upto then list[#list + 1] = {app_frame(f, false, faceName), spr.frames[f].duration} end end end end
-  add("body:typing", "intent", 2); add("body:typing", "intent", 1, 1)
-  add("between:typing-yawning", nil, 1)
-  add("body:yawning", nil, 2); add("body:yawning", nil, 1, 1)
-  add("between:yawning-typing", nil, 1)
-  add("body:typing", "intent", 2)
-  gif(list, REV .. "body-" .. BR .. "-typing-to-yawning.gif")
+-- sequences, composited as the app plays them: a loop runs whole, then its resting frame 0, the in-between, the next
+-- loop; steps = { {tag, face (nil = drawn or idle), times, upto (only the first n frames)}, ... }
+local function seqGif(name, steps, overlay)
+  if not WANT[name] then return end
+  local list = {}
+  for _, s in ipairs(steps) do local fs = frames(s[1])
+    for _ = 1, s[3] or 1 do for i, f in ipairs(fs) do if not s[4] or i <= s[4] then
+      local img = app_frame(f, false, s[2]); if overlay then overlay(img, f) end
+      list[#list + 1] = {img, spr.frames[f].duration} end end end
+  end
+  gif(list, REV .. "body-" .. BR .. "-" .. name .. ".gif")
 end
+seqGif("typing-to-yawning", {{"body:typing", "intent", 2}, {"body:typing", "intent", 1, 1}, {"between:typing-yawning"},
+  {"body:yawning", nil, 2}, {"body:yawning", nil, 1, 1}, {"between:yawning-typing"}, {"body:typing", "intent", 2}})
+seqGif("sleeping", {{"body:sleeping", nil, 3}})
+seqGif("idle-to-sleeping-to-idle", {{"body:idle"}, {"body:idle", nil, 1, 1}, {"between:idle-sleeping"},
+  {"body:sleeping", nil, 2}, {"body:sleeping", nil, 1, 1}, {"between:sleeping-idle"}, {"body:idle"}})
+seqGif("typing-to-sleeping", {{"body:typing", "intent", 2}, {"body:typing", "intent", 1, 1}, {"between:typing-sleeping"},
+  {"body:sleeping", nil, 2}})
+-- where the plug emoji will sit while she sleeps: the emoji slice key of each frame, outlined in blue (review only)
+seqGif("sleeping-plug", {{"body:sleeping", nil, 2}}, function(img, f) local k = key("emoji", f); local blue = pc.rgba(0x6F, 0x8F, 0xD0, 255)
+  for i = 0, 15 do img:drawPixel(k[2] + i, k[3], blue); img:drawPixel(k[2] + i, k[3] + 15, blue); img:drawPixel(k[2], k[3] + i, blue); img:drawPixel(k[2] + 15, k[3] + i, blue) end end)
 
 -- contact sheet: one row per loop half (4 frames), each cell 2x with a label: loop, offset, parts moved, duration
 local G = {
@@ -104,7 +116,8 @@ local G = {
  P={"##.","#.#","##.","#..","#.."}, R={"##.","#.#","##.","#.#","#.#"}, S={".##","#..",".#.","..#","##."},
  T={"###",".#.",".#.",".#.",".#."}, Y={"#.#","#.#",".#.",".#.",".#."}, [" "]={"..",".."}, ["+"]={"...",".#.","###",".#.","..."},
  A={".#.","#.#","###","#.#","#.#"}, O={".#.","#.#","#.#","#.#",".#."}, U={"#.#","#.#","#.#","#.#","###"},
- W={"#...#","#...#","#.#.#","##.##","#...#"}, ["-"]={"...","...","###","...","..."}, [">"]={"#..",".#.","..#",".#.","#.."},
+ W={"#...#","#...#","#.#.#","##.##","#...#"}, F={"###","#..","##.","#..","#.."}, K={"#.#","#.#","##.","#.#","#.#"},
+ Z={"###","..#",".#.","#..","###"}, ["-"]={"...","...","###","...","..."}, [">"]={"#..",".#.","..#",".#.","#.."},
 }
 local function text(out, s, x, y, k, col)
   for ch in s:gmatch(".") do local g = G[ch] or G[" "]
@@ -116,14 +129,16 @@ end
 do
   local cells = {}
   local SHORT = {["body:idle"] = "IDLE", ["body:typing"] = "TYPING", ["body:yawning"] = "YAWN",
-                 ["between:typing-yawning"] = "T>Y", ["between:yawning-typing"] = "Y>T"}
+                 ["between:typing-yawning"] = "T>Y", ["between:yawning-typing"] = "Y>T", ["body:sleeping"] = "SLEEP",
+                 ["between:idle-sleeping"] = "I>S", ["between:typing-sleeping"] = "T>S", ["between:sleeping-idle"] = "S>I"}
   local function sgn(v, s) if (v or 0) > 0 then return s .. "+" elseif (v or 0) < 0 then return s .. "-" end end
   for _, loop in ipairs(BODY_LOOPS) do local t = tag(loop.tag)
     local rest = {}; for n in (loop.data:match("rest=([%d,]+)") or ""):gmatch("%d+") do rest[tonumber(n)] = true end
     for k, p in ipairs(loop.frames) do local f = t.fromFrame.frameNumber + k - 1
       local parts = {}
       local cand = {rest[k - 1] and "REST" or false, sgn(p.c, "C") or false, sgn(p.h, "H") or false, p.l == 1 and "L" or false,
-                    p.r == 1 and "R" or false, p.arm and p.arm:upper() or false, p.eyes == "closed" and "SHUT" or false}
+                    p.r == 1 and "R" or false, p.arm and p.arm:upper() or false, p.eyes == "closed" and "SHUT" or false,
+                    p.sink and ("SINK" .. p.sink) or false, p.fold and "FOLD" or false, p.z and p.z:upper() or false}
       for i = 1, #cand do if cand[i] then parts[#parts + 1] = cand[i] end end
       cells[#cells + 1] = {f, string.format("%s %d %s %dMS", SHORT[loop.tag] or loop.tag:upper(), k - 1, table.concat(parts, " "), math.floor(spr.frames[f].duration * 1000 + 0.5))}
     end

@@ -69,7 +69,9 @@ function LID_EDGE(img, y) for x = 40, 60 do if img:getPixel(x, y) == app.pixelCo
 -- one entry per frame: c = chest (body layer) and h = head (head, face, eyes) offset in px, +1 up (breath, lean back),
 -- -1 down (slump); l / r = left / right hand up 1; fx = typing sparks (TYPING_FX); face = the face drawn in (a face:*
 -- tag; default the idle face, which the app covers with its pasted face); eyes = "closed" (the eyes:closed patch);
--- arm = the raised left arm (ARMS); d = duration in ms (multiples of a 1/12 s tick).
+-- arm = the raised left arm (ARMS); sink = sleeping: head down that many px (body half as far, or bsink); fold = the folded
+-- sleeves (SLEEVES); z = the sleep "z" (ZZ); bags = "idle": closed exhausted eyes without the two eye-bag pixels;
+-- patch = {{layer, x, y, colour}} hand touch-ups for that frame; d = duration in ms (multiples of a 1/12 s tick).
 -- tag = the tag name; data = its user data: rest = the two resting frames as offsets from the tag's first frame,
 -- face=drawn = the face is part of the frames (the app skips its face and blink overlays on that tag).
 BODY_LOOPS = {
@@ -95,11 +97,58 @@ BODY_LOOPS = {
     {face = "exhausted", eyes = "closed", d = 167}, {c = -1, face = "exhausted", d = 250}}},
   {tag = "between:yawning-typing", data = "face=drawn", frames = {
     {h = -1, face = "exhausted", d = 250}, {face = "exhausted", eyes = "closed", d = 167}}},
+  -- sleeping (5 s): her head sinks 24 px (sink; the body half as far) so her chin rests on folded arms (fold) across
+  -- the keyboard; eyes closed; she breathes in (sink 23) while a "z" drifts up (z). Rests (0, 4): the calm pose, no z.
+  {tag = "body:sleeping", data = "rest=0,4 face=drawn", frames = {
+    {sink = 24, fold = true, face = "exhausted", eyes = "closed", bags = "idle", d = 1167},
+    {sink = 23, fold = true, face = "exhausted", eyes = "closed", bags = "idle", z = "z1", patch = {{"head", 120, 89, "#4A3532"}}, d = 750},
+    {sink = 23, fold = true, face = "exhausted", eyes = "closed", bags = "idle", z = "z2", patch = {{"head", 120, 89, "#4A3532"}}, d = 1167},
+    {sink = 24, fold = true, face = "exhausted", eyes = "closed", bags = "idle", z = "z3", d = 750},
+    {sink = 24, fold = true, face = "exhausted", eyes = "closed", bags = "idle", d = 1167}}},
+  -- falling asleep (from the idle / typing rest, which are the same image): blink, head sinks, arms fold
+  {tag = "between:idle-sleeping", data = "face=drawn", frames = {
+    {face = "exhausted", eyes = "closed", bags = "idle", d = 167}, {sink = 8, face = "exhausted", eyes = "closed", bags = "idle", d = 250},
+    {sink = 16, fold = true, face = "exhausted", eyes = "closed", bags = "idle", d = 250}}},
+  {tag = "between:typing-sleeping", data = "face=drawn", frames = {
+    {face = "exhausted", eyes = "closed", bags = "idle", d = 167}, {sink = 8, face = "exhausted", eyes = "closed", bags = "idle", d = 250},
+    {sink = 16, fold = true, face = "exhausted", eyes = "closed", bags = "idle", d = 250}}},
+  -- waking: head lifts, hands back on the keys, sleepy eyes open, then a blink to the idle face
+  {tag = "between:sleeping-idle", data = "face=drawn", frames = {
+    {sink = 16, fold = true, face = "exhausted", eyes = "closed", bags = "idle", d = 333}, {sink = 6, face = "exhausted", eyes = "closed", bags = "idle", d = 250},
+    {face = "exhausted", d = 500}, {face = "exhausted", eyes = "closed", bags = "idle", d = 167}}},
 }
 -- the raised left arm for the yawn (props layer, never over the lid): the accepted left-hand rows flipped upright at
 -- hand = {x, y} (9 rows; the gaps between the fingertips are closed with outline), on a sleeve from the cuff (top) down
 -- to the elbow behind the lid (bot); xl / xr = the sleeve's left and right outline x at top and bottom
+-- sleeping: her folded forearms in baggy hoodie sleeves, lying across the keyboard and desk (props layer, behind the lid).
+-- Two sleeves on a grid with origin (x 44, y 89): "lower" (her right arm, elbow behind the lid, cuff drooping shut at
+-- the right) is drawn first, "upper" (her left arm, rounded elbow on the right, cuff drooping at the left with
+-- fingertips peeking out) over it. top / bot: {from col, to col, row} runs giving the lumpy fabric edges. Each sleeve
+-- is outlined, lit along its top, shadowed underneath; creases = short fold lines; seam = the cuff's fold column;
+-- open = the cuff opening (dark). The fingertips are the accepted hand's fingertip rows. Stays left of the paper (x 102).
+SLEEVES = {
+  x = 44, y = 89,
+  {name = "lower", top = {{0, 3, 7}, {4, 7, 6}, {8, 11, 7}, {12, 44, 8}, {45, 46, 8}, {47, 49, 7}, {50, 51, 8}, {52, 52, 9}, {53, 53, 11}},
+   bot = {{0, 51, 15}, {52, 52, 15}, {53, 53, 14}},
+   creases = {{29, 12}, {30, 13}}, hl = {{48, 8}, {49, 8}}, seam = 46, open = {53, 53}},
+  {name = "upper",
+   top = {{6, 6, 6}, {7, 7, 5}, {8, 9, 4}, {10, 12, 4}, {13, 13, 3}, {14, 15, 2}, {16, 18, 1}, {19, 22, 0}, {23, 24, 1}, {25, 25, 2}, {26, 26, 3},
+          {27, 28, 2}, {29, 30, 1}, {31, 35, 0}, {36, 37, 1}, {38, 38, 2}, {39, 39, 3}, {40, 41, 2}, {42, 44, 1}, {45, 48, 1}, {49, 50, 2}, {51, 52, 3}, {53, 54, 4}, {55, 55, 5}, {56, 56, 7}},
+   bot = {{6, 6, 11}, {7, 7, 12}, {8, 12, 13}, {13, 13, 12}, {14, 18, 11}, {19, 23, 12}, {24, 30, 11}, {31, 36, 12}, {37, 47, 11}, {48, 52, 12}, {53, 54, 11}, {55, 55, 10}, {56, 56, 9}},
+   creases = {{26, 4}, {27, 5}, {27, 6}, {28, 7}, {28, 8}, {39, 4}, {40, 5}, {40, 6}, {41, 7}, {50, 4}, {50, 5}, {51, 6}},
+   hl = {{19, 2}, {20, 2}, {21, 2}, {32, 2}, {33, 2}, {34, 2}, {44, 3}, {45, 3}, {10, 6}, {11, 6}},
+   seam = 13, open = {6, 7}},
+  fingers = {x = 6, y = 14, rows = {"KBBKBBKBBK", ".KK.KK.KK."}},
+}
+-- the sleep "z" (props): letter rows, cream (W) or fading pink-400 (P), on a 1 px #120D0E plate (8-neighbour outline)
+-- so it reads on any desktop; it grows as it drifts up and right, then fades to pink
+ZZ = {
+  z1 = {x = 95, y = 23, rows = {"WWWW", "..W.", ".W..", "WWWW"}},
+  z2 = {x = 99, y = 13, rows = {"WWWWW", "...W.", "..W..", ".W...", "WWWWW"}},
+  z3 = {x = 105, y = 3, rows = {"PPPPP", "...P.", "..P..", ".P...", "PPPPP"}},
+}
 ARMS = {   -- the cuff starts on the wrist row (the hand's last row), one pixel wider than the wrist on each side
+  prop  = {hand = {50, 72}, top = 80, bot = 94, xl = {53, 44}, xr = {60, 59}},   -- sleeping variant B: fist propping her jaw
   mid   = {hand = {49, 75}, top = 83, bot = 94, xl = {52, 44}, xr = {59, 59}},
   mouth = {hand = {52, 58}, top = 66, bot = 94, xl = {55, 40}, xr = {62, 59}},
 }

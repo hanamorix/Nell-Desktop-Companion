@@ -17,7 +17,8 @@ if not EYE_SPEC then dofile(app.fs.joinPath(SCRIPTS_DIR, "cfg.lua")) end
 dofile(app.fs.joinPath(SCRIPTS_DIR, "slicekeys.lua"))
 local pc = app.pixelColor
 local spr = app.activeSprite
-if not spr or spr.filename ~= MASTER then spr = app.open(MASTER) end
+local TARGET = BODY_TARGET or MASTER   -- BODY_TARGET (global): build / check / export another copy (scratch variants)
+if not spr or spr.filename ~= TARGET then spr = app.open(TARGET) end
 local function hex(h) return pc.rgba(tonumber(h:sub(2,3),16), tonumber(h:sub(4,5),16), tonumber(h:sub(6,7),16), 255) end
 local CLEAR = pc.rgba(0, 0, 0, 0)
 
@@ -98,6 +99,63 @@ local function drawArm(a, put)
     local c0, c1 = row:find("[^.]"), #row - row:reverse():find("[^.]") + 1
     for c = c0, c1 do put(a.hand[1] + c - 1, a.hand[2] + r - 1, HAND_LG[row:sub(c, c)] or HAND_LG.K) end end   -- fingertip gaps: outline
 end
+-- sleeping uncovers chair the hair hid on frame 1: the chair with every hole inside its polygon (CHAIR) that she covered
+-- on frame 1 filled with chair shadow
+local function inPoly(px, py, poly) local inside, j = false, #poly
+  for i = 1, #poly do local xi, yi, xj, yj = poly[i][1], poly[i][2], poly[j][1], poly[j][2]
+    if (yi > py) ~= (yj > py) and px < (xj - xi) * (py - yi) / (yj - yi) + xi then inside = not inside end; j = i end
+  return inside end
+local function outside(img)   -- transparent pixels reachable from the canvas border
+  local out, q = {}, {}
+  local function push(x, y) local k = y * 128 + x
+    if x >= 0 and y >= 0 and x < 128 and y < 128 and not out[k] and pc.rgbaA(img:getPixel(x, y)) == 0 then out[k] = true; q[#q + 1] = k end end
+  for i = 0, 127 do push(i, 0); push(i, 127); push(0, i); push(127, i) end
+  local h = 1; while h <= #q do local k = q[h]; h = h + 1; local x, y = k % 128, k // 128; push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1) end
+  return out
+end
+local OUT1 = outside(COMP1)
+local TOP1 = {}   -- which layer shows each pixel on frame 1
+for y = 0, 127 do for x = 0, 127 do for i = #LAYERS, 1, -1 do if pc.rgbaA(BASE[LAYERS[i].name]:getPixel(x, y)) > 0 then TOP1[y * 128 + x] = LAYERS[i].name; break end end end end
+local EDGE1 = {}   -- frame 1's own silhouette pixels that aren't outline (the hair strand at x 37-40): left as drawn
+for y = 0, 127 do for x = 0, 127 do local v = COMP1:getPixel(x, y)
+  if pc.rgbaA(v) > 0 and v ~= hex("#120D0E") then for _, d in ipairs({{1,0},{-1,0},{0,1},{0,-1}}) do local xx, yy = x + d[1], y + d[2]
+    if xx < 0 or yy < 0 or xx > 127 or yy > 127 or OUT1[yy * 128 + xx] then EDGE1[y * 128 + x] = true end end end end end
+CHAIR_FULL = BASE.chair:clone()
+for y = 0, 127 do for x = 0, 127 do
+  if pc.rgbaA(CHAIR_FULL:getPixel(x, y)) == 0 and pc.rgbaA(COMP1:getPixel(x, y)) > 0 and inPoly(x + 0.5, y + 0.5, CHAIR) then
+    CHAIR_FULL:drawPixel(x, y, hex("#261A22")) end end end   -- whatever ends up on her silhouette is outlined per frame
+-- sleeping: the folded forearms in baggy sleeves (SLEEVES) and the sleep "z" (ZZ), both on props
+local function drawFold(put)
+  local S, LG = SLEEVES, {K = hex("#120D0E"), B = hex("#F4B6AC")}
+  local function run(list, c) for _, r in ipairs(list) do if c >= r[1] and c <= r[2] then return r[3] end end end
+  for _, sl in ipairs(S) do
+    local mark, hl = {}, {}
+    for _, m in ipairs(sl.creases or {}) do mark[m[2] * 128 + m[1]] = true end
+    for _, m in ipairs(sl.hl or {}) do hl[m[2] * 128 + m[1]] = true end
+    local function inside(c, r) local t, b = run(sl.top, c), run(sl.bot, c); return t and r >= t and r <= b end
+    for c = 0, 60 do local t, b = run(sl.top, c), run(sl.bot, c)
+      if t then for r = t, b do local col
+        if not (inside(c - 1, r) and inside(c + 1, r) and inside(c, r - 1) and inside(c, r + 1)) then col = SLEEVE.K
+        elseif sl.open and c >= sl.open[1] and c <= sl.open[2] then col = SLEEVE.lo               -- cuff opening
+        elseif c == sl.seam or mark[r * 128 + c] then col = SLEEVE.lo                              -- cuff fold, creases
+        elseif r == t + 1 or hl[r * 128 + c] then col = SLEEVE.hi                                   -- lit top, bulge highlights
+        elseif r == b - 1 then col = SLEEVE.lo                                                    -- shadow underneath
+        else col = SLEEVE.mid end
+        put(S.x + c, S.y + r, col)
+      end end
+    end
+  end
+  local f = S.fingers
+  for r, row in ipairs(f.rows) do for c = 1, #row do local v = LG[row:sub(c, c)]; if v then put(S.x + f.x + c - 1, S.y + f.y + r - 1, v) end end end
+end
+local function drawZ(z, put)
+  local LG = {W = hex("#FFF4EC"), P = hex("#F4B6AC")}
+  local ink = {}
+  for r, row in ipairs(z.rows) do for c = 1, #row do if LG[row:sub(c, c)] then ink[(z.y + r - 1) * 128 + z.x + c - 1] = LG[row:sub(c, c)] end end end
+  for k in pairs(ink) do local x, y = k % 128, k // 128   -- 1 px plate (8-neighbours), so it reads on any desktop
+    for dy = -1, 1 do for dx = -1, 1 do if not ink[(y + dy) * 128 + x + dx] then put(x + dx, y + dy, hex("#120D0E")) end end end end
+  for k, v in pairs(ink) do put(k % 128, k // 128, v) end
+end
 local log = {}
 local function pose(p)
   local im = {}
@@ -107,6 +165,8 @@ local function pose(p)
   local faceF = p.face and frameOf("face:" .. p.face)
   local src = {head = BASE.head, face = faceF and layerImg("face", faceF) or BASE.face, eyes = faceF and layerImg("eyes", faceF) or BASE.eyes}
   if p.eyes == "closed" then src.eyes = src.eyes:clone(); src.eyes:drawImage(CLOSED, Point(0, 0)) end
+  -- bags = "idle": exhausted's two eye-bag pixels just outside the closed patch would be left single; take the idle face's
+  if p.bags == "idle" then for _, q in ipairs({{57, 55}, {54, 56}}) do src.eyes:drawPixel(q[1], q[2], BASE.eyes:getPixel(q[1], q[2])) end end
   for _, n in ipairs({"head", "face", "eyes"}) do im[n] = lift(src[n], h0, 0, hairY) end
   for i, up in ipairs({p.l or 0, p.r or 0}) do if up == 1 then
     local new = {}
@@ -125,6 +185,24 @@ local function pose(p)
   if p.arm then   -- the left hand leaves the keys: the deck shows where it was (the lid still covers its own part)
     for _, q in ipairs(HAND_PX[1]) do im.body:drawPixel(q[1], q[2], CLEAR)
       if q[1] > LID[q[2]] then im.laptop:drawPixel(q[1], q[2], DECK_L(q[1], q[2])) end end
+  end
+  local sink = p.sink or 0
+  if sink > 0 then   -- sleeping: head (sink) and body (half as far, so her back still fills the chair) sink, behind laptop and desk
+    im.chair = CHAIR_FULL:clone()
+    for i = 1, 2 do for _, q in ipairs(HAND_PX[i]) do im.body:drawPixel(q[1], q[2], CLEAR)   -- hands off the keys
+      if p.fold and q[1] > LID[q[2]] and pc.rgbaA(im.laptop:getPixel(q[1], q[2])) == 0 then
+        im.laptop:drawPixel(q[1], q[2], (i == 1 and DECK_L or DECK)(q[1], q[2])) end end end
+    for _, n in ipairs({"body", "head", "face", "eyes"}) do local src, out = im[n], Image(128, 128, ColorMode.RGB)
+      for y = 0, 127 do for x = 0, 127 do
+        local dn = (n == "body") and (p.bsink or sink // 2) or sink
+        local v = (n == "body" and x < BODY_XMIN) and src:getPixel(x, y) or (y - dn >= 0 and src:getPixel(x, y - dn) or CLEAR)
+        if y >= DESK_Y then v = (n == "body") and src:getPixel(x, y) or CLEAR end   -- nothing of her below the desk top (body keeps the bits of desk/chair it owns there)
+        if n ~= "body" and (pc.rgbaA(im.laptop:getPixel(x, y)) > 0 or pc.rgbaA(im.desk:getPixel(x, y)) > 0) then v = CLEAR end
+        out:drawPixel(x, y, v) end end
+      im[n] = out
+    end
+    if not p.fold then for i = (p.arm and 2 or 1), 2 do for _, q in ipairs(HAND_PX[i]) do   -- hands stay on the keys (not one raised), in front of her head
+      im.body:drawPixel(q[1], q[2], q[3]); for _, n in ipairs({"head", "face", "eyes"}) do im[n]:drawPixel(q[1], q[2], CLEAR) end end end end
   end
   -- FILL: holes the move opened, from the topmost opaque pixel at the source (below for a lift, above for a slump),
   -- on that pixel's own layer, nearest the source first. A hole is a pixel opaque on frame 1, transparent now, whose
@@ -148,13 +226,44 @@ local function pose(p)
   end
   if h0 == 1 then for _, q in ipairs(HEAD_UP_PATCHES) do im[q[1]]:drawPixel(q[2], q[3], hex(q[4])) end end
   for _, q in ipairs(p.fx and TYPING_FX[p.fx] or {}) do im.props:drawPixel(q[1], q[2], hex(q[3])) end   -- typing sparks (props layer)
+  local function behindLid(x, y) return pc.rgbaA(BASE.laptop:getPixel(x, y)) > 0 and x <= LID[y] end
+  if p.fold then drawFold(function(x, y, v) if not behindLid(x, y) then im.props:drawPixel(x, y, v) end end) end
+  if p.z then drawZ(ZZ[p.z], function(x, y, v) im.props:drawPixel(x, y, v) end) end
   -- the raised arm (props, over everything but the lid); drawn before ORPHANS so slivers along its edges are cleaned
   if p.arm then drawArm(ARMS[p.arm], function(x, y, v)
     if not (pc.rgbaA(BASE.laptop:getPixel(x, y)) > 0 and x <= LID[y]) then im.props:drawPixel(x, y, v) end end) end
+  if sink > 0 then   -- the sunk pose can leave pockets behind her and put pixels on her silhouette that were never outlined
+    local cc = comp(im); local out = outside(cc)
+    -- new pockets (frame 1's own hair gap excepted) fill inwards, each pixel taking its neighbours' majority colour
+    local changed = true
+    while changed do changed = false
+      for y = 1, 126 do for x = 1, 126 do
+        local k1 = (y - sink) * 128 + x
+        if pc.rgbaA(cc:getPixel(x, y)) == 0 and not out[y * 128 + x] and not (y - sink >= 0 and pc.rgbaA(COMP1:getPixel(x, y - sink)) == 0 and not OUT1[k1]) then
+          local n, best, bn = {}, nil, 0
+          for dy = -1, 1 do for dx = -1, 1 do local v = cc:getPixel(x + dx, y + dy)
+            if pc.rgbaA(v) > 0 then n[v] = (n[v] or 0) + 1; if n[v] > bn then best, bn = v, n[v] end end end end
+          if best then im.body:drawPixel(x, y, best); cc:drawPixel(x, y, best); fills = fills + 1; changed = true; log[#log + 1] = string.format("pocket(%d,%d)", x, y) end
+        end end end
+    end
+    for y = 0, 127 do for x = 0, 127 do
+      local edge = false
+      for _, d in ipairs({{1,0},{-1,0},{0,1},{0,-1}}) do local xx, yy = x + d[1], y + d[2]
+        if xx < 0 or yy < 0 or xx > 127 or yy > 127 or out[yy * 128 + xx] then edge = true end end
+      if edge and pc.rgbaA(cc:getPixel(x, y)) > 0 then
+        for i = #LAYERS, 1, -1 do local n = LAYERS[i].name; local v = im[n]:getPixel(x, y)
+          if pc.rgbaA(v) > 0 then
+            if n ~= "props" and v ~= hex("#120D0E") and not EDGE1[(y - sink) * 128 + x] then im[n]:drawPixel(x, y, hex("#120D0E")); log[#log + 1] = string.format("outline %s(%d,%d)", n, x, y) end
+            break end end
+      end
+    end end
+  end
+  for _, q in ipairs(p.patch or {}) do im[q[1]]:drawPixel(q[2], q[3], hex(q[4])) end   -- per-frame touch-ups (cfg.lua)
   -- ORPHANS: where body and head move apart (lag frames) single pixels can lose every same-coloured neighbour.
   -- Any orphan that frame 1 doesn't already have (at the same spot or one above or below) takes its neighbours'
   -- majority colour, on the layer that shows it (body or head only: chair, desk and laptop never change).
-  -- Hand pixels and the face rect (any key) are never touched.
+  -- Hand pixels and the face rect (any key) are never touched, except in sunk (sleeping) frames, where the drawn face
+  -- is clipped by the lid and arms and its cut edges are cleaned too.
   local c = comp(im)
   local function orphan(img, x, y) local v = img:getPixel(x, y); if pc.rgbaA(v) == 0 then return false end
     for dy = -1, 1 do for dx = -1, 1 do if (dx ~= 0 or dy ~= 0) and img:getPixel(x + dx, y + dy) == v then return false end end end
@@ -162,15 +271,16 @@ local function pose(p)
   local hand = {}
   for i, up in ipairs({p.l or 0, p.r or 0}) do for _, q in ipairs(HAND_PX[i]) do hand[(q[2] - up) * 128 + q[1]] = true end end
   local down = (dir < 0) and 1 or 0   -- a slumped frame's face rect and frame-1 orphans sit 1 px lower
-  local function keep(x, y) return hand[y * 128 + x] or (x >= FACE[1] and y >= FACE[2] - 1 and x < FACE[1] + FACE[3] and y < FACE[2] + FACE[4] + down) end
+  if sink > 0 and p.fold then hand = {} end
+  local function keep(x, y) return hand[y * 128 + x] or (sink == 0 and x >= FACE[1] and y >= FACE[2] - 1 + sink and x < FACE[1] + FACE[3] and y < FACE[2] + FACE[4] + down + sink) end
   for y = 1, 126 do for x = 1, 126 do
-    if not keep(x, y) and orphan(c, x, y) and not orphan(COMP1, x, y) and not orphan(COMP1, x, y + 1) and not (down == 1 and orphan(COMP1, x, y - 1)) then
+    if not keep(x, y) and orphan(c, x, y) and not orphan(COMP1, x, y - sink) and not orphan(COMP1, x, y + 1 - sink) and not (down == 1 and orphan(COMP1, x, y - 1)) then
       local n, best, bn = {}, nil, 0
       for dy = -1, 1 do for dx = -1, 1 do local v = c:getPixel(x + dx, y + dy)
         if (dx ~= 0 or dy ~= 0) and pc.rgbaA(v) > 0 then n[v] = (n[v] or 0) + 1; if n[v] > bn then best, bn = v, n[v] end end end end
       for i = #LAYERS, 1, -1 do local nm = LAYERS[i].name
         if pc.rgbaA(im[nm]:getPixel(x, y)) > 0 then
-          if nm == "body" or nm == "head" then im[nm]:drawPixel(x, y, best); log[#log + 1] = string.format("orphan %s(%d,%d)", nm, x, y) end
+          if nm == "body" or nm == "head" or (sink > 0 and (nm == "face" or nm == "eyes" or (nm ~= "props" and TOP1[y * 128 + x] ~= nm))) then im[nm]:drawPixel(x, y, best); log[#log + 1] = string.format("orphan %s(%d,%d)", nm, x, y) end
           break end end
     end
   end end
@@ -195,7 +305,7 @@ app.transaction(function()
       local fr = spr:newEmptyFrame(#spr.frames + 1)
       fr.duration = p.d / 1000
       for _, l in ipairs(LAYERS) do local img, pos = trimmed(im[l.name]); if img then spr:newCel(l, fr, img, pos) end end
-      local dy = -(p.h or 0)
+      local dy = (p.sink or 0) - (p.h or 0)
       for n, r in pairs({face = FACE, eyes = EYES, emoji = EMOJI}) do
         table.insert(KEYS[n], {fr.frameNumber - 1, r[1], r[2] + dy, r[3], r[4]}) end
       fillReport[#fillReport + 1] = string.format("%s %d: %d fills", loop.tag, k - 1, fills)
@@ -211,10 +321,10 @@ end)
 spr:saveAs(spr.filename)
 spr:close()
 -- read first: every slice's frame-0 key must parse back as cfg.lua has it before anything is rewritten
-local before = SLICE_KEYS(MASTER, {__readonly = true})
+local before = SLICE_KEYS(TARGET, {__readonly = true})
 for n, r in pairs({face = FACE, eyes = EYES, emoji = EMOJI, paper = PAPER}) do local b = before[n][1]
   assert(b[1] == 0 and b[2] == r[1] and b[3] == r[2] and b[4] == r[3] and b[5] == r[4], "slice " .. n .. " frame-0 key differs from cfg") end
-SLICE_KEYS(MASTER, KEYS)
-spr = app.open(MASTER)
+SLICE_KEYS(TARGET, KEYS)
+spr = app.open(TARGET)
 print("body ok", table.concat(fillReport, " | "))
 if BODY_VERBOSE then print("fills: " .. table.concat(log, " ")) end

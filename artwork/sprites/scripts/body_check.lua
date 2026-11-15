@@ -5,7 +5,8 @@ if not EYE_SPEC then dofile(app.fs.joinPath(SCRIPTS_DIR, "cfg.lua")) end
 dofile(app.fs.joinPath(SCRIPTS_DIR, "slicekeys.lua"))
 local pc = app.pixelColor
 local spr = app.activeSprite
-if not spr or spr.filename ~= MASTER then spr = app.open(MASTER) end
+local TARGET = BODY_TARGET or MASTER   -- BODY_TARGET (global): build / check / export another copy (scratch variants)
+if not spr or spr.filename ~= TARGET then spr = app.open(TARGET) end
 local OUTLINE = pc.rgba(0x12, 0x0D, 0x0E, 255)
 local function comp(f) local im = Image(128, 128, ColorMode.RGB); im:drawSprite(spr, f); return im end
 local function tag(n) for _, t in ipairs(spr.tags) do if t.name == n then return t end end end
@@ -72,6 +73,9 @@ print("hand px behind the lid (not compared): " .. hidden)
 local function handAt(im, i, dy) local bad = 0
   for _, q in ipairs(hands[i]) do if im:getPixel(q[1], q[2] + dy) ~= q[3] then bad = bad + 1 end end; return bad end
 
+local function layerOf(n, f) for _, l in ipairs(spr.layers) do if l.name == n then
+  local im = Image(128, 128, ColorMode.RGB); local c = l:cel(f); if c then im:drawImage(c.image, c.position) end; return im end end end
+local handPx = {}; for _, h in ipairs(HANDS) do for r, row in ipairs(h.rows) do for cc = 1, #row do if row:sub(cc, cc) ~= "." then handPx[(h.y + r - 1) * 128 + h.x + cc - 1] = true end end end end
 local POSE = {}   -- tag name -> {data, frames} from cfg.lua
 for _, loop in ipairs(BODY_LOOPS) do POSE[loop.tag] = loop end
 local propsLayer; for _, l in ipairs(spr.layers) do if l.name == "props" then propsLayer = l end end
@@ -89,21 +93,30 @@ for _, t in ipairs(spr.tags) do if t.name:match("^body:") or t.name:match("^betw
     local im = comp(f)
     local fk, ek, mk = key("face", f), key("eyes", f), key("emoji", f)
     local dy = fk[2] - FACE[2]
-    check(fk[1] == FACE[1] and fk[3] == FACE[3] and fk[4] == FACE[4] and dy == -(p.h or 0), "face key " .. f)
+    check(fk[1] == FACE[1] and fk[3] == FACE[3] and fk[4] == FACE[4] and dy == (p.sink or 0) - (p.h or 0), "face key " .. f)
     check(ek[2] - EYES[2] == dy and mk[2] - EMOJI[2] == dy and ek[1] == EYES[1] and mk[1] == EMOJI[1], "eyes/emoji key not following face " .. f)
     local stray, partial = 0, 0
     for it in im:pixels() do local v = it(); if a(v) > 0 and not OKCOL[v] then stray = stray + 1 end; if a(v) > 0 and a(v) < 255 then partial = partial + 1 end end
     -- hands: each must sit exactly at dy 0 or -1
     local hs = {}
-    for i = 1, 2 do if i == 1 and p.arm then hs[i] = "arm" elseif handAt(im, i, 0) == 0 then hs[i] = "0" elseif handAt(im, i, -1) == 0 then hs[i] = "-1" else hs[i] = "X" end end
+    for i = 1, 2 do if p.fold then hs[i] = "fold" elseif i == 1 and p.arm then hs[i] = "arm" elseif handAt(im, i, 0) == 0 then hs[i] = "0" elseif handAt(im, i, -1) == 0 then hs[i] = "-1" else hs[i] = "X" end end
     check(hs[1] ~= "X" and hs[2] ~= "X", "hand not an exact copy on frame " .. f)
     -- seam: paste each face's rect at this frame's face key
     local idleDiff, worstRing = 0, 0
     local props = Image(128, 128, ColorMode.RGB); local pc2 = propsLayer:cel(f); if pc2 then props:drawImage(pc2.image, pc2.position) end
+    local lap, dsk = layerOf("laptop", f), layerOf("desk", f)
+    local diffAt = {}
     if drawn then   -- the drawn face must be that face (closed if asked) translated to the key, except under the raised hand
       local want = faceImg(p.face, p.eyes == "closed")
+      if p.bags == "idle" then for _, q in ipairs({{57, 55}, {54, 56}}) do want:drawPixel(q[1], q[2], F1:getPixel(q[1], q[2])) end end
       for y = 0, FACE[4] - 1 do for x = 0, FACE[3] - 1 do
-        if a(props:getPixel(fk[1] + x, fk[2] + y)) == 0 and want:getPixel(FACE[1] + x, FACE[2] + y) ~= im:getPixel(fk[1] + x, fk[2] + y) then idleDiff = idleDiff + 1 end end end
+        local X, Y = fk[1] + x, fk[2] + y   -- in front of the face: props (arm, fold, z), and when she sinks the laptop, desk and hands
+        local function occ(X, Y) return a(props:getPixel(X, Y)) > 0 or ((p.sink or 0) > 0 and (Y >= DESK_Y or a(lap:getPixel(X, Y)) > 0 or a(dsk:getPixel(X, Y)) > 0 or handPx[Y * 128 + X])) end
+        local hidden = occ(X, Y)
+        if (p.sink or 0) > 0 and (x == 0 or y == 0 or x == FACE[3] - 1 or y == FACE[4] - 1) then hidden = true end   -- its ring meets a body that sank less
+        if not hidden and (p.sink or 0) > 0 then   -- asleep, the face's cut edge next to an occluder may be cleaned
+          for dy = -1, 1 do for dx = -1, 1 do if occ(X + dx, Y + dy) then hidden = true end end end end
+        if not hidden and want:getPixel(FACE[1] + x, FACE[2] + y) ~= im:getPixel(X, Y) then idleDiff = idleDiff + 1; diffAt[#diffAt + 1] = X .. "," .. Y end end end
     end
     for ff = 1, drawn and 0 or 8 do local ring = 0
       for y = 0, FACE[4] - 1 do for x = 0, FACE[3] - 1 do
@@ -130,22 +143,28 @@ for _, t in ipairs(spr.tags) do if t.name:match("^body:") or t.name:match("^betw
     print(string.format("  %-12s f%2d %4dms | %2d,%2d | %d | %d | %d | %d | %s,%s | %d | %d | %d | %d",
       t.name, f, math.floor(spr.frames[f].duration * 1000 + 0.5), fk[1], fk[2], encl, eb, stray, partial, hs[1], hs[2], idleDiff, worstRing, outside, emojiOpaque))
     check(encl <= encl1 and eb <= edge1 and stray == 0 and partial == 0, "frame " .. f .. " holes/outline/colour")
-    check(idleDiff == 0 and worstRing == 0 and outside == 0 and emojiOpaque == 0, "frame " .. f .. " seam/patch/emoji")
+    check(idleDiff == 0 and worstRing == 0 and outside == 0 and emojiOpaque == 0, "frame " .. f .. " seam/patch/emoji" .. (#diffAt > 0 and (" (drawn face differs at " .. table.concat(diffAt, " ") .. ")") or ""))
   end
 end end
 
 -- statics: chair, desk and laptop composites match frame 1 except where a hand moved or a hole was filled
 local function layerImg(n, f) for _, l in ipairs(spr.layers) do if l.name == n then
   local im = Image(128, 128, ColorMode.RGB); local c = l:cel(f); if c then im:drawImage(c.image, c.position) end; return im end end end
+-- a static pixel counts as recoloured only if frame 1 shows it (pixels the figure hid on frame 1 may be outlined when uncovered)
+local L1 = {}; for _, l in ipairs(spr.layers) do L1[#L1 + 1] = {l.name, layerImg(l.name, 1)} end
+local function topIs(n, x, y) for i = #L1, 1, -1 do if a(L1[i][2]:getPixel(x, y)) > 0 then return L1[i][1] == n end end return false end
 for _, n in ipairs({"chair", "desk", "laptop"}) do
-  local base, total, list = layerImg(n, 1), 0, {}
+  local base, total, list, closures = layerImg(n, 1), 0, {}, {}
   for _, t in ipairs(spr.tags) do if t.name:match("^body:") or t.name:match("^between:") then for f = t.fromFrame.frameNumber, t.toFrame.frameNumber do
     local im = layerImg(n, f)
     for y = 0, 127 do for x = 0, 127 do local u, v = base:getPixel(x, y), im:getPixel(x, y)
       if u ~= v then total = total + 1
-        if a(u) > 0 and a(v) > 0 then list[#list + 1] = string.format("f%d(%d,%d)", f, x, y) end end end end
+        if a(u) > 0 and a(v) > 0 and topIs(n, x, y) then
+          if v == OUTLINE then closures[#closures + 1] = string.format("f%d(%d,%d)", f, x, y)   -- now on her silhouette: outlined
+          else list[#list + 1] = string.format("f%d(%d,%d)", f, x, y) end end end end end
   end end end
-  print(string.format("static %-6s px differing from frame 1 (cuts, fills): %d; recoloured visible px: %d %s", n, total, #list, table.concat(list, " ")))
+  print(string.format("static %-6s px differing from frame 1 (cuts, fills): %d; recoloured visible px: %d %s; outline closures (frame-1 pixels now on her silhouette): %d %s",
+    n, total, #list, table.concat(list, " "), #closures, table.concat(closures, " ")))
   check(#list == 0, n .. " recoloured")
 end
 

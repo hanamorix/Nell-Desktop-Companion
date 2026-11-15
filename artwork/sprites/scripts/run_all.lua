@@ -2,7 +2,7 @@
 -- Run from Aseprite (or the aseprite MCP run_lua_script):  dofile([[<repo>/artwork/sprites/scripts/run_all.lua]])
 -- or headless:  aseprite -b --script artwork/sprites/scripts/run_all.lua
 -- ROUND (global, default "r4") names the review exports master-<ROUND>-{1x,2x}.png (transparent).
--- BROUND (global, default "r2") names the body exports body-<BROUND>-{idle,typing,idle-blink}.gif and -frames.png.
+-- BROUND (global, default "r5a") names the body exports body-<BROUND>-<gif>.gif (BODY_GIFS) and -frames.png.
 -- FROUND (global, default "r5") names the face exports faces-<FROUND>-sheet.png, -blinkswap.gif and -<CLOSEUP>-closeup.png.
 local here = debug.getinfo(1, "S").source:gsub("^@", "")
 local dir = app.fs.filePath(here)
