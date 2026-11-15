@@ -31,7 +31,7 @@ private func five(_ reset: String) -> String { #"{"rate_limits":{"five_hour":{"u
 @Test func usageMergeKeepsMissingWindow() {
     let old = UsageReading(session: UsageWindow(used: 1), weekly: UsageWindow(used: 2))
     let new = UsageReading(session: UsageWindow(used: 9))
-    #expect(old.merged(new) == UsageReading(session: UsageWindow(used: 9), weekly: UsageWindow(used: 2)))
+    #expect(old.merged(new, now: d("2025-11-15T12:00:00Z")) == UsageReading(session: UsageWindow(used: 9), weekly: UsageWindow(used: 2)))
 }
 
 @Test func usageLevels() {
@@ -100,17 +100,17 @@ private func used(_ v: String) -> String { #"{"rate_limits":{"five_hour":{"used_
 @Test func usageMergeIgnoresStaleWindow() {
     let old = UsageReading(session: UsageWindow(used: 50, resetsAt: d("2025-11-15T15:00:00Z")))
     let stale = UsageReading(session: UsageWindow(used: 10, resetsAt: d("2025-11-15T14:00:00Z")))
-    #expect(old.merged(stale) == old)
+    #expect(old.merged(stale, now: d("2025-11-15T12:00:00Z")) == old)
 }
 
 @Test func usageMergeSameWindowKeepsHigher() {
     let r = d("2025-11-15T15:00:00Z")
     let a = UsageReading(session: UsageWindow(used: 60, resetsAt: r)), b = UsageReading(session: UsageWindow(used: 40, resetsAt: r))
-    #expect(a.merged(b) == a); #expect(b.merged(a) == a)
+    #expect(a.merged(b, now: d("2025-11-15T12:00:00Z")) == a); #expect(b.merged(a, now: d("2025-11-15T12:00:00Z")) == a)
 }
 
 @Test func usageMergeNewWindowWins() {
     let old = UsageReading(session: UsageWindow(used: 95, resetsAt: d("2025-11-15T15:00:00Z")))
     let new = UsageReading(session: UsageWindow(used: 10, resetsAt: d("2025-11-15T20:00:00Z")))
-    #expect(old.merged(new) == new)
+    #expect(old.merged(new, now: d("2025-11-15T12:00:00Z")) == new)
 }

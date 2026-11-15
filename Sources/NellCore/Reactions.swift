@@ -111,7 +111,9 @@ public struct PauseState: Sendable {
 /// The bubble text for a `StopFailure`. A usage limit is a nap, not a failure, with the reset time when Claude gave one
 /// ("You've hit your session limit · resets 3:45pm").
 public func stopFailureMessage(_ e: HookEvent) -> String {
-    guard e.error == "rate_limit" else { return e.lastAssistantMessage ?? e.error ?? "Something went wrong" } // "API Error: …"
+    guard e.error == "rate_limit" else { // "API Error: …"; an empty field says nothing
+        return [e.lastAssistantMessage, e.error].compactMap { $0 }.first { !$0.isEmpty } ?? "Something went wrong"
+    }
     let base = "Usage limit reached — Nell's napping until it resets"
     guard let m = e.lastAssistantMessage, let r = m.range(of: #"resets\s+([^\n·]+?)\s*$"#, options: .regularExpression) else { return base }
     return base + " at " + m[r].replacingOccurrences(of: #"^resets\s+"#, with: "", options: .regularExpression)

@@ -38,9 +38,11 @@ public struct UsageReading: Equatable, Sendable {
     }
 
     /// Per window the fresher post wins (a stale or reordered post never moves a chip back); a missing window is kept.
-    public func merged(_ newer: UsageReading) -> UsageReading {
+    /// A window whose reset has passed is over, so any reading replaces it, whatever reset it reports.
+    public func merged(_ newer: UsageReading, now: Date) -> UsageReading {
         func pick(_ old: UsageWindow?, _ new: UsageWindow?) -> UsageWindow? {
             guard let old, let new else { return new ?? old }
+            if old.resetPassed(now) { return new }
             guard let o = old.resetsAt, let n = new.resetsAt else { return new }
             return n < o ? old : n == o && old.used > new.used ? old : new
         }

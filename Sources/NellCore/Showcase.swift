@@ -178,13 +178,15 @@ public enum Showcase {
         ]),
         Scene(name: "usage", steps: [
             Step("no reading", [], shows: [.gauge(.weekly, .none), .gauge(.session, .none), .face(.idle)]),
-            Step("low", [.usage(session: 20, weekly: 30, resetsIn: 3600)], shows: [.gauge(.weekly, .low), .gauge(.session, .low)]),
-            Step("mid", [.usage(session: 60, weekly: 70, resetsIn: 3600)], shows: [.gauge(.weekly, .mid), .gauge(.session, .mid)]),
-            Step("high", [.usage(session: 85, weekly: 81, resetsIn: 3600)], shows: [.gauge(.weekly, .high), .gauge(.session, .high), .face(.idle)]),
-            Step("tired", [.usage(session: 95, weekly: 50, resetsIn: 3600)],
+            // the tired windows reset 2 s later, before the next step; a reading still stamped with an old reset can't
+            // bring them back, and the fresh windows after that climb again (each stamped later than the last)
+            Step("tired", [.usage(session: 95, weekly: 50, resetsIn: 2)],
                  shows: [.gauge(.session, .high), .gauge(.weekly, .mid), .face(.exhausted), .body(.idle)]),
             Step("reset passed", [.usage(session: 95, weekly: 50, resetsIn: -60)],
                  shows: [.gauge(.session, .low), .gauge(.weekly, .low), .face(.idle)]),
+            Step("low", [.usage(session: 20, weekly: 30, resetsIn: 3600)], shows: [.gauge(.weekly, .low), .gauge(.session, .low)]),
+            Step("mid", [.usage(session: 60, weekly: 70, resetsIn: 3600)], shows: [.gauge(.weekly, .mid), .gauge(.session, .mid)]),
+            Step("high", [.usage(session: 85, weekly: 81, resetsIn: 3600)], shows: [.gauge(.weekly, .high), .gauge(.session, .high), .face(.idle)]),
         ]),
         Scene(name: "themes", steps: [
             // the Stop comes first: it settles any open Chat approval, and the Allow/Deny buttons must stay on screen

@@ -24,6 +24,8 @@ public struct ReturnedText: Sendable {
     private var waiting: [Mode: [String]] = [:]
     public init() {}
     public mutating func add(_ texts: [String], for m: Mode) { waiting[m, default: []] += texts }
+    /// Text for this mode is waiting to join the bar (its chip shows the news dot until you switch to it).
+    public func isWaiting(for m: Mode) -> Bool { waiting[m] != nil }
 
     /// The draft with the selected mode's waiting text taken in, oldest first, ahead of what's typed there now.
     public mutating func draft(_ typed: String, selected: Mode) -> String {

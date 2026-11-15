@@ -25,6 +25,8 @@ public struct BubbleStore: Sendable {
     public init() {}
 
     public mutating func add(_ kind: BubbleKind, mode: Mode, text: String, now: Date) {
+        // the same failure again (another send while kitty is down) is already on screen
+        if kind == .error, bubbles.contains(where: { $0.kind == .error && $0.mode == mode && $0.text == text }) { return }
         var t = text
         if kind == .reply, mode == .code { t = truncated(text) }
         let startsNow = kind == .user || kind == .status
@@ -60,11 +62,15 @@ public struct BubbleStore: Sendable {
     }
 
     /// Starts countdowns once allowed, restarts the hovered one (shortcut: hover restarts rather than pauses), drops faded bubbles.
-    public mutating func tick(now: Date, userIdle: TimeInterval, hovered: UUID?) {
+    /// `onScreen` is the rows the column placed: a visible row it parked (pinned rows took the room) keeps its countdown
+    /// restarted the same way until it's shown. Rows `visible` leaves out still fade, so they never come back later.
+    public mutating func tick(now: Date, userIdle: TimeInterval, hovered: UUID?, onScreen: Set<UUID>? = nil) {
+        let parked = onScreen.map { Set(visible(now: now).map(\.bubble.id)).subtracting($0) } ?? []
         for i in bubbles.indices {
             let b = bubbles[i]
             if b.pinned { continue } // a pending approval or question never fades
             if b.id == hovered { bubbles[i].clockStart = now; continue }
+            if parked.contains(b.id) { if b.clockStart != nil { bubbles[i].clockStart = now }; continue }
             if b.clockStart == nil, userIdle < 5 { bubbles[i].clockStart = now }
         }
         let gone = Set(bubbles.filter { fadeFactor($0, now) <= 0 }.map(\.id))

@@ -34,8 +34,10 @@ struct CompanionView: View {
         }
     }
 
-    /// The chip's gold dot: the other mode has a bubble showing that you aren't looking at.
-    private func hasNews(_ m: Mode) -> Bool { m != model.selected && model.shown.contains { $0.bubble.mode == m && $0.bubble.kind != .user } }
+    /// The chip's gold dot: the other mode has a bubble showing that you aren't looking at, or text handed back to its bar.
+    private func hasNews(_ m: Mode) -> Bool {
+        m != model.selected && (model.hasReturnedText(m) || model.shown.contains { $0.bubble.mode == m && $0.bubble.kind != .user })
+    }
 
     private var projectName: String { ((model.state.projectDir ?? "") as NSString).lastPathComponent }
 
@@ -230,8 +232,11 @@ struct BubbleView: View {
             VStack(alignment: .leading, spacing: 8) { // the two don't fit one 236 pt row
                 Button { model.openTerminal(bubble.mode, requestId: nil) } label: { Icon(name: "terminal"); Text("Answer in the console") }
                     .buttonStyle(PixelButton(kind: .quiet))
-                // Esc in kitty sends no event: this clears the bubble and hands queued text back to the bar
-                Button { model.dismissQuestion(mode: bubble.mode) } label: { Text("Dismiss") }.buttonStyle(PixelButton(kind: .quiet))
+                // Esc in kitty sends no event: this says the picker is gone, so it clears the bubble and unlocks the bar
+                // (queued text goes back into it unsent). The label asserts that rather than reading as "hide this".
+                Button { model.dismissQuestion(mode: bubble.mode) } label: { Text("Closed in console") }.buttonStyle(PixelButton(kind: .quiet))
+                    .help("Use this after pressing Esc on the question in the console.")
+                    .accessibilityLabel("Closed in console: use this after pressing Esc on the question in the console")
             }
         }
         if bubble.kind == .consoleNeeded, !bubble.settled {

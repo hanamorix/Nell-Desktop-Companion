@@ -106,7 +106,7 @@ import SwiftUI
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
-                self?.model.tick(userIdle: idle)
+                self?.model.tick(userIdle: idle, onScreen: (self?.controller.hoverRects.keys).map(Set.init))
             }
         }
         observePauses()
@@ -149,7 +149,7 @@ import SwiftUI
     /// Stops the sprite and the 10 Hz mouse poll (the 1 Hz model clock keeps running: its watchdogs hand held text back).
     private func setPause(_ change: (inout PauseState) -> Void) {
         change(&pause)
-        model.paused = pause.paused; controller.paused = pause.paused
+        model.paused = pause.paused; controller.paused = pause.paused; model.hidden = pause.hidden
     }
 
     /// Pause while the screen is locked or asleep. Locked and asleep are tracked apart: the display can wake on the lock screen.

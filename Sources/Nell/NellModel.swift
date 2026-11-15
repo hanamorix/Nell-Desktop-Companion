@@ -13,6 +13,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     @Published var draft = ""
     /// The screen is locked or asleep, or Nell is hidden: the sprite stops entirely.
     var paused = false { didSet { sprite.paused = paused } }
+    /// "Minimise" put her away: every new approval or question brings her back.
+    var hidden = false
     /// The bar is holding text because Claude has a prompt open in kitty (or is still starting).
     @Published private(set) var barHeld = false
     @Published private(set) var console = ConsoleState()
@@ -45,13 +47,15 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     private var trackers: [Mode: SessionTracker] = [.code: SessionTracker(), .chat: SessionTracker()]
     private var bubbles = BubbleStore()
     private var queues: [Mode: InputQueue] = [.code: InputQueue(), .chat: InputQueue()]
-    private var returned = ReturnedText()
+    @Published private var returned = ReturnedText() // published: a mode's chip shows a dot while its text waits
     private var sentByNell: [Mode: [String]] = [.code: [], .chat: []]
     private var questionIds: Set<String> = []
     private var settledInKitty: Set<String> = []
     private var wasDisconnected: Set<Mode> = []
     /// v2's needs-you priority, kept for the sound and bringing her forward.
     private var needsYouState: NellState?
+    /// An approval or question arrived since the last refresh (one call to onNeedsYou per prompt).
+    private var promptArrived = false
     private var reactions = ReactionState()
     private var context = ContextMeter()
     private var expiry: (at: Date, timer: Timer)?
@@ -61,9 +65,15 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     init(kitty: KittyController, registry: ApprovalRegistry, paths: Paths, state: SavedState, sprite: SpriteDriver) {
         self.kitty = kitty; self.registry = registry; self.paths = paths; self.state = state; self.sprite = sprite
         theme = Themes.named(state.theme); PN.theme = theme
+        kitty.onFellBackToChatFolder = { [weak self] dir in
+            self?.addBubble(.error, .code, "Couldn't open \((dir as NSString).lastPathComponent) — Code is in the chat folder; choose a project folder from the menu", Date())
+        }
     }
 
-    func cwd(_ m: Mode) -> String { m == .code ? (state.projectDir ?? paths.chatDir.path) : paths.chatDir.path }
+    /// The same folder kitty's restart uses: one that's gone or can't be entered falls back to the chat folder.
+    func cwd(_ m: Mode) -> String { m == .code ? (state.usableProjectDir ?? paths.chatDir.path) : paths.chatDir.path }
+    /// Text handed back for this mode waits to join the bar until you switch to it.
+    func hasReturnedText(_ m: Mode) -> Bool { returned.isWaiting(for: m) }
     func markLaunched(_ modes: [Mode]) { markStarting(modes); refresh() }
     private func markStarting(_ modes: [Mode]) { let now = Date(); for m in modes { trackers[m]?.markLaunched(now: now) } }
 
@@ -81,19 +91,25 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     func chatChip() { selected = .chat; refresh() }
 
     /// ⌘: from Chat, select Code and open the console; in Code, toggle open ↔ minimised.
-    func codeChip() { console.pressCodeChip(selected: &selected); applyConsole() }
+    func codeChip() { let was = console; console.pressCodeChip(selected: &selected); applyConsole(was) }
 
     /// Every console open comes from a click: ⌘, the minimised bubble, Open console, Answer in the console.
-    func openConsole(tab: Mode = .code) { console.open(tab: tab); applyConsole() }
-    func minimiseConsole() { console.minimise(); applyConsole() }
+    func openConsole(tab: Mode = .code) { let was = console; console.open(tab: tab); applyConsole(was) }
+    func minimiseConsole() { console.minimise(); applyConsole(console) }
 
     func relayoutNow() { if let l = relayout?(console.phase) { layout = l; sprite.mirrored = l.faceRight } }
 
     /// Drag with ⌥: the console hides so the two windows never drift apart, and comes back where Nell lands.
     func dragBegan() { if console.phase == .open { kitty.hideConsole() } }
-    func dragEnded() { applyConsole() }
+    func dragEnded() { applyConsole(console) }
 
-    private func applyConsole() {
+    /// `was` is the console before this click: if kitty can't be brought up, it goes back to that (never an open frame
+    /// with nothing in it; minimised if it was already open).
+    private func applyConsole(_ was: ConsoleState) {
+        if console.phase == .open, !consoleTabRunning() {
+            console = was
+            if console.phase == .open { console.minimise() }
+        }
         relayoutNow()
         if console.phase == .open {
             bubbles.settleConsoleNeeded(mode: console.tab)
@@ -105,6 +121,15 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
             kitty.hideConsole()
         }
         refresh()
+    }
+
+    /// Opening the console restarts kitty or its tab's Claude if they're gone, as a send does. False when nothing could start.
+    private func consoleTabRunning() -> Bool {
+        let tab = kitty.ensureTab(console.tab, cwd: cwd(console.tab), state: &state)
+        if !tab.launched.isEmpty { markStarting(tab.launched); onStateChanged?() }
+        guard tab == .unavailable else { return true }
+        addBubble(.error, console.tab, "Claude's console couldn't start. Try again in a moment.", Date())
+        return false
     }
 
     /// After a display change: re-lay everything out and move kitty with it, without taking the keyboard.
@@ -151,9 +176,18 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     private func returnQueueToBar(_ m: Mode) {
         let back = queues[m]?.release(held: false) ?? []
         guard !back.isEmpty else { return }
-        for t in back { bubbles.removeUser(mode: m, text: t) } // shown when typed, never sent
-        returned.add(back, for: m)
+        giveBack(back, m)
+    }
+
+    /// Unsent text goes back to its mode's bar. For a mode you're not on, its chip lights and a bubble says where it went.
+    private func giveBack(_ texts: [String], _ m: Mode) {
+        for t in texts { bubbles.removeUser(mode: m, text: t) } // shown when typed, never sent
+        returned.add(texts, for: m)
         pullReturned()
+        if m != selected {
+            let name = m == .code ? "Code" : "Chat"
+            addBubble(.alert, m, "Your message to \(name) is back in the bar — switch to \(name) to send it", Date())
+        }
     }
 
     /// The selected mode's returned text joins the draft; another mode's waits until you switch to it.
@@ -211,6 +245,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
             } else {
                 addBubble(.approval(requestId: id), m, approvalSummary(name: e.toolName ?? "", input: e.toolInput), now)
             }
+            promptArrived = true
         case "PostToolUseFailure":
             if e.isInterrupt == true { bubbles.clearStatus(mode: m); if m == .code { codeStatus = nil } } // you pressed Esc: not a failure
             else { setStatus(m, toolSummary(name: e.toolName ?? "", input: e.toolInput) + " failed", now) }
@@ -244,7 +279,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     }
 
     /// 1 Hz: timers in the trackers, bubble fades, the disconnected nudge.
-    func tick(userIdle: TimeInterval) {
+    /// `onScreen`: the bubbles the column placed (one it parked keeps its countdown until it's shown).
+    func tick(userIdle: TimeInterval, onScreen: Set<UUID>? = nil) {
         let now = Date()
         for m in Mode.allCases {
             if trackers[m]?.tick(now: now) == true { returnQueueToBar(m) } // the watchdog gave up: never send unattended
@@ -255,7 +291,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
             }
             if !disc { wasDisconnected.remove(m) }
         }
-        bubbles.tick(now: now, userIdle: userIdle, hovered: hovered)
+        bubbles.tick(now: now, userIdle: userIdle, hovered: hovered, onScreen: onScreen)
         for m in Mode.allCases where trackers[m]?.lastAlert != nil && !bubbles.bubbles.contains(where: { $0.kind == .alert && $0.mode == m }) {
             trackers[m]?.clearAlert()
         }
@@ -285,7 +321,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     }
 
     func usageUpdated(_ r: UsageReading) {
-        let merged = usage?.merged(r) ?? r
+        let merged = usage?.merged(r, now: Date()) ?? r
         if merged != usage { usage = merged }
         refresh()
     }
@@ -294,8 +330,9 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         guard let code = trackers[.code], let chat = trackers[.chat] else { return }
         let now = Date()
         let next = promptWaiting(code: code, chat: chat)
-        if next != nil, needsYouState != next { onNeedsYou?() }
-        needsYouState = next
+        // a new kind of prompt brings her forward; while she's hidden, so does every new one
+        if next != nil, needsYouState != next || promptArrived && hidden { onNeedsYou?() }
+        needsYouState = next; promptArrived = false
         let holding = heldEmoji(code: code, chat: chat)
         for e in [Emoji.warning, .question, .plug] { reactions.setHeld(e, holding.contains(e)) }
         let emoji = reactions.current(now: now)
@@ -333,9 +370,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         case .hold: // Claude was gone and is starting again: keep the text until its SessionStart
             _ = queues[m]?.submit(text, held: true)
         case .giveBack: // kitty is down: writing to its socket would lose the text
-            bubbles.removeUser(mode: m, text: text)
-            returned.add([text], for: m)
-            pullReturned()
+            giveBack([text], m)
             addBubble(.error, m, "Claude's console isn't running. Your message is back in the bar.", Date())
         }
     }
