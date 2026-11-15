@@ -15,12 +15,14 @@ public enum Showcase {
         case chatChip, codeChip, openConsole, minimiseConsole
         /// Nell's block at this fraction of the screen's free space (0,0 = bottom-left), then relayout.
         case place(x: Double, y: Double)
+        /// A status-line reading (percent used; nil leaves that window as it was) whose windows reset in `resetsIn` seconds.
+        case usage(session: Double?, weekly: Double?, resetsIn: TimeInterval)
     }
 
     /// What a step is there to show. The app checks each one after the step and logs any mismatch.
     public enum Visual: Hashable, Sendable {
         case face(Face), emoji(Emoji), body(Body), between(String), paper(Int), bubble(BubbleKindName), badge,
-             console(ConsolePhase), placement(String)
+             console(ConsolePhase), placement(String), gauge(UsageKind, UsageLevel)
     }
 
     public struct Step: Sendable {
@@ -171,6 +173,16 @@ public enum Showcase {
             Step("minimised idle", [stop(.code)], shows: [.console(.minimised)]),
             Step("open again", [.openConsole], shows: [.console(.open)]),
             Step("back to chat", [.minimiseConsole, .chatChip], shows: [.console(.minimised)]),
+        ]),
+        Scene(name: "usage", steps: [
+            Step("no reading", [], shows: [.gauge(.weekly, .none), .gauge(.session, .none), .face(.idle)]),
+            Step("low", [.usage(session: 20, weekly: 30, resetsIn: 3600)], shows: [.gauge(.weekly, .low), .gauge(.session, .low)]),
+            Step("mid", [.usage(session: 60, weekly: 70, resetsIn: 3600)], shows: [.gauge(.weekly, .mid), .gauge(.session, .mid)]),
+            Step("high", [.usage(session: 85, weekly: 81, resetsIn: 3600)], shows: [.gauge(.weekly, .high), .gauge(.session, .high), .face(.idle)]),
+            Step("tired", [.usage(session: 95, weekly: 50, resetsIn: 3600)],
+                 shows: [.gauge(.session, .high), .gauge(.weekly, .mid), .face(.exhausted), .body(.idle)]),
+            Step("reset passed", [.usage(session: 95, weekly: 50, resetsIn: -60)],
+                 shows: [.gauge(.session, .low), .gauge(.weekly, .low), .face(.idle)]),
         ]),
         Scene(name: "placement", steps: [
             ("bottom-left quadrant", 0.25, 0.25), ("bottom-right quadrant", 0.75, 0.25),

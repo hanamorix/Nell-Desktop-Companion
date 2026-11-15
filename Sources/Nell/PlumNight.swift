@@ -169,3 +169,27 @@ struct ModeChip: View {
         .buttonStyle(.plain).help(help).accessibilityLabel(help)
     }
 }
+
+/// A usage gauge beside Chat and Code: the window's label over a sunken meter well filled to its fraction.
+/// No reading shows a dimmed dash. The tooltip carries the numbers and reset time.
+struct UsageChip: View {
+    let kind: UsageKind; let gauge: UsageGauge
+    var body: some View {
+        let fill = gauge.level == .high ? PN.berry : gauge.level == .mid ? PN.gold : PN.leaf
+        VStack(spacing: 2) {
+            Text(kind.label).font(Fonts.ui()).foregroundColor(PN.muted).frame(height: 10)
+            ZStack(alignment: .leading) {
+                PN.plum900
+                if let f = gauge.fraction {
+                    fill.frame(width: (26 * f / PN.px).rounded() * PN.px, height: 4).padding(.top, 2).frame(maxHeight: .infinity, alignment: .bottom)
+                } else {
+                    Text("\u{2013}").font(Fonts.ui()).foregroundColor(PN.muted).opacity(0.5).frame(maxWidth: .infinity)
+                }
+            }
+            .frame(width: 26, height: 8)
+        }
+        .frame(width: 34, height: 26)
+        .pixelFrame(fill: PN.plum700, hi: PN.plum600, lo: PN.plum900, drop: .none)
+        .help(gauge.tooltip).accessibilityLabel(gauge.tooltip)
+    }
+}

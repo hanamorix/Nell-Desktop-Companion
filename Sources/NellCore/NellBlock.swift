@@ -28,6 +28,13 @@ public enum NellBlock {
         return (code.offsetBy(dx: 0, dy: -chip.height - chipGap), code)
     }
 
+    /// Two gauge chips stacked above Chat in the same column: 7D on top, 5H below.
+    public static func usageChips(_ chip: CGSize, mirrored: Bool) -> (weekly: CGRect, session: CGRect) {
+        let chat = chips(chip, mirrored: mirrored).chat
+        let session = chat.offsetBy(dx: 0, dy: -chip.height - chipGap)
+        return (session.offsetBy(dx: 0, dy: -chip.height - chipGap), session)
+    }
+
     /// Her head: the face slice's centre at 2×, mirrored with the sprite.
     public static func head(faceSlice f: CGRect, mirrored: Bool) -> CGPoint {
         let x = f.midX * 2

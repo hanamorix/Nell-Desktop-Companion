@@ -64,6 +64,9 @@ import NellCore
         case .codeChip: model.codeChip()
         case .openConsole: model.openConsole()
         case .minimiseConsole: model.minimiseConsole()
+        case .usage(let s, let w, let resetsIn):
+            let at = Date().addingTimeInterval(resetsIn)
+            model.usageUpdated(UsageReading(session: s.map { UsageWindow(used: $0, resetsAt: at) }, weekly: w.map { UsageWindow(used: $0, resetsAt: at) }))
         case .place(let x, let y):
             guard let v = controller.screen?.visibleFrame else { return }
             let s = PanelController.nellSize
@@ -86,6 +89,7 @@ import NellCore
             case .badge: ok = model.shown.contains { $0.bubble.mode != model.selected }
             case .console(let phase): ok = model.console.phase == phase
             case .placement: ok = model.layout != nil
+            case .gauge(let k, let l): ok = (k == .weekly ? model.weeklyGauge : model.sessionGauge).level == l
             }
             if !ok { log("MISMATCH \(v): body \(p.body) face \(p.face) emoji \(p.emoji.map(\.rawValue) ?? "none") stacks \(p.stacks)") }
         }

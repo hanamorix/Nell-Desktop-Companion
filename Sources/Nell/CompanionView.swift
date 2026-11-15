@@ -71,6 +71,7 @@ struct CompanionView: View {
     private func nell(_ l: NellCore.Layout) -> some View {
         let m = l.faceRight, size = NellBlock.size, bar = NellBlock.bar(mirrored: m)
         let chips = NellBlock.chips(CGSize(width: 38, height: 30), mirrored: m) // a chip with its news dot
+        let usage = NellBlock.usageChips(CGSize(width: 38, height: 30), mirrored: m)
         return ZStack(alignment: .topLeading) {
             SpriteCompositor(driver: model.sprite) // mirrored inside when she faces right, so the emoji stays readable
                 .grabbable()
@@ -89,6 +90,8 @@ struct CompanionView: View {
                 .interactive().place(chips.chat)
             ModeChip(icon: "code", help: "Claude Code console", on: model.selected == .code, news: hasNews(.code)) { model.codeChip() }
                 .interactive().place(chips.code)
+            UsageChip(kind: .weekly, gauge: model.weeklyGauge).interactive().place(usage.weekly)
+            UsageChip(kind: .session, gauge: model.sessionGauge).interactive().place(usage.session)
             MessageBar(model: model, focused: $barFocused, isFocused: barFocused) // grows upward over her when multi-line
                 .interactive()
                 .frame(width: bar.width, height: size.height, alignment: .bottom)

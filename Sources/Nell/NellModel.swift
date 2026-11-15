@@ -244,6 +244,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         questionIds = []; settledInKitty = []; wasDisconnected = []
         reactions = ReactionState(); context = ContextMeter()
         console = ConsoleState(); selected = .chat; draft = ""; codeStatus = nil
+        usage = nil
         relayoutNow()
         refresh()
     }

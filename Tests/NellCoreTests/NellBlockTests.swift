@@ -210,3 +210,18 @@ private func spriteX(_ l: Layout) -> CGFloat { l.nellFrame.minX + NellBlock.spri
     #expect(clickTakesKeyboard(CGPoint(x: 130, y: 250), rects: [CGRect(x: 100, y: 240, width: 60, height: 20)], grabRects: sprite),
             "a control drawn over her still works")
 }
+
+@Test func usageChipsStackAboveChat() {
+    let chip = CGSize(width: 38, height: 30)
+    for mirrored in [false, true] {
+        let c = NellBlock.chips(chip, mirrored: mirrored), u = NellBlock.usageChips(chip, mirrored: mirrored)
+        let sprite = CGRect(x: NellBlock.spriteX(mirrored: mirrored), y: 0, width: NellBlock.sprite, height: NellBlock.sprite)
+        #expect(u.session.maxY == c.chat.minY - NellBlock.chipGap)
+        #expect(u.weekly.maxY == u.session.minY - NellBlock.chipGap)
+        #expect([u.weekly.minX, u.session.minX, c.code.minX] == [c.chat.minX, c.chat.minX, c.chat.minX])
+        #expect(u.weekly.minY >= 0)
+        for r in [u.weekly, u.session] {
+            #expect(!r.intersects(NellBlock.bar(mirrored: mirrored)) && !r.intersects(sprite))
+        }
+    }
+}

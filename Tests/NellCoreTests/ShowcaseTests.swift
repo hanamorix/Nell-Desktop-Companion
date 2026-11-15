@@ -92,3 +92,12 @@ private let shows = Set(Showcase.scenes.flatMap { $0.steps.flatMap(\.shows) })
         #expect(shows.contains(.between(pair)), "\(pair)")
     }
 }
+
+@Test func showcaseCoversUsageChips() {
+    for k in [UsageKind.session, .weekly] { for l in [UsageLevel.none, .low, .mid, .high] { #expect(shows.contains(.gauge(k, l)), "\(k) \(l)") } }
+    let tired = Showcase.scenes.flatMap(\.steps).contains { s in
+        s.shows.contains(.face(.exhausted)) && s.shows.contains(.body(.idle))
+            && s.actions.contains { if case .usage(let a, let b, _) = $0 { (a ?? 0) > 90 || (b ?? 0) > 90 } else { false } }
+    }
+    #expect(tired)
+}
