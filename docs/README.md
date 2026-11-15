@@ -66,3 +66,10 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 | Notes | [2026-11-15-codebase-review-findings.md](notes/2026-11-15-codebase-review-findings.md) | Every red-team-confirmed finding from the four-slice review, its severity and its root fix, plus what's left unfixed and why |
 | Plan | [2026-11-15-review-fixes-plan.md](plans/2026-11-15-review-fixes-plan.md) | The 4-package plan to fix them: IPC, kitty and processes, session state, interface |
 | Notes | [2026-11-15-review-fixes-build-ledger.md](notes/2026-11-15-review-fixes-build-ledger.md) | Every ruling, review, fix round and deferred minor from fixing the review, including the red team on the fixes |
+
+### 1.0 release (2026-11-15)
+
+| Type | Document | What it is |
+|---|---|---|
+| Spec | [2026-11-15-nell-release-design.md](specs/2026-11-15-nell-release-design.md) | Terminal parity (login shell, your skills/hooks/status line), Chat as full Claude Code, finding or installing kitty and Claude Code, MIT/CC BY-NC licences, icon, universal DMG, stylised README |
+| Plan | [2026-11-15-nell-release-plan.md](plans/2026-11-15-nell-release-plan.md) | The 5-task plan: parity, dependencies, packaging, live verification, README |
