@@ -50,3 +50,9 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 | Plan | [2026-11-15-nell-usage-chips-plan.md](plans/2026-11-15-nell-usage-chips-plan.md) | The 4-task plan: status-line spike, usage logic, socket wiring, gauge chips and showcase |
 | Notes | [2026-11-15-nell-usage-statusline-findings.md](notes/2026-11-15-nell-usage-statusline-findings.md) | Status-line spike: `rate_limits` shape (`resets_at` is epoch seconds), absent before the first reply, runs in hidden windows and with Chat's args |
 | Notes | [2026-11-15-nell-usage-chips-build-ledger.md](notes/2026-11-15-nell-usage-chips-build-ledger.md) | Every ruling, review fix and deferred minor from the usage-chips build, the final review and its fix wave |
+
+### Colour themes (2026-11-15)
+
+| Type | Document | What it is |
+|---|---|---|
+| Spec | [2026-11-15-nell-themes-design.md](specs/2026-11-15-nell-themes-design.md) | Five dark colour themes (Plum Night, Moss, Tide, Ember, Slate) picked from a Settings submenu on her right-click menu, recolouring the interface and the console |
