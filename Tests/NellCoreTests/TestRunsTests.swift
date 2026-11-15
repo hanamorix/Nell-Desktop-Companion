@@ -45,6 +45,47 @@ private func failure(_ command: String, error: String) -> HookEvent {
     #expect(testOutcome(post("pytest | tail -5", stdout: "=== 2 failed in 0.1s ===")) == .fail)
     #expect(testOutcome(post("pytest | tail -5", stdout: "=== 2 passed in 0.1s ===")) == .pass)
     #expect(testOutcome(try fixture("PostToolUse-Bash-testfail-piped")) == .fail)
+    // Piped, only whole-run summaries with their failure count may cheer (final ruling).
+    #expect(testOutcome(post("npm test 2>&1 | tail -6", stdout: "ok 3 - adds\nnot ok 4 - subtracts\n# tests 4\n# pass 3\n# fail 1")) == .fail)
+    #expect(testOutcome(post("npm test 2>&1 | tail -3", stdout: "ok 1 - adds\nok 2 - subtracts\n# pass 2")) == nil, "node:test ok lines alone")
+    #expect(testOutcome(post("swift test 2>&1 | tail -1", stdout: "✔ Test run with 5 tests passed after 0.1 seconds.")) == nil,
+            "XCTest failures may sit above Swift Testing's line")
+    #expect(testOutcome(post("python3 -m unittest 2>&1 | tail -1", stdout: "OK")) == nil)
+    #expect(testOutcome(post("pytest -q | tail -1", stdout: "5 passed in 0.12s")) == .pass)
+    #expect(testOutcome(post("npm test | tail -5", stdout: "Tests:       3 passed, 3 total")) == .pass)
+    #expect(testOutcome(post("cargo test | tail -3", stdout: "test result: ok. 12 passed; 0 failed; 0 ignored")) == .pass)
+    #expect(testOutcome(post("swift test 2>&1 | tail -2", stdout: "Executed 9 tests, with 0 failures (0 unexpected) in 0.2 (0.3) seconds")) == .pass)
+    #expect(testOutcome(post("swift test 2>&1 | tail -2", stdout: "Executed 9 tests, with 2 failures (0 unexpected) in 0.2 (0.3) seconds")) == .fail)
+    #expect(testOutcome(post("npm test", stdout: "ok 1 - adds\nnot ok 2 - subtracts")) == .fail, "not ok fails unpiped too")
+}
+
+@Test func backgroundTestRunGetsNoReaction() {
+    var bg = post("swift test", stdout: "")
+    bg.toolInput?["run_in_background"] = .bool(true)
+    #expect(testOutcome(bg) == nil, "the result isn't known yet")
+    var t = SessionTracker()
+    t.handle(HookEvent(name: "UserPromptSubmit", sessionId: "S"), requestId: nil, now: Date())
+    t.handle(HookEvent(name: "PreToolUse", sessionId: "S", toolName: "Bash",
+                       toolInput: ["command": .string("swift test"), "run_in_background": .bool(true)], toolUseId: "b"), requestId: nil, now: Date())
+    #expect(!t.testRunning, "no yawn for a background run")
+}
+
+@Test func interruptedOrTimedOutTestGetsNoReaction() {
+    var interrupted = failure("pytest", error: "Exit code 1\n2 passed")
+    interrupted.isInterrupt = true
+    #expect(testOutcome(interrupted) == nil)
+    #expect(testOutcome(failure("pytest", error: "Command timed out after 2m 0.0s")) == nil)
+    #expect(testOutcome(failure("pytest", error: "Exit code 0")) == nil)
+    #expect(testOutcome(failure("pytest", error: "Exit code 1\nno summary")) == .fail)
+}
+
+@Test func testScriptsMatchWholeWords() {
+    for c in ["scripts/test.sh", "./run_tests.sh", "scripts/test-all.sh", "tests.sh", "ci/unit_test.sh"] {
+        #expect(isTestCommand(c), "\(c)")
+    }
+    for c in ["./deploy-latest.sh", "scripts/attestation.sh", "./contest.sh", "testing.sh"] {
+        #expect(!isTestCommand(c), "\(c)")
+    }
 }
 
 @Test func summaryLinesOverrideCleanExitAndFailureAlwaysFails() {

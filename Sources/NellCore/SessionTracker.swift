@@ -98,7 +98,7 @@ public struct SessionTracker: Sendable {
             return settleAll()
         case "PreToolUse":
             openToolUses.append((e.toolName ?? "", e.toolInput, e.toolUseId))
-            if e.toolName == "Bash", let c = e.toolInput?["command"]?.string, isTestCommand(c) { testIds.insert(e.toolUseId ?? "") }
+            if e.toolName == "Bash", let c = e.toolInput?["command"]?.string, isTestCommand(c), !isBackground(e) { testIds.insert(e.toolUseId ?? "") }
             if openToolUses.count > 32 { openToolUses.removeFirst() }
             if isQuestionTool { pendingQuestion = firstQuestion(e.toolInput) ?? "Claude has a question" } else { set(.typing) }
         case "PermissionRequest":

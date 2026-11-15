@@ -7,7 +7,7 @@ private let testCommandPatterns: [String] = [
     #"(python3?\s+-m\s+)?(pytest|unittest)"#,
     #"(swift|cargo|go|mix|gradle|mvn|make)\s+test"#,
     #"(npx\s+)?(jest|vitest|rspec)"#,
-    #"(\S*/)?[\w.-]*test[\w.-]*\.sh"#,
+    #"(\S*/)?([\w.-]*[_.-])?tests?([_.-][\w.-]*)?\.sh"#, // whole word: test.sh, run_tests.sh, test-all.sh; not attestation.sh
 ].map { "^(?:\($0))(?=\\s|$)" }
 
 /// Splits on `&&` and `;` (a leading `cd x &&` is just another segment) and matches each segment's start.
@@ -53,9 +53,17 @@ func exitStatusUnreliable(_ command: String) -> Bool {
 }
 
 private let failSummaries: [String] = [#"(\d+) failed\b"#, #"(\d+) failures?\b"#]
-private let failMarkers: [String] = [#"✘ Test run"#, #"test result: FAILED"#, #"^FAIL\b"#, #"^FAILED \("#]
+private let failMarkers: [String] = [#"✘ Test run"#, #"test result: FAILED"#, #"^FAIL\b"#, #"^FAILED \("#, #"^not ok\b"#, #"^# fail [1-9]"#]
 private let passCounts: [String] = [#"(\d+) passed\b"#]
 private let passMarkers: [String] = [#"✔ Test run"#, #"test result: ok\."#, #"^ok\s"#, #"^OK\b"#]
+/// Lines that sum up the whole run with its failure count: the only passes a piped run may show (a pipe can cut the
+/// failures off above them). pytest's final line, jest's "Tests:", cargo's "test result:", XCTest's "Executed".
+private let wholeRunPasses: [String] = [
+    #"^=*\s*(\d+ \w+, )*[1-9]\d* passed\b[^\n]* in [\d.]+s\b"#,
+    #"^Tests:[^\n]*\b[1-9]\d* passed\b"#,
+    #"test result: ok\. [1-9]\d* passed"#,
+    #"Executed [1-9]\d* tests?, with 0 failures"#,
+]
 
 private func has(_ out: String, _ p: String) -> Bool { out.range(of: "(?m)" + p, options: .regularExpression) != nil }
 
@@ -67,23 +75,28 @@ private func positiveCount(_ out: String, _ p: String) -> Bool {
     }
 }
 
-private func summary(_ out: String) -> TestOutcome? {
+private func summary(_ out: String, piped: Bool) -> TestOutcome? {
     if failMarkers.contains(where: { has(out, $0) }) || failSummaries.contains(where: { positiveCount(out, $0) }) { return .fail }
+    if piped { return wholeRunPasses.contains { has(out, $0) } ? .pass : nil }
     if passMarkers.contains(where: { has(out, $0) }) || passCounts.contains(where: { positiveCount(out, $0) }) { return .pass }
     return nil
 }
 
+/// `run_in_background`: Claude gets control back at once, so the result isn't known yet (no yawn, no reaction).
+func isBackground(_ e: HookEvent) -> Bool { e.toolInput?["run_in_background"] == .bool(true) }
+
 /// A failure summary always wins; exit status is trusted only when the command isn't piped.
 public func testOutcome(_ e: HookEvent) -> TestOutcome? {
     guard e.toolName == "Bash", e.name == "PostToolUse" || e.name == "PostToolUseFailure",
-          let command = e.toolInput?["command"]?.string, isTestCommand(command) else { return nil }
+          let command = e.toolInput?["command"]?.string, isTestCommand(command), !isBackground(e) else { return nil }
     let piped = exitStatusUnreliable(command)
     if e.name == "PostToolUseFailure" {
-        guard let err = e.error else { return piped ? nil : .fail }
-        return summary(err) == .fail || !piped ? .fail : nil
+        // only a real non-zero exit (the spike's "Exit code N" shape) is a failure: not Esc, not a timeout
+        guard e.isInterrupt != true, let err = e.error, err.range(of: #"^Exit code [1-9]"#, options: .regularExpression) != nil else { return nil }
+        return summary(err, piped: piped) == .fail || !piped ? .fail : nil
     }
     guard case .object(let r)? = e.toolResponse else { return nil }
     if case .bool(true)? = r["interrupted"] { return nil }
     let out = [r["stdout"]?.string, r["stderr"]?.string].compactMap { $0 }.joined(separator: "\n")
-    return summary(out) ?? (piped ? nil : .pass)
+    return summary(out, piped: piped) ?? (piped ? nil : .pass)
 }
