@@ -8,17 +8,19 @@ printf '#!/bin/bash\necho "$@" >> %q\n' "$T/calls" > "$T/kitten"; chmod +x "$T/k
 F=Tests/NellCoreTests/Fixtures
 fail=0
 NOJQ='(version 1)(allow default)(deny process-exec (literal "/usr/bin/jq"))'
-# hook <socket> <event> [VAR=value...] < body: the script as Claude runs it, as on macOS 14
+PROFILE=$NOJQ
+# hook <socket> <event> [VAR=value...] < body: the script as Claude runs it, as on macOS 14 unless PROFILE allows jq.
+# An empty <event> is the old two-argument command, kept by Claude sessions started before the upgrade.
 hook() { local sock=$1 event=$2; shift 2
   env -i PATH=/var/empty NELL_KITTEN="$T/kitten" KITTY_LISTEN_ON="unix:$T/kitty-1.sock" "$@" \
-    /usr/bin/sandbox-exec -p "$NOJQ" /bin/bash Sources/Nell/Resources/nell-hook.sh code "$sock" "$event"; }
+    /usr/bin/sandbox-exec -p "$PROFILE" /bin/bash Sources/Nell/Resources/nell-hook.sh code "$sock" ${event:+"$event"}; }
 run() { hook "$T/nope.sock" "$2" < "$1"; }
 
 start=$(date +%s); out=$(run $F/PreToolUse-Bash.json PreToolUse); rc=$?; secs=$(( $(date +%s) - start ))
 if [ $rc -eq 0 ] && [ -z "$out" ] && [ $secs -le 1 ] && [ ! -e "$T/calls" ]; then echo PASS preToolUseSilentWhenNellDown; else echo "FAIL preToolUse rc=$rc out=[$out] secs=$secs"; fail=1; fi
 
 out=$(run $F/PermissionRequest-Bash.json PermissionRequest); rc=$?
-if [ $rc -eq 0 ] && [ -z "$out" ] && grep -q "resize-os-window --match env:NELL_MODE=code --action show" "$T/calls" && grep -q "focus-window --match env:NELL_MODE=code" "$T/calls"; then echo PASS permissionRaisesKittyWhenNellDown; else echo "FAIL permission rc=$rc out=[$out] calls=[$(cat "$T/calls" 2>/dev/null)]"; fail=1; fi
+if [ $rc -eq 0 ] && [ -z "$out" ] && grep -q "resize-os-window --match var:nell_mode=code --action show" "$T/calls" && grep -q "focus-window --match var:nell_mode=code" "$T/calls"; then echo PASS permissionRaisesKittyWhenNellDown; else echo "FAIL permission rc=$rc out=[$out] calls=[$(cat "$T/calls" 2>/dev/null)]"; fail=1; fi
 out=$(run $F/Notification-idle_prompt.json Notification); rc=$?
 if [ $rc -eq 0 ] && [ -z "$out" ] && ! grep -q "idle" "$T/calls" 2>/dev/null && [ "$(wc -l < "$T/calls")" -eq 2 ]; then echo PASS notificationDoesNotRaiseKitty; else echo "FAIL notification raised kitty: [$(cat "$T/calls")]"; fail=1; fi
 # Nell running but slow to answer (the approval deadline): the script must NOT show kitty, Nell offers the console itself
@@ -50,4 +52,14 @@ for want in "$ALLOW" "$DENY"; do
 done
 answers "x"; out=$(hook "$T/fake.sock" Stop < $F/Stop.json); rc=$?; kill $SRV 2>/dev/null; wait $SRV 2>/dev/null
 if [ $rc -eq 0 ] && [ -z "$out" ]; then echo PASS nonApprovalPrintsNothing; else echo "FAIL Stop printed rc=$rc out=[$out]"; fail=1; fi
+
+# The old two-argument command: with jq the event still comes from stdin; without it the script just degrades
+if [ -x /usr/bin/jq ]; then
+  PROFILE='(version 1)(allow default)'
+  answers "$ALLOW"; out=$(hook "$T/fake.sock" "" < $F/PermissionRequest-Bash.json); rc=$?; kill $SRV 2>/dev/null; wait $SRV 2>/dev/null
+  if [ $rc -eq 0 ] && [ "$out" = "$ALLOW" ]; then echo PASS oldTwoArgCommandWithJqPrintsDecision; else echo "FAIL old command with jq rc=$rc out=[$out]"; fail=1; fi
+  PROFILE=$NOJQ
+else echo "SKIP oldTwoArgCommandWithJqPrintsDecision (no /usr/bin/jq)"; fi
+answers "$ALLOW"; out=$(hook "$T/fake.sock" "" < $F/PermissionRequest-Bash.json); rc=$?; kill $SRV 2>/dev/null; wait $SRV 2>/dev/null
+if [ $rc -eq 0 ] && [ -z "$out" ]; then echo PASS oldTwoArgCommandWithoutJqExitsQuietly; else echo "FAIL old command without jq rc=$rc out=[$out]"; fail=1; fi
 exit $fail

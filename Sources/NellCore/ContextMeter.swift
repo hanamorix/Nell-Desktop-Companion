@@ -10,7 +10,7 @@ public struct ContextMeter: Sendable {
     /// The last `maxBytes` of a regular file (the whole file if smaller), or nil if it can't be read.
     /// The path comes off the socket: non-blocking so a FIFO can't hang the open, regular files only so a device can't stream forever.
     public static func tail(of url: URL, maxBytes: Int) -> Data? {
-        let fd = open(url.path, O_RDONLY | O_NONBLOCK)
+        let fd = open(url.path, O_RDONLY | O_NONBLOCK | O_NOCTTY) // a tty path must not become Nell's controlling terminal
         guard fd >= 0 else { return nil }
         let h = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
         var st = stat()

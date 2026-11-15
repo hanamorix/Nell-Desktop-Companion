@@ -30,13 +30,19 @@ func stopAndClean(_ s: HookServer, _ sock: String) { s.stop(); try? FileManager.
 
 /// A bare client: what a non-curl process (or one that hangs up early) does on the socket.
 func rawConnect(_ sock: String) -> Int32 {
+    let c = tryConnect(sock)
+    precondition(c >= 0, "connect \(errno)")
+    return c
+}
+/// -1 if the connect is refused.
+func tryConnect(_ sock: String) -> Int32 {
     let c = socket(AF_UNIX, SOCK_STREAM, 0)
     var one: Int32 = 1
     setsockopt(c, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
     var addr = sockaddr_un(); addr.sun_family = sa_family_t(AF_UNIX)
     withUnsafeMutableBytes(of: &addr.sun_path) { buf in for (i, b) in sock.utf8CString.enumerated() { buf[i] = UInt8(bitPattern: b) } }
     let r = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(c, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
-    precondition(r == 0, "connect \(errno)")
+    if r != 0 { close(c); return -1 }
     return c
 }
 func rawPost(_ path: String, _ body: Data) -> Data {
@@ -141,7 +147,7 @@ private func postStatus(_ sock: String, _ body: Data) -> String {
     let s = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, _, _ in }, onRequestSettled: { _, _, _ in })
     try s.start(); defer { stopAndClean(s, sock) }
     let stop = try fixture("Stop")
-    for _ in 0..<12 { let c = rawConnect(sock); send(c, rawPost("/hook?mode=code", stop)); close(c) } // under listen's backlog of 16
+    for _ in 0..<20 { let c = rawConnect(sock); send(c, rawPost("/hook?mode=code", stop)); close(c) }
     let p = curl(sock, stop)
     #expect(output(p) == ""); #expect(p.terminationStatus == 0)
 }
@@ -170,6 +176,45 @@ private func postStatus(_ sock: String, _ body: Data) -> String {
     let start = Date(); var b: UInt8 = 0
     let n = recv(c, &b, 1, 0)
     #expect(n == 0); #expect(Date().timeIntervalSince(start) < 4)
+}
+
+@Test func tricklingClientIsClosedWithinRequestDeadline() throws {
+    let sock = tmpSocket(); let events = Box<String>()
+    let s = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, e, _ in events.add(e.name) }, onRequestSettled: { _, _, _ in })
+    try s.start(); defer { stopAndClean(s, sock) }
+    let c = rawConnect(sock); defer { close(c) }
+    let start = Date(); var closedAfter: TimeInterval?
+    for _ in 0..<16 { // one byte every 0.5 s: each read finishes well inside the 2 s receive timeout
+        if (Data("a".utf8).withUnsafeBytes { write(c, $0.baseAddress, 1) }) < 0 { closedAfter = Date().timeIntervalSince(start); break }
+        usleep(500_000)
+    }
+    #expect(closedAfter != nil, "still open after 8 s"); #expect((closedAfter ?? 99) < 5)
+    _ = output(curl(sock, try fixture("Stop")))
+    waitFor { !events.all.isEmpty }
+    #expect(events.all == ["Stop"])
+}
+
+@Test func burstOfConnectsIsNotRefused() throws {
+    let sock = tmpSocket()
+    let s = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, _, _ in }, onRequestSettled: { _, _, _ in })
+    try s.start(); defer { stopAndClean(s, sock) }
+    let stop = rawPost("/hook?mode=code", try fixture("Stop"))
+    let refused = Box<Int>()
+    DispatchQueue.concurrentPerform(iterations: 100) { _ in // hooks from several sessions, all at once
+        let c = tryConnect(sock); if c < 0 { refused.add(1) } else { send(c, stop); close(c) }
+    }
+    #expect(refused.all.count == 0) // a refusal reads as "Nell is down" to the hook script, and as "stale" to a second start()
+}
+
+@Test func secondStartThrowsWhileFirstHoldsTheLock() throws {
+    // even when the live socket can't be reached (here: its file is gone), only the lock holder may bind the path
+    let sock = tmpSocket()
+    let s = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, _, _ in }, onRequestSettled: { _, _, _ in })
+    try s.start(); defer { stopAndClean(s, sock) }
+    unlink(sock)
+    let second = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, _, _ in }, onRequestSettled: { _, _, _ in })
+    #expect(throws: HookServerError.alreadyRunning) { try second.start() }
+    second.stop()
 }
 
 @Test func strayByteThenHangupSettlesAsNone() throws {

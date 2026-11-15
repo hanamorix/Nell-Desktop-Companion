@@ -22,6 +22,7 @@ public final class HookServer: @unchecked Sendable {
     private let onRequestSettled: OnSettled
     private let onStatus: @Sendable (UsageReading) -> Void
     private var fd: Int32 = -1
+    private var lock: Int32 = -1 // flock'd `<socket>.lock`: whoever holds it owns the socket path
     private var source: DispatchSourceRead?
 
     public init(socketPath: String, registry: ApprovalRegistry, onEvent: @escaping OnEvent, onRequestSettled: @escaping OnSettled,
@@ -38,7 +39,15 @@ public final class HookServer: @unchecked Sendable {
         func atPath(_ s: Int32, _ f: (Int32, UnsafePointer<sockaddr>?, socklen_t) -> Int32) -> Int32 {
             withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { f(s, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
         }
-        // a server that answers is another Nell's: leave its socket alone. Anything else there is stale, left by a crash.
+        // Another Nell holds the lock while it runs (the kernel drops it if she crashes). Only the holder may unlink and bind.
+        let l = open(path + ".lock", O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
+        guard l >= 0 else { throw HookServerError.socket("lock: \(errno)") }
+        guard flock(l, LOCK_EX | LOCK_NB) == 0 else {
+            let e = errno; close(l)
+            throw e == EWOULDBLOCK ? HookServerError.alreadyRunning : HookServerError.socket("flock: \(e)")
+        }
+        lock = l
+        // a Nell from before the lock still answers on the path: leave its socket alone. Anything else is stale, left by a crash.
         let probe = socket(AF_UNIX, SOCK_STREAM, 0)
         guard probe >= 0 else { throw HookServerError.socket("socket") }
         let live = atPath(probe, connect) == 0
@@ -49,7 +58,8 @@ public final class HookServer: @unchecked Sendable {
         guard fd >= 0 else { throw HookServerError.socket("socket") }
         var one: Int32 = 1 // accepted sockets inherit it, even from a client that hung up before accept
         guard setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size)) == 0 else { throw HookServerError.socket("SO_NOSIGPIPE: \(errno)") }
-        guard atPath(fd, bind) == 0, chmod(path, 0o600) == 0, listen(fd, 16) == 0 else { throw HookServerError.socket("bind/listen: \(errno)") }
+        // a full queue refuses connects, which the hook script reads as "Nell is down": room for a burst from every session
+        guard atPath(fd, bind) == 0, chmod(path, 0o600) == 0, listen(fd, SOMAXCONN) == 0 else { throw HookServerError.socket("bind/listen: \(errno)") }
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "nell.accept"))
         src.setEventHandler { [weak self] in
             guard let self else { return }
@@ -66,12 +76,13 @@ public final class HookServer: @unchecked Sendable {
 
     public func stop() {
         source?.cancel(); source = nil
-        if fd >= 0 { close(fd); fd = -1; unlink(path) } // only the socket this server bound
+        if fd >= 0 { close(fd); fd = -1 }
+        if lock >= 0 { unlink(path); close(lock); lock = -1 } // only the lock holder owns the path
     }
 
     private func serve(_ c: Int32) {
         defer { close(c) }
-        var tv = timeval(tv_sec: 2, tv_usec: 0) // bounds reading the request; the approval wait below uses poll, which ignores it
+        var tv = timeval(tv_sec: 2, tv_usec: 0) // bounds each read; the approval wait below uses poll, which ignores it
         setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
         guard let r = readRequest(c) else { return }
         if r.path == "/status" { // the status line, not a hook: reply with Claude's status-bar text
@@ -103,11 +114,13 @@ public final class HookServer: @unchecked Sendable {
         watcher.sync {} // done with `c` before it's closed and its number reused
     }
 
+    /// The whole request must arrive within 2 s (at worst ~4 s: a read may block for its 2 s timeout), or a trickling client holds a thread and an fd.
     private func readRequest(_ c: Int32) -> HTTPRequest? {
+        let deadline = DispatchTime.now() + 2
         var buf = Data(); var chunk = [UInt8](repeating: 0, count: 65_536)
         while true {
             let n = read(c, &chunk, chunk.count)
-            guard n > 0 else { return nil }
+            guard n > 0, DispatchTime.now() < deadline else { return nil }
             buf.append(contentsOf: chunk[0..<n])
             switch parseHTTPRequest(buf) {
             case .complete(let r): return r
