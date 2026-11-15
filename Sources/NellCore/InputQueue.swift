@@ -11,5 +11,23 @@ public struct InputQueue: Sendable {
         return text
     }
 
-    public mutating func release() -> [String] { defer { queued = [] }; return queued }
+    /// Everything queued, once nothing holds it (`held: false` takes it all, for handing back to the bar).
+    public mutating func release(held: Bool) -> [String] {
+        guard !held else { return [] }
+        defer { queued = [] }; return queued
+    }
+}
+
+/// Queued text handed back to the bar unsent belongs to its mode: it joins the one draft only while that mode is
+/// selected, so a single Enter never sends it to the other Claude.
+public struct ReturnedText: Sendable {
+    private var waiting: [Mode: [String]] = [:]
+    public init() {}
+    public mutating func add(_ texts: [String], for m: Mode) { waiting[m, default: []] += texts }
+
+    /// The draft with the selected mode's waiting text taken in, oldest first, ahead of what's typed there now.
+    public mutating func draft(_ typed: String, selected: Mode) -> String {
+        let back = waiting.removeValue(forKey: selected) ?? []
+        return (back + [typed]).filter { !$0.isEmpty }.joined(separator: "\n")
+    }
 }

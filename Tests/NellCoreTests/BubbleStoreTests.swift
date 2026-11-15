@@ -14,6 +14,15 @@ import Testing
     #expect(b.visible(now: at(1001 + Timings.bubbleVisible + Timings.bubbleFade)).isEmpty)
 }
 
+@Test func textHandedBackToTheBarLosesItsBubble() {
+    var b = BubbleStore()
+    b.add(.user, mode: .code, text: "follow-up", now: t0)
+    b.add(.user, mode: .chat, text: "follow-up", now: t0)
+    b.add(.user, mode: .code, text: "other", now: t0)
+    b.removeUser(mode: .code, text: "follow-up")
+    #expect(b.bubbles.map { "\($0.mode) \($0.text)" } == ["chat follow-up", "code other"])
+}
+
 @Test func fadeWaitsForUserActivity() {
     var b = BubbleStore()
     b.add(.reply, mode: .chat, text: "Hello", now: t0)

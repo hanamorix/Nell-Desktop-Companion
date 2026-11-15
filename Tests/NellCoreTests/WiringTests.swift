@@ -109,13 +109,13 @@ private func event(_ name: String) throws -> HookEvent { try HookEvent.decode(fi
     var c = started()
     c.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
     c.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
-    c.settleApproval("r1", answer: .none)
+    c.settleApproval("r1", answer: .none, now: at(2))
     #expect(c.ranAfterKittyApproval(ev("PostToolUse", tool: "Bash", input: bash, id: "u1")))
     // Allowed in Nell: the 👍 came from the button, not again from the run.
     var a = started()
     a.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
     a.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
-    a.settleApproval("r1", answer: .allow)
+    a.settleApproval("r1", answer: .allow, now: at(2))
     #expect(!a.ranAfterKittyApproval(ev("PostToolUse", tool: "Bash", input: bash, id: "u1")))
 }
 

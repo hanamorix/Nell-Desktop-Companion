@@ -8,7 +8,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
 /// Nell's brain on the main actor: routes hook events into trackers + bubbles, and UI actions into kitty + approvals.
 @MainActor final class NellModel: ObservableObject {
-    @Published var selected: Mode = .chat
+    @Published var selected: Mode = .chat { didSet { pullReturned() } }
     @Published private(set) var shown: [ShownBubble] = []
     @Published var draft = ""
     /// The screen is locked or asleep: the sprite stops entirely.
@@ -45,12 +45,13 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     private var trackers: [Mode: SessionTracker] = [.code: SessionTracker(), .chat: SessionTracker()]
     private var bubbles = BubbleStore()
     private var queues: [Mode: InputQueue] = [.code: InputQueue(), .chat: InputQueue()]
+    private var returned = ReturnedText()
     private var sentByNell: [Mode: [String]] = [.code: [], .chat: []]
     private var questionIds: Set<String> = []
     private var settledInKitty: Set<String> = []
     private var wasDisconnected: Set<Mode> = []
     /// v2's needs-you priority, kept for the sound and bringing her forward.
-    private var needsYouState: NellState = .idle
+    private var needsYouState: NellState?
     private var reactions = ReactionState()
     private var context = ContextMeter()
     private var expiry: (at: Date, timer: Timer)?
@@ -72,7 +73,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         let m = selected
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         addBubble(.user, m, text, Date())
-        if let now = queues[m]?.submit(text, held: trackers[m]?.inputHeld ?? false) { send(now, m) }
+        enqueue(text, m)
         refresh()
     }
 
@@ -136,6 +137,30 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         openConsole(tab: m)
     }
 
+    /// The question was dismissed in kitty (Esc sends no event): drop it, its bubble, and the bar's hold.
+    func dismissQuestion(mode m: Mode) {
+        trackers[m]?.dismissQuestion()
+        bubbles.settleQuestions(mode: m)
+        returnQueueToBar(m) // nothing confirms the picker closed
+        refresh()
+    }
+
+    /// A hold ended with no event saying Claude's prompt closed, so Enter could still answer it: queued text goes back
+    /// into the bar unsent, even if something else still holds this mode (a later Allow would flush it into that prompt).
+    private func returnQueueToBar(_ m: Mode) {
+        let back = queues[m]?.release(held: false) ?? []
+        guard !back.isEmpty else { return }
+        for t in back { bubbles.removeUser(mode: m, text: t) } // shown when typed, never sent
+        returned.add(back, for: m)
+        pullReturned()
+    }
+
+    /// The selected mode's returned text joins the draft; another mode's waits until you switch to it.
+    private func pullReturned() {
+        let d = returned.draft(draft, selected: selected)
+        if d != draft { draft = d }
+    }
+
     // MARK: Hook events
 
     func handle(_ m: Mode, _ e: HookEvent, requestId: String?) {
@@ -155,16 +180,15 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         case nil: break
         }
         sprite.eventArrived()
+        settleBubbles(after: e, mode: m, settled: settled, in: &bubbles)
         for id in settled {   // answered in kitty, or the turn ended: release the hanging hook too
             settledInKitty.insert(id)
-            bubbles.settle(requestId: id, as: "Answered in console")
             registry.answer(id: id, .none)
         }
         switch e.name {
         case "SessionStart":
             if m == .code, state.codeSessionId != e.sessionId { state.codeSessionId = e.sessionId; onStateChanged?() }
             if m == .chat, state.chatSessionId != e.sessionId { state.chatSessionId = e.sessionId; onStateChanged?() }
-            bubbles.settleConsoleNeeded(mode: m)
             if m == .chat, console.tab == .chat { // Chat's one-time trust prompt is done: back to Code
                 console.chatConnected()
                 if console.phase == .open { kitty.selectTab(.code) }
@@ -186,11 +210,9 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
             } else {
                 addBubble(.approval(requestId: id), m, approvalSummary(name: e.toolName ?? "", input: e.toolInput), now)
             }
-        case "PostToolUse", "PostToolUseFailure":
-            if e.toolName == "AskUserQuestion" { bubbles.settleQuestions(mode: m) }
-            if e.name == "PostToolUseFailure" {
-                setStatus(m, toolSummary(name: e.toolName ?? "", input: e.toolInput) + " failed", now)
-            }
+        case "PostToolUseFailure":
+            if e.isInterrupt == true { bubbles.clearStatus(mode: m); if m == .code { codeStatus = nil } } // you pressed Esc: not a failure
+            else { setStatus(m, toolSummary(name: e.toolName ?? "", input: e.toolInput) + " failed", now) }
         case "Notification":
             if let a = trackers[m]?.lastAlert, a != alertBefore { addBubble(.alert, m, a, now) }
         case "Stop":
@@ -209,7 +231,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     }
 
     func requestSettled(_ m: Mode, _ id: String, _ a: ApprovalAnswer) {
-        trackers[m]?.settleApproval(id, answer: a)
+        trackers[m]?.settleApproval(id, answer: a, now: Date())
         if a == .allow { reactions.flash(.thumbsup, now: Date()) }
         let quiet = questionIds.remove(id) != nil || settledInKitty.remove(id) != nil
         bubbles.settle(requestId: id, as: a == .allow ? "Allowed" : a == .deny ? "Denied" : "Answer in the console")
@@ -223,7 +245,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     func tick(userIdle: TimeInterval) {
         let now = Date()
         for m in Mode.allCases {
-            trackers[m]?.tick(now: now)
+            if trackers[m]?.tick(now: now) == true { returnQueueToBar(m) } // the watchdog gave up: never send unattended
             let disc = trackers[m]?.state == .disconnected
             if disc, !wasDisconnected.contains(m) { // e.g. the folder-trust dialog: offer the console, don't open it
                 wasDisconnected.insert(m)
@@ -250,7 +272,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         setTheme(Themes.plumNight.id)
         trackers = [.code: SessionTracker(), .chat: SessionTracker()]
         bubbles = BubbleStore()
-        queues = [.code: InputQueue(), .chat: InputQueue()]
+        queues = [.code: InputQueue(), .chat: InputQueue()]; returned = ReturnedText()
         sentByNell = [.code: [], .chat: []]
         questionIds = []; settledInKitty = []; wasDisconnected = []
         reactions = ReactionState(); context = ContextMeter()
@@ -269,8 +291,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     func refresh() {
         guard let code = trackers[.code], let chat = trackers[.chat] else { return }
         let now = Date()
-        let next = bodyState(selected: selected, code: code, chat: chat, listening: !draft.isEmpty)
-        if (next == .needsYou || next == .question), needsYouState != next { onNeedsYou?() }
+        let next = promptWaiting(code: code, chat: chat)
+        if next != nil, needsYouState != next { onNeedsYou?() }
         needsYouState = next
         let holding = heldEmoji(code: code, chat: chat)
         for e in [Emoji.warning, .question, .plug] { reactions.setHeld(e, holding.contains(e)) }
@@ -311,7 +333,11 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     }
 
     private func flushQueue(_ m: Mode) {
-        guard trackers[m]?.inputHeld == false else { return }
-        for t in queues[m]?.release() ?? [] { send(t, m) }
+        for t in queues[m]?.release(held: trackers[m]?.inputHeld ?? true) ?? [] { enqueue(t, m) }
+    }
+
+    /// Sends now, or queues behind what's waiting. Asks `inputHeld` each time: a send that relaunches Claude holds the rest.
+    private func enqueue(_ text: String, _ m: Mode) {
+        if let now = queues[m]?.submit(text, held: trackers[m]?.inputHeld ?? false) { send(now, m) }
     }
 }

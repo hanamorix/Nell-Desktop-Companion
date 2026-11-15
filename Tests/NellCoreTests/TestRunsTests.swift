@@ -137,3 +137,19 @@ private func failure(_ command: String, error: String) -> HookEvent {
         #expect(testOutcome(post(c, stdout: "no summary")) == .pass, "\(c)")
     }
 }
+
+@Test func failureAfterAndChainCountsOnlyWithAFailureSummary() {
+    #expect(testOutcome(failure("npm test && npm run lint", error: "Exit code 1\nTests: 4 passed, 4 total\nlint: 3 problems")) == nil,
+            "the tests passed: lint failed")
+    #expect(testOutcome(failure("npm test && npm run lint", error: "Exit code 1\nno summary")) == nil, "unclear: nothing")
+    #expect(testOutcome(failure("npm test && npm run lint", error: "Exit code 1\nTests: 1 failed, 3 passed")) == .fail)
+    #expect(testOutcome(failure("cd app && pytest", error: "Exit code 1\nno summary")) == .fail, "a leading cd doesn't matter")
+}
+
+@Test func nonRunsGetNoReaction() {
+    #expect(testOutcome(failure("npm test", error: "Exit code 127\nsh: npm: command not found")) == nil)
+    #expect(testOutcome(failure("scripts/test.sh", error: "Exit code 126\nscripts/test.sh: Permission denied")) == nil)
+    #expect(testOutcome(failure("pytest", error: "Exit code 12\nno summary")) == .fail)
+    #expect(testOutcome(post("cargo test --no-run", stdout: "Finished test profile")) == nil, "built, didn't run")
+    #expect(testOutcome(failure("cargo test --no-run", error: "Exit code 101\nerror[E0425]: cannot find value")) == nil)
+}
