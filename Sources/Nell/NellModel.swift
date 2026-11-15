@@ -8,7 +8,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
 /// Nell's brain on the main actor: routes hook events into trackers + bubbles, and UI actions into kitty + approvals.
 @MainActor final class NellModel: ObservableObject {
-    @Published var selected: Mode = .chat
+    @Published var selected: Mode = .chat { didSet { pullReturned() } }
     @Published private(set) var shown: [ShownBubble] = []
     @Published var draft = ""
     /// The screen is locked or asleep: the sprite stops entirely.
@@ -45,6 +45,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     private var trackers: [Mode: SessionTracker] = [.code: SessionTracker(), .chat: SessionTracker()]
     private var bubbles = BubbleStore()
     private var queues: [Mode: InputQueue] = [.code: InputQueue(), .chat: InputQueue()]
+    private var returned = ReturnedText()
     private var sentByNell: [Mode: [String]] = [.code: [], .chat: []]
     private var questionIds: Set<String> = []
     private var settledInKitty: Set<String> = []
@@ -150,10 +151,14 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         let back = queues[m]?.release(held: false) ?? []
         guard !back.isEmpty else { return }
         for t in back { bubbles.removeUser(mode: m, text: t) } // shown when typed, never sent
-        draft = mergedDraft(returned: back, typed: draft)
-        // one bar: the next Enter must reach the Claude this text was for.
-        // shortcut: if both modes handed text back in one tick it would all go to the last; Chat has no tools, so it never holds
-        selected = m
+        returned.add(back, for: m)
+        pullReturned()
+    }
+
+    /// The selected mode's returned text joins the draft; another mode's waits until you switch to it.
+    private func pullReturned() {
+        let d = returned.draft(draft, selected: selected)
+        if d != draft { draft = d }
     }
 
     // MARK: Hook events
@@ -267,7 +272,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         setTheme(Themes.plumNight.id)
         trackers = [.code: SessionTracker(), .chat: SessionTracker()]
         bubbles = BubbleStore()
-        queues = [.code: InputQueue(), .chat: InputQueue()]
+        queues = [.code: InputQueue(), .chat: InputQueue()]; returned = ReturnedText()
         sentByNell = [.code: [], .chat: []]
         questionIds = []; settledInKitty = []; wasDisconnected = []
         reactions = ReactionState(); context = ContextMeter()

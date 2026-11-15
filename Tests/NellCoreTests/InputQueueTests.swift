@@ -26,14 +26,25 @@ import Testing
     let early = t.tick(now: at(592)), ended = t.tick(now: at(591 + Timings.typingWatchdog))
     let again = t.tick(now: at(591 + Timings.typingWatchdog + 1))
     #expect(!early); #expect(ended, "the watchdog ended the hold"); #expect(!again, "reported once")
-    let back = q.release(held: false)
-    #expect(mergedDraft(returned: back, typed: "and also") == "follow-up\nand also", "for the bar, not kitty")
+    var r = ReturnedText()
+    r.add(q.release(held: false), for: .code)
+    #expect(r.draft("and also", selected: .code) == "follow-up\nand also", "for the bar, not kitty")
     #expect(q.count == 0)
 }
 
 @Test func returnedTextKeepsWhatYouAreTyping() {
-    #expect(mergedDraft(returned: ["one", "two"], typed: "") == "one\ntwo")
-    #expect(mergedDraft(returned: [], typed: "typing") == "typing")
+    var r = ReturnedText()
+    r.add(["one", "two"], for: .code)
+    #expect(r.draft("", selected: .code) == "one\ntwo")
+    #expect(r.draft("typing", selected: .code) == "typing", "taken once")
+}
+
+@Test func returnedTextWaitsForItsOwnMode() {
+    var r = ReturnedText()
+    r.add(["for code"], for: .code)
+    #expect(r.draft("typing to chat", selected: .chat) == "typing to chat", "Chat's draft is left alone")
+    #expect(r.draft("typing to chat", selected: .chat) == "typing to chat")
+    #expect(r.draft("now in code", selected: .code) == "for code\nnow in code", "appears on switching to Code")
 }
 
 @Test func watchdogReportsTheHoldEvenWhileAnotherApprovalWaits() {

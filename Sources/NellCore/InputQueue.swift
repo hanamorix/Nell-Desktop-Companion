@@ -18,7 +18,16 @@ public struct InputQueue: Sendable {
     }
 }
 
-/// Queued text handed back to the bar unsent, oldest first, ahead of whatever you're typing there now.
-public func mergedDraft(returned: [String], typed: String) -> String {
-    (returned + [typed]).filter { !$0.isEmpty }.joined(separator: "\n")
+/// Queued text handed back to the bar unsent belongs to its mode: it joins the one draft only while that mode is
+/// selected, so a single Enter never sends it to the other Claude.
+public struct ReturnedText: Sendable {
+    private var waiting: [Mode: [String]] = [:]
+    public init() {}
+    public mutating func add(_ texts: [String], for m: Mode) { waiting[m, default: []] += texts }
+
+    /// The draft with the selected mode's waiting text taken in, oldest first, ahead of what's typed there now.
+    public mutating func draft(_ typed: String, selected: Mode) -> String {
+        let back = waiting.removeValue(forKey: selected) ?? []
+        return (back + [typed]).filter { !$0.isEmpty }.joined(separator: "\n")
+    }
 }
