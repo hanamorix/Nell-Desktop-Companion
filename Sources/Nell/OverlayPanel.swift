@@ -51,20 +51,23 @@ extension View {
     let panel: OverlayPanel
     var rects: [CGRect] = []
     var grabRects: [CGRect] = []
+    /// Her drawn pixels at a point in the sprite box: those take clicks (the right-click menu) even without ⌥.
+    var spriteOpaque: (CGPoint) -> Bool = { _ in false }
     var hoverRects: [UUID: CGRect] = [:]
     var paused = false
     /// Bottom-left of Nell's block in screen coordinates; the layout grows everything else around it.
     var nellOrigin: CGPoint = .zero
     var onPositionSaved: ((String, CGPoint) -> Void)?
     var onHover: ((UUID?) -> Void)?
+    /// The window started or stopped taking clicks (the showcase logs it).
+    var onHitChange: ((Bool) -> Void)?
     private var timer: Timer?
     private var dragStart: (mouse: NSPoint, origin: NSPoint, nell: CGPoint)?
 
-    /// 320 wide for the ~250 pt message bar beside the chips; 296 tall = the 256 pt sprite + 6 pt gap + the 34 pt bar
-    /// (one 14 pt Departure Mono line + 6 + 10 padding + 4 frame).
-    static let nellSize = CGSize(width: 320, height: 296)
+    /// 320 wide = the 256 pt sprite + the chip strip on her chair side; 296 tall = the sprite + 6 pt gap + the 34 pt bar.
+    static let nellSize = NellBlock.size
     static let columnSize = CGSize(width: 270, height: 320)
-    static let minimisedSize = CGSize(width: 340, height: 30)
+    static let minimisedSize = CGSize(width: 340, height: NellBlock.barHeight) // inline with the bar row
 
     init(panel: OverlayPanel) { self.panel = panel }
 
@@ -90,18 +93,24 @@ extension View {
         }
     }
 
+    /// Whether a click at `p` (content-view points, y down) would land on Nell rather than pass through.
+    func takesClick(at p: CGPoint) -> Bool {
+        isInteractive(p, rects: rects, grabRects: grabRects, optionHeld: NSEvent.modifierFlags.contains(.option), opaqueAt: spriteOpaque)
+    }
+
     private func updateMouse() {
         guard !paused, panel.isVisible, let content = panel.contentView else { return }
         if dragStart != nil { return } // keep the sprite solid mid-drag even if ⌥ is released
         let w = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
         let p = CGPoint(x: w.x, y: content.bounds.height - w.y)
-        let inside = isInteractive(p, rects: rects, grabRects: grabRects, optionHeld: NSEvent.modifierFlags.contains(.option))
-        if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
+        let inside = takesClick(at: p)
+        if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside; onHitChange?(inside) }
         onHover?(hoverRects.first { $0.value.contains(p) }?.key)
     }
 
     /// Returns true on the first call of a drag, so the caller can hide the console.
     func dragChanged() -> Bool {
+        if dragStart == nil, !NSEvent.modifierFlags.contains(.option) { return false } // a plain drag on her does nothing
         let m = NSEvent.mouseLocation
         let first = dragStart == nil
         if first { dragStart = (m, panel.frame.origin, nellOrigin) }
@@ -112,9 +121,12 @@ extension View {
         return first
     }
 
-    func dragEnded() {
+    /// Returns true if a drag actually happened.
+    func dragEnded() -> Bool {
+        guard dragStart != nil else { return false }
         dragStart = nil
         onPositionSaved?(displayKey(screen), nellOrigin)
+        return true
     }
 
     func displayKey(_ screen: NSScreen?) -> String {

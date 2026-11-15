@@ -42,42 +42,59 @@ struct CompanionView: View {
         CGRect(x: r.minX - l.panelFrame.minX, y: l.panelFrame.maxY - r.maxY, width: r.width, height: r.height)
     }
 
+    /// Her head's x in the column's own coordinates, for the bubbles' tails.
+    private func headX(_ l: NellCore.Layout) -> CGFloat {
+        guard let face = model.sprite.sheet.slice("face", frame: 0) else { return l.columnFrame.width / 2 }
+        return NellBlock.head(faceSlice: face, mirrored: l.faceRight).x + l.nellFrame.minX - l.columnFrame.minX
+    }
+
     private func column(_ l: NellCore.Layout) -> some View {
-        VStack(alignment: l.side == .left ? .trailing : .leading, spacing: 8) {
+        let head = headX(l), width = l.columnFrame.width
+        return VStack(spacing: 8) {
             if l.columnUp { Spacer(minLength: 0) }
             ForEach(model.shown) { s in // fade each bubble as one, so its drop doesn't show through the fill
-                // your cream bubbles sit right, Nell's sit left; the tail follows the side
+                // Nell's bubbles sit over her head; your cream ones stay on the far side
                 let mine = s.bubble.kind == .user
-                BubbleView(model: model, bubble: s.bubble, tailRight: mine).compositingGroup().opacity(s.opacity)
-                    .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+                ColumnRow(width: width, headX: head, mine: mine) {
+                    BubbleView(model: model, bubble: s.bubble, layout: l, headX: head, columnWidth: width).compositingGroup().opacity(s.opacity)
+                }
             }
             if !l.columnUp { Spacer(minLength: 0) }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: l.side == .left ? .trailing : .leading)
+        // the newest bubble is last: when they overflow, the oldest are the ones clipped
+        .frame(width: width, height: l.columnFrame.height, alignment: .bottom)
         .clipped()
     }
 
+    /// Option A: the sprite against the laptop side, the bar spanning her desk underneath, and the chips stacked on the
+    /// chair side with the Code chip on the bar row. Everything swaps sides when she's mirrored.
     private func nell(_ l: NellCore.Layout) -> some View {
-        VStack(spacing: 6) {
+        let m = l.faceRight, size = NellBlock.size, bar = NellBlock.bar(mirrored: m)
+        let chips = NellBlock.chips(CGSize(width: 38, height: 30), mirrored: m) // a chip with its news dot
+        return ZStack(alignment: .topLeading) {
             SpriteCompositor(driver: model.sprite) // mirrored inside when she faces right, so the emoji stays readable
                 .grabbable()
-                .gesture(DragGesture(minimumDistance: 2)
+                .gesture(DragGesture(minimumDistance: 2) // only with ⌥ held: PanelController ignores plain drags
                     .onChanged { _ in if controller.dragChanged() { model.dragBegan() } }
-                    .onEnded { _ in controller.dragEnded(); model.dragEnded() })
+                    .onEnded { _ in if controller.dragEnded() { model.dragEnded() } })
                 .contextMenu {
-                    Button("Open project…") { model.onOpenProject?() }
-                    Button("Hide Nell") { model.onHide?() }
+                    // the shortcut only brings her back, so it's named in the label rather than shown as this item's key
+                    Button("Minimise (⌥⌘N to return)") { model.onHide?() }
+                    Button("Choose project folder…") { model.onOpenProject?() }
                     Divider()
                     Button("Quit Nell") { model.onQuit?() }
                 }
-            HStack(alignment: .center, spacing: 8) {
-                ModeChip(icon: "chat", help: "Chat", on: model.selected == .chat, news: hasNews(.chat)) { model.chatChip() }
-                ModeChip(icon: "code", help: "Claude Code console", on: model.selected == .code, news: hasNews(.code)) { model.codeChip() }
-                MessageBar(model: model, focused: $barFocused, isFocused: barFocused)
-            }
-            .interactive()
+                .place(CGRect(x: NellBlock.spriteX(mirrored: m), y: 0, width: NellBlock.sprite, height: NellBlock.sprite))
+            ModeChip(icon: "chat", help: "Chat", on: model.selected == .chat, news: hasNews(.chat)) { model.chatChip() }
+                .interactive().place(chips.chat)
+            ModeChip(icon: "code", help: "Claude Code console", on: model.selected == .code, news: hasNews(.code)) { model.codeChip() }
+                .interactive().place(chips.code)
+            MessageBar(model: model, focused: $barFocused, isFocused: barFocused) // grows upward over her when multi-line
+                .interactive()
+                .frame(width: bar.width, height: size.height, alignment: .bottom)
+                .position(x: bar.midX, y: size.height / 2)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .frame(width: size.width, height: size.height)
     }
 }
 
@@ -121,38 +138,61 @@ struct MessageBar: View {
 struct BubbleView: View {
     @ObservedObject var model: NellModel
     let bubble: Bubble
-    let tailRight: Bool
+    let layout: NellCore.Layout
+    /// Her head's x in the column; the tail points there.
+    let headX: CGFloat
+    let columnWidth: CGFloat
 
     var body: some View {
-        let s = style
-        VStack(alignment: .leading, spacing: 4) {
-            if let h = header {
-                HStack(spacing: 4) { Icon(name: h.icon, ink: PN.cream); Text(h.label) }.foregroundStyle(h.color)
+        let s = style, tailDown = layout.columnUp, hasTail = bubble.kind != .status // status bubbles mutter: no tail
+        let badged = bubble.mode != model.selected
+        let drop: CGFloat = s.drop == .large ? 2 * PN.px : s.drop == .small ? PN.px : 0
+        let farEdge = badged ? TailRule.room : drop // the badge sits on the edge opposite the tail
+        Cap(width: 264) { // hugs its text; long text wraps at 264
+            VStack(alignment: .leading, spacing: 4) {
+                if let h = header {
+                    HStack(spacing: 4) { Icon(name: h.icon, ink: PN.cream); Text(h.label) }.foregroundStyle(h.color)
+                }
+                content
+                actions.padding(.top, 4)
             }
-            content
-            actions.padding(.top, 4)
+            .lineSpacing(1) // Departure Mono's 14 pt line + 1 = the 11/15 body style
+            .foregroundStyle(s.ink)
+            .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 8)
+            .pixelFrame(fill: s.fill, hi: s.hi, lo: s.lo, drop: s.drop)
+            .overlay { GeometryReader { g in decorations(g.size, fill: s.fill, tail: hasTail, badged: badged) } }
         }
-        .lineSpacing(1) // Departure Mono's 14 pt line + 1 = the 11/15 body style
-        .foregroundStyle(s.ink)
-        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 8)
-        .pixelFrame(fill: s.fill, hi: s.hi, lo: s.lo, drop: s.drop)
-        .overlay(alignment: tailRight ? .bottomTrailing : .bottomLeading) {
-            if bubble.kind != .status { // status bubbles are muttering: no tail
-                PixelArt.tail(s.fill).scaleEffect(x: tailRight ? -1 : 1).offset(x: tailRight ? -14 : 14, y: 10)
-            }
-        }
-        .overlay(alignment: tailRight ? .topLeading : .topTrailing) {
-            if bubble.mode != model.selected { badge.offset(x: tailRight ? 6 : -6, y: -10) }
-        }
-        .padding(.bottom, bubble.kind == .status ? PN.px : 10) // room for the tail, or the drop inside the clipped column
-        .frame(maxWidth: 264, alignment: tailRight ? .trailing : .leading)
+        // room for the tail (and the badge) inside the clipped column, on the edges they stick out of
+        .padding(.top, tailDown ? (badged ? farEdge : 0) : (hasTail ? TailRule.room : 0))
+        .padding(.bottom, tailDown ? (hasTail ? TailRule.room : drop) : farEdge)
         .modifier(BubbleHit(id: bubble.id, hasButtons: hasButtons))
+    }
+
+    /// The tail on the edge facing her, its tip as near her head as the bubble allows; the badge on the opposite edge.
+    @ViewBuilder private func decorations(_ size: CGSize, fill: Color, tail: Bool, badged: Bool) -> some View {
+        let x = bubbleX(width: size.width, columnWidth: columnWidth, headX: headX, mine: bubble.kind == .user)
+        let a = tailAnchor(bubble: CGRect(x: x, y: 0, width: size.width, height: size.height), layout: layout, headX: headX)
+        let down = a.edge == .bottom, half = TailRule.width / 2
+        if tail { // the art points down-left; its top row overlaps the bubble's outline
+            PixelArt.tail(fill).scaleEffect(x: a.leansLeft ? 1 : -1, y: down ? 1 : -1)
+                .position(x: a.leansLeft ? a.tipX + half : a.tipX - half, y: down ? size.height + 4 : -4)
+        }
+        if badged {
+            badge.offset(x: a.leansLeft ? -6 : 6, y: down ? -10 : 10)
+                .frame(width: size.width, height: size.height,
+                       alignment: Alignment(horizontal: a.leansLeft ? .trailing : .leading, vertical: down ? .top : .bottom))
+        }
     }
 
     @ViewBuilder private var content: some View {
         let (text, tag) = parts
-        if bubble.kind == .reply, bubble.mode == .chat {
-            ScrollView { rich(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 150)
+        if bubble.kind == .reply, bubble.mode == .chat { // scrolls only when taller than 150 pt
+            Cap(height: 150) {
+                ViewThatFits(in: .vertical) {
+                    rich(text).textSelection(.enabled)
+                    ScrollView { rich(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                }
+            }
         } else if bubble.kind == .status {
             (rich(text) + Text(text.hasSuffix("failed") ? "" : "…").foregroundColor(PN.pink400)).lineLimit(3)
         } else {
@@ -314,5 +354,33 @@ struct MinimisedConsole: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// One bubble in the column, placed by `bubbleX` from its own measured width: the column's full width, the bubble's height.
+struct ColumnRow: SwiftUI.Layout {
+    let width: CGFloat, headX: CGFloat, mine: Bool
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: width, height: subviews.first?.sizeThatFits(ProposedViewSize(width: width, height: nil)).height ?? 0)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let s = subviews.first else { return }
+        let size = s.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        let x = bubbleX(width: size.width, columnWidth: width, headX: headX, mine: mine)
+        s.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY), proposal: ProposedViewSize(size))
+    }
+}
+
+/// Proposes at most `width` × `height` but takes only what its content needs (a plain `.frame(maxWidth:)` would expand).
+struct Cap: SwiftUI.Layout {
+    var width: CGFloat? = nil, height: CGFloat? = nil
+    private func capped(_ p: ProposedViewSize) -> ProposedViewSize {
+        ProposedViewSize(width: width.map { min(p.width ?? $0, $0) } ?? p.width, height: height.map { min(p.height ?? $0, $0) } ?? p.height)
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(capped(proposal)) ?? .zero
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }

@@ -10,7 +10,9 @@ import SwiftUI
     var paused = false { didSet { if paused != oldValue { tick() } } }
     var mirrored = false { didSet { if mirrored != oldValue { redraw() } } }
 
-    private let sheet: SpriteSheet
+    let sheet: SpriteSheet
+    /// The alpha of the frame on screen, so a click on her drawn pixels is hers and a gap clicks through.
+    private(set) var mask: SpriteMask?
     private let sheetImage: CGImage
     private var animator: Animator
     private var frame: Animator.Frame?
@@ -77,6 +79,10 @@ import SwiftUI
             ctx.restoreGState()
         }
         image = ctx.makeImage()
+        if let data = ctx.data {
+            let px = data.assumingMemoryBound(to: UInt8.self), w = ctx.width, h = ctx.height, row = ctx.bytesPerRow
+            mask = SpriteMask(width: w, height: h, alpha: (0..<(w * h)).map { px[($0 / w) * row + ($0 % w) * 4 + 3] }) // RGBA, top row first
+        }
     }
 }
 

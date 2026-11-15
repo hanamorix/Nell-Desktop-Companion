@@ -16,6 +16,7 @@ import NellCore
     init(model: NellModel, controller: PanelController, scenes: [Showcase.Scene], sandbox: URL) {
         self.model = model; self.controller = controller; self.scenes = scenes; self.sandbox = sandbox
         home = controller.nellOrigin
+        controller.onHitChange = { [weak self] takes in self?.log(takes ? "pointer: takes clicks" : "pointer: clicks pass through") }
     }
 
     func start() {
@@ -83,6 +84,39 @@ import NellCore
             }
             if !ok { log("MISMATCH \(v): body \(p.body) face \(p.face) emoji \(p.emoji.map(\.rawValue) ?? "none") stacks \(p.stacks)") }
         }
+    }
+
+    /// `--probe`: checks the right-click hit area in-process (posting real mouse events needs Accessibility access):
+    /// a point on her head and one in a transparent gap of the sprite box, then a right-click on her head that opens the
+    /// menu, closed 3 s later with Escape.
+    func probe() {
+        guard let box = controller.grabRects.first, let face = model.sprite.sheet.slice("face", frame: 0) else { return log("probe: no sprite") }
+        let head = NellBlock.head(faceSlice: face, mirrored: model.layout?.faceRight ?? false)
+        let body = CGPoint(x: box.minX + head.x - NellBlock.spriteX(mirrored: model.layout?.faceRight ?? false), y: box.minY + head.y)
+        let gap = CGPoint(x: box.minX + 20, y: box.minY + 80) // art (10, 40): beside her hood, above the laptop
+        for (name, p) in [("head", body), ("gap", gap)] {
+            log("probe \(name) \(p): \(controller.takesClick(at: p) ? "takes clicks" : "clicks pass through")")
+        }
+        let panel = controller.panel
+        guard let content = panel.contentView else { return }
+        let window = panel.windowNumber
+        let escape = Timer(timeInterval: 3, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                NSApp.postEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                 windowNumber: window, context: nil, characters: "\u{1b}",
+                                                 charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!, atStart: false)
+            }
+        }
+        RunLoop.main.add(escape, forMode: .common) // fires inside the menu's tracking loop
+        log("probe: right-click on her head")
+        let at = NSPoint(x: body.x, y: content.bounds.height - body.y)
+        for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
+            if let e = NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                panel.sendEvent(e)
+            }
+        }
+        log("probe: menu closed")
     }
 
     private func log(_ line: String) {

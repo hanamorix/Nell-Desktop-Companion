@@ -88,7 +88,9 @@ public struct Blit: Equatable, Sendable {
     public let flipped: Bool
 }
 
-/// Clicks pass through Nell unless they land on something with a control, or on her sprite while ⌥ is held.
-public func isInteractive(_ p: CGPoint, rects: [CGRect], grabRects: [CGRect], optionHeld: Bool) -> Bool {
-    rects.contains { $0.contains(p) } || (optionHeld && grabRects.contains { $0.contains(p) })
+/// Clicks pass through Nell unless they land on a control or on her drawn pixels (for the right-click menu).
+/// With ⌥ held her whole sprite box takes clicks, for dragging. `opaqueAt` gets the point relative to the box.
+public func isInteractive(_ p: CGPoint, rects: [CGRect], grabRects: [CGRect], optionHeld: Bool, opaqueAt: (CGPoint) -> Bool) -> Bool {
+    rects.contains { $0.contains(p) }
+        || grabRects.contains { $0.contains(p) && (optionHeld || opaqueAt(CGPoint(x: p.x - $0.minX, y: p.y - $0.minY))) }
 }

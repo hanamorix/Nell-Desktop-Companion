@@ -52,16 +52,16 @@ func realSheet() throws -> SpriteSheet {
 
 @Test func buttonsAlwaysInteractive() {
     let rects = [CGRect(x: 0, y: 0, width: 10, height: 10), CGRect(x: 50, y: 50, width: 5, height: 5)]
-    #expect(isInteractive(CGPoint(x: 5, y: 5), rects: rects, grabRects: [], optionHeld: false))
-    #expect(isInteractive(CGPoint(x: 52, y: 52), rects: rects, grabRects: [], optionHeld: true))
-    #expect(!isInteractive(CGPoint(x: 20, y: 20), rects: rects, grabRects: [], optionHeld: true))
+    #expect(isInteractive(CGPoint(x: 5, y: 5), rects: rects, grabRects: [], optionHeld: false, opaqueAt: { _ in false }))
+    #expect(isInteractive(CGPoint(x: 52, y: 52), rects: rects, grabRects: [], optionHeld: true, opaqueAt: { _ in false }))
+    #expect(!isInteractive(CGPoint(x: 20, y: 20), rects: rects, grabRects: [], optionHeld: true, opaqueAt: { _ in false }))
 }
 
 @Test func spriteOnlyInteractiveWithOption() {
     let sprite = [CGRect(x: 100, y: 100, width: 40, height: 40)]
-    #expect(!isInteractive(CGPoint(x: 110, y: 110), rects: [], grabRects: sprite, optionHeld: false))
-    #expect(isInteractive(CGPoint(x: 110, y: 110), rects: [], grabRects: sprite, optionHeld: true))
-    #expect(!isInteractive(CGPoint(x: 10, y: 10), rects: [], grabRects: sprite, optionHeld: true))
+    #expect(!isInteractive(CGPoint(x: 110, y: 110), rects: [], grabRects: sprite, optionHeld: false, opaqueAt: { _ in false }))
+    #expect(isInteractive(CGPoint(x: 110, y: 110), rects: [], grabRects: sprite, optionHeld: true, opaqueAt: { _ in false }))
+    #expect(!isInteractive(CGPoint(x: 10, y: 10), rects: [], grabRects: sprite, optionHeld: true, opaqueAt: { _ in false }))
 }
 
 func v3Sheet() throws -> SpriteSheet {

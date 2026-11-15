@@ -60,6 +60,7 @@ import SwiftUI
         controller.restore(positions: model.state.positions)
         controller.onPositionSaved = { [weak self] key, p in self?.model.state.positions[key] = p; self?.save() }
         controller.onHover = { [weak self] id in self?.model.hovered = id }
+        controller.spriteOpaque = { [weak model] p in model?.sprite.mask?.opaque(at: p, scale: 2) ?? false }
         let cell = consoleCell()
         model.relayout = { [weak self] phase in self?.controller.relayout(phase, cell: cell) ?? model.layout! }
         model.displayFrame = { NSScreen.screens.first?.frame ?? .zero } // the same display the layout uses
@@ -106,6 +107,9 @@ import SwiftUI
             guard !scenes.isEmpty else { return fail("No showcase scene named \(name ?? ""). Try --showcase list.") }
             runner = ShowcaseRunner(model: model, controller: controller, scenes: scenes, sandbox: paths.support)
             runner?.start()
+            if CommandLine.arguments.contains("--probe") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.runner?.probe() }
+            }
         } else if Bundle.main.bundleURL.pathExtension == "app" {
             try? SMAppService.mainApp.register()
         }
