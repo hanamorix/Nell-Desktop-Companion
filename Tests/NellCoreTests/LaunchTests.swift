@@ -41,7 +41,16 @@ private func hooks(_ data: Data) throws -> [String: [[String: Any]]] {
     let sock = "/Users/x/Library/Application Support/Nell/nell.sock"
     let h = try hooks(hooksSettingsJSON(script: script, statusScript: "/x/nell-status.sh", socket: sock, mode: .chat))
     let cmd = try #require(((h["Stop"]?.first?["hooks"] as? [[String: Any]])?.first?["command"]) as? String)
-    #expect(cmd == "'\(script)' chat '\(sock)'")
+    #expect(cmd == "'\(script)' chat '\(sock)' 'Stop'")
+}
+
+@Test func settingsCommandPassesEventName() throws {
+    // the script reads the event from $3: jq isn't on macOS before 15
+    let h = try hooks(hooksSettingsJSON(script: "/x/nell-hook.sh", statusScript: "/x/nell-status.sh", socket: "/x/nell.sock", mode: .code))
+    for (e, entry) in h {
+        let cmd = try #require((entry.first?["hooks"] as? [[String: Any]])?.first?["command"] as? String)
+        #expect(cmd == "'/x/nell-hook.sh' code '/x/nell.sock' '\(e)'")
+    }
 }
 
 @Test func transcriptPathMungesSpacesAndUnicode() {

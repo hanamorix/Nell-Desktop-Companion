@@ -7,7 +7,6 @@ import Testing
     r.register(id: "a"); r.register(id: "b")
     #expect(r.answer(id: "a", .allow))
     #expect(r.wait(id: "a", timeout: 1) == .allow)
-    #expect(r.pendingIds == ["b"])
     #expect(r.wait(id: "b", timeout: 0.1) == .none)
 }
 

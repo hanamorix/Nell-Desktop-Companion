@@ -25,10 +25,11 @@ public let chatSystemPrompt = "You are in a plain chat inside Nell, a desktop co
 func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
 public func hooksSettingsJSON(script: String, statusScript: String, socket: String, mode: Mode) -> Data {
-    let command = "\(shellQuote(script)) \(mode.rawValue) \(shellQuote(socket))"
     var hooks: [String: Any] = [:]
     for e in hookEvents {
         let timeout = e == "PermissionRequest" ? Timings.hookTimeout : 5
+        // the event name as $3, so the script needs no jq (not on macOS before 15)
+        let command = "\(shellQuote(script)) \(mode.rawValue) \(shellQuote(socket)) \(shellQuote(e))"
         hooks[e] = [["hooks": [["type": "command", "command": command, "timeout": timeout]]]]
     }
     return try! JSONSerialization.data(withJSONObject: ["hooks": hooks, "statusLine": ["type": "command", "command": "\(shellQuote(statusScript)) \(shellQuote(socket))", "padding": 0] as [String: Any]], options: [.prettyPrinted, .sortedKeys])

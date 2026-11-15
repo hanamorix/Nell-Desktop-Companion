@@ -34,6 +34,24 @@ private func request(body: Data) -> Data {
     #expect(parseHTTPRequest(Data("hello\r\n\r\n".utf8)) == .invalid)
 }
 
+private func head(_ contentLength: String) -> Data { Data("POST /hook?mode=code HTTP/1.1\r\nContent-Length: \(contentLength)\r\n\r\nxy".utf8) }
+
+@Test func parseBadContentLengths() {
+    #expect(parseHTTPRequest(head("-1")) == .invalid)
+    #expect(parseHTTPRequest(head("99999999999999999999999")) == .invalid) // overflows Int
+    #expect(parseHTTPRequest(head("\(Int.max)")) == .incomplete) // the server's 4 MB cap ends it
+}
+
+@Test func parseHeaderCapIs16KB() {
+    #expect(parseHTTPRequest(Data(repeating: UInt8(ascii: "a"), count: 16_384)) == .incomplete)
+    #expect(parseHTTPRequest(Data(repeating: UInt8(ascii: "a"), count: 16_385)) == .invalid)
+}
+
+@Test func parseWithoutQueryHasNoMode() {
+    guard case .complete(let r) = parseHTTPRequest(Data("POST /hook HTTP/1.1\r\nContent-Length: 0\r\n\r\n".utf8)) else { Issue.record("not complete"); return }
+    #expect(r.path == "/hook"); #expect(r.query["mode"] == nil)
+}
+
 @Test func responseHasLengthAndClose() {
     let s = String(decoding: httpResponse(body: Data("ok".utf8)), as: UTF8.self)
     #expect(s.hasPrefix("HTTP/1.1 200 OK\r\n"))
