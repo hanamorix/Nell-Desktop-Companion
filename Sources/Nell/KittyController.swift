@@ -30,6 +30,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     private(set) var socket: String?
     private var lastRequest: PanelRequest?
     private var measured = false
+    private var shown = false // the console is on screen, so a restarted panel must come back shown
     private let home = FileManager.default.homeDirectoryForCurrentUser
     var claude: String { home.appending(path: ".local/bin/claude").path }
 
@@ -84,8 +85,9 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     }
 
     /// Starts the hidden panel with Code as its first window, and returns its socket once kitty answers and Code is tagged.
+    /// A restart reopens it where the last one was placed.
     private func startPanel(codeDir: String, state: inout SavedState) throws -> String {
-        let request = PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before it's ever shown
+        let request = lastRequest ?? PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before shown
         let args = sessionArgs(.code, cwd: codeDir, state: &state)
         let argv = KittyCommands.launchPanel(paths: paths, request: request, claude: claude, args: args)
         let p = Process()
@@ -95,11 +97,11 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
         try p.run()
         lastRequest = request
-        for _ in 0..<50 {
-            if let s = (try? FileManager.default.contentsOfDirectory(atPath: paths.support.path))?
-                .first(where: { $0.hasPrefix("kitty-") && $0.hasSuffix(".sock") }) {
-                let socket = "unix:" + paths.support.appending(path: s).path
-                if runTool(KittyCommands.tagFirstWindow(socket: socket)).status == 0 { return socket }
+        let path = paths.support.appending(path: "kitty-\(p.processIdentifier).sock").path // kitten panel execs into kitty
+        let deadline = Date().addingTimeInterval(30) // a cold login, or Gatekeeper re-checking an updated kitty, is slow
+        while Date() < deadline {
+            if FileManager.default.fileExists(atPath: path), runTool(KittyCommands.tagFirstWindow(socket: "unix:" + path)).status == 0 {
+                return "unix:" + path
             }
             usleep(100_000)
         }
@@ -115,12 +117,17 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         var ls = runTool(KittyCommands.ls(socket: socket))
         let restarted = ls.status != 0
         if restarted {
-            unlink(String(socket.dropFirst("unix:".count))) // a crashed kitty leaves its socket file behind
+            let path = String(socket.dropFirst("unix:".count))
+            // its socket is still there and its pid alive: kitty is stuck, not gone. It's ours (it answered moments ago),
+            // so end it and its Claudes rather than run a second set on the same sessions. A clean quit removes the socket.
+            if FileManager.default.fileExists(atPath: path), let pid = kittyPid(fromSocket: socket), kill(pid, 0) == 0 { kill(pid, SIGTERM) }
+            unlink(path) // a crashed kitty leaves its socket file behind
             do { socket = try startPanel(codeDir: state.usableProjectDir ?? paths.chatDir.path, state: &state) } catch {
                 EventLog.write("kitty restart failed: \(error)") // `socket` keeps the dead path, so the next send retries
                 return false
             }
             self.socket = socket
+            if shown { runTool(KittyCommands.showPanel(socket: socket)) }
             ls = runTool(KittyCommands.ls(socket: socket))
         }
         guard !windowExists(lsJSON: ls.out, mode: m) else { return restarted } // the new panel's first window is Code
@@ -143,6 +150,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     /// the calibration so the caller can store it and re-place.
     func showConsole(tab: Mode) -> PanelCalibration? {
         guard let socket else { return nil }
+        shown = true
         runTool(KittyCommands.focusTab(socket: socket, mode: tab))
         runTool(KittyCommands.showPanel(socket: socket))
         runTool(KittyCommands.focus(socket: socket, mode: tab))
@@ -154,7 +162,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     /// Switch the console's visible tab without showing it or taking the keyboard.
     func selectTab(_ m: Mode) { if let socket { runTool(KittyCommands.focusTab(socket: socket, mode: m)) } }
 
-    func hideConsole() { if let socket { runTool(KittyCommands.hidePanel(socket: socket)) } }
+    func hideConsole() { shown = false; if let socket { runTool(KittyCommands.hidePanel(socket: socket)) } }
 
     func send(_ text: String, to m: Mode) {
         guard let socket else { return }
@@ -200,5 +208,5 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
 }
 
 struct KittyNotAnswering: Error, CustomStringConvertible {
-    var description: String { "kitty didn't answer on its socket within 5 s" }
+    var description: String { "kitty didn't answer on its socket within 30 s" }
 }
