@@ -5,13 +5,17 @@ The artwork is licensed under the Creative Commons Attribution-NonCommercial 4.0
 International licence (CC BY-NC 4.0). The code is MIT-licensed separately (see
 LICENSE at the repository root); this licence covers only the art.
 
-Covered by this licence:
-  - artwork/                                   (all of it: concept art, sprite masters, icon sources, exports)
-  - concept-nell-design-system/                (its art and design: character, icons, components, tokens),
-                                               except the Departure Mono font and its licence file
+Covered by this licence (the art, and only the art):
+  - artwork/                                   (all of it, including artwork/icon/: concept art, sprite
+                                               masters, icon sources and exports)
+  - concept-nell-design-system/assets/         (the character reference images and the interface icon SVGs)
   - Sources/Nell/Resources/sprites/            (Nell's sprite sheet and its frame data)
   - Sources/Nell/Resources/icons/              (the interface icons)
   - Sources/Nell/Resources/AppIcon.icns        (the app icon)
+
+Everything else in the repository is MIT-licensed (see LICENSE), including the
+rest of concept-nell-design-system/ (its CSS, JSON tokens, design-system.json and components/),
+except the third-party files listed in THIRD_PARTY.md.
 
 You may share and adapt the art for non-commercial purposes, as long as you give
 appropriate credit ("Nell artwork by hanamorix"), link to the licence, and say if

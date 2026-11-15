@@ -14,6 +14,9 @@ mkdir -p "$STAGE" "$MNT" dist
 bash scripts/bundle.sh "$STAGE/Nell.app"
 ln -s /Applications "$STAGE/Applications"
 cp Sources/Nell/Resources/AppIcon.icns "$STAGE/.VolumeIcon.icns"
+cp LICENSE "$STAGE/LICENSE.txt"
+cp artwork/LICENSE "$STAGE/LICENSE-artwork.txt"
+cp THIRD_PARTY.md "$STAGE/THIRD_PARTY.md"
 cat > "$STAGE/How to open Nell.txt" <<'EOF'
 How to open Nell
 ================

@@ -1,6 +1,8 @@
 # Third-party software
 
-Nell's code is MIT ([LICENSE](LICENSE)) and her art is CC BY-NC 4.0 ([artwork/LICENSE](artwork/LICENSE)). These are the other projects she ships with or works alongside.
+Nell's code is MIT ([LICENSE](LICENSE)) and her art is CC BY-NC 4.0 ([artwork/LICENSE](artwork/LICENSE)). The art licence covers only `artwork/`, `concept-nell-design-system/assets/`, `Sources/Nell/Resources/sprites/` and `icons/`, and the app icon; everything else, including the design system's CSS, JSON and components, is MIT, apart from the projects below.
+
+These are the other projects she ships with or works alongside.
 
 | Project | Licence | How Nell uses it |
 |---|---|---|
