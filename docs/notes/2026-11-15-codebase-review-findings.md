@@ -83,3 +83,53 @@ Final severity is the red team's grade. "Live" marks the few things that can onl
   - a 10 s `kitten` hang on a stuck kitty.
 
   Each needs live evidence before a change.
+
+## Outcome (fixed on branch `review-fixes`)
+
+Every confirmed finding above is fixed at its root. Each fix has a test that failed before it, except where the code lives in the app target. Those app-target fixes have a stated desktop check instead.
+
+Process:
+- Each package had its own review and fix rounds.
+- A whole-branch Opus review and a red team on the fixes found further gaps.
+- Those gaps were fixed in a final wave and four narrow rounds, each re-reviewed.
+
+Every ruling is in [2026-11-15-review-fixes-build-ledger.md](2026-11-15-review-fixes-build-ledger.md).
+
+**Final state:**
+- 290 tests pass.
+- The hook-script tests pass 9/9.
+- `swift build` is green.
+- The tests leave no temp folders.
+
+**Found and fixed during the fixing** (not in the original review):
+- **Holds and queued text:** a hold that ends by timeout returns queued text to the bar, filed under its own mode, instead of sending it.
+- **Approvals arriving after Stop:** they are tracked instead of dropped.
+- **Ambiguous approvals:** these are two identical calls open at once. They never bind to a guessed call, and they settle only through their own hook.
+- **A dead kitty:**
+  - Opening the console restarts it.
+  - Restarts wait 5 s mid-session and retry at most every 30 s.
+  - A failed spawn never kills a live kitty.
+- **The instance lock:**
+  - An `flock`'d lock file means a busy Nell is never taken for a stale one.
+  - A refused second instance never saves `state.json`.
+- **Kitty can't enter the project folder:**
+  - Code starts in the chat folder instead of quitting.
+  - The project's session id is never overwritten.
+- **Usage chips:** a reading after a reset is no longer ignored (a pre-existing usage-chips bug).
+- **Showing her again and fading bubbles:**
+  - She comes back for every new prompt while hidden.
+  - Parked bubbles don't fade unseen.
+
+**Known limitations** (each was decided deliberately; the reasons are in the ledger):
+- **A background agent's prompt still open when the main agent's turn ends** isn't held. It's never been observed. Holding it would leave a silent 3-minute "Waiting…" after every approval you deny in the console, because answering in kitty doesn't close the hook (pipeline spike fact 3).
+- **Text typed after a hold has timed out** sends at once. This is the 3-minute release that v1 accepted.
+- **Three or more pinned bubbles below her** can clip the oldest approval's buttons. The hidden part isn't clickable, and it can be answered once a newer one settles, or at the 590 s hand-off.
+- **An identical approval stays ambiguous after one is denied in the console:** the next identical approval answered in the console settles through its own hook, not its Post, until Claude restarts. This affects comfort only, not safety.
+- **Still to check on the desktop:**
+  - **S-D1b:** whether AppKit makes the panel key again after it was key once.
+  - **⌘C on a selected reply:** whether it copies in an app with no Edit menu.
+  - **What Enter does in Claude's open pickers.**
+- **Minor leftovers listed in the ledger:**
+  - some harmless kitty shortcuts;
+  - the usage showcase scene no longer exercising `merged` (a unit test pins it);
+  - `isKitty` hard-coding the kitty.app path.
