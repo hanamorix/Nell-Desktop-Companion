@@ -141,3 +141,5 @@ Clicking back and forth between the Chat and Code chips made Nell vanish and lef
 **Root cause:** `runTool` waited for each `kitten @` call with `Process.waitUntilExit()`, which runs the current run loop. On the main thread, that let layout, timers and hook events run in the middle of a call. The fix that made every console open check the tab first put an inout call on the chip path, so it began crashing often. The send path always had the same hazard.
 
 **Fix:** `runTool` (now in NellCore) waits on a semaphore that the process's termination handler signals, so the run loop never turns mid-call. The test `runToolWaitsWithoutRunningTheRunLoop` failed with the old wait and passes with the new one.
+
+Confirmed on the desktop after relaunch: switching between Chat and Code no longer crashes Nell (user: "Switching works").
