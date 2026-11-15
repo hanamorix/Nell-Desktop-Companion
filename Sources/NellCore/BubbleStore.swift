@@ -47,6 +47,11 @@ public struct BubbleStore: Sendable {
         for i in bubbles.indices where bubbles[i].kind == .question && bubbles[i].mode == mode { bubbles[i].settled = true }
     }
 
+    /// Text handed back to the bar was never sent: drop the bubble it got when typed (the newest one with that text).
+    public mutating func removeUser(mode: Mode, text: String) {
+        if let i = bubbles.lastIndex(where: { $0.kind == .user && $0.mode == mode && $0.text == text }) { bubbles.remove(at: i) }
+    }
+
     /// Starts countdowns once allowed, restarts the hovered one (shortcut: hover restarts rather than pauses), drops faded bubbles.
     public mutating func tick(now: Date, userIdle: TimeInterval, hovered: UUID?) {
         for i in bubbles.indices {

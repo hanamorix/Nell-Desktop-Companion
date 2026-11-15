@@ -11,9 +11,14 @@ public struct InputQueue: Sendable {
         return text
     }
 
-    /// Everything queued, once nothing holds it (call it on every event and tick: a hold can end with no event).
+    /// Everything queued, once nothing holds it (`held: false` takes it all, for handing back to the bar).
     public mutating func release(held: Bool) -> [String] {
         guard !held else { return [] }
         defer { queued = [] }; return queued
     }
+}
+
+/// Queued text handed back to the bar unsent, oldest first, ahead of whatever you're typing there now.
+public func mergedDraft(returned: [String], typed: String) -> String {
+    (returned + [typed]).filter { !$0.isEmpty }.joined(separator: "\n")
 }

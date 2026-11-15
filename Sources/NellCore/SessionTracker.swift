@@ -94,7 +94,8 @@ public struct SessionTracker: Sendable {
         if isPost { testIds.remove(e.toolUseId ?? "") }
         if isPost { openToolUses.removeAll { $0.id != nil && $0.id == e.toolUseId } }
 
-        if finalized, ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"].contains(e.name) { return [] }
+        // late tool events after the turn are noise; a PermissionRequest never is: its hook blocks, so a prompt is open
+        if finalized, ["PreToolUse", "PostToolUse", "PostToolUseFailure"].contains(e.name) { return [] }
 
         switch e.name {
         case "SessionStart":
@@ -145,14 +146,17 @@ public struct SessionTracker: Sendable {
         return []
     }
 
-    public mutating func tick(now: Date) {
+    /// True when the watchdog just ended a hold: no event says Claude's prompt closed, so it may still be open.
+    @discardableResult
+    public mutating func tick(now: Date) -> Bool {
         if let l = launchedAt, !connected, now.timeIntervalSince(l) >= Timings.hooksNotConnected { base = .disconnected }
-        guard let last = lastEventAt else { return }
+        guard let last = lastEventAt else { return false }
         let quiet = now.timeIntervalSince(last)
         // Esc in kitty sends no event at all; a deadline hand-off comes long after the last event, so time the hold too
-        if let h = hold, quiet >= Timings.typingWatchdog, now.timeIntervalSince(h.since) >= Timings.typingWatchdog { hold = nil }
-        guard pendingApprovals.isEmpty, pendingQuestion == nil else { return }
-        if (base == .typing || base == .thinking), quiet >= Timings.typingWatchdog { base = .idle }
+        var holdEnded = false
+        if let h = hold, quiet >= Timings.typingWatchdog, now.timeIntervalSince(h.since) >= Timings.typingWatchdog { hold = nil; holdEnded = true }
+        if pendingApprovals.isEmpty, pendingQuestion == nil, base == .typing || base == .thinking, quiet >= Timings.typingWatchdog { base = .idle }
+        return holdEnded
     }
 
     private mutating func settleAll() -> [String] {

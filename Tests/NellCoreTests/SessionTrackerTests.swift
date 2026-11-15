@@ -349,6 +349,15 @@ func started() -> SessionTracker {
     #expect(t.pendingApprovals["r2"] == "u2"); #expect(t.state == .needsYou)
 }
 
+@Test func approvalAfterStopIsStillTracked() {
+    var t = started()
+    t.handle(ev("Stop"), requestId: nil, now: at(1))
+    t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(2)) // a blocking hook: a live prompt
+    #expect(t.pendingApprovals.keys.sorted() == ["r1"]); #expect(t.inputHeld); #expect(t.state == .needsYou)
+    t.settleApproval("r1", answer: .none, now: at(592)) // the deadline: Claude's own prompt is open in kitty
+    t.tick(now: at(593)); #expect(t.inputHeld)
+}
+
 @Test func turnEndSettlesPinnedQuestionAndConsoleBubbles() {
     func store() -> BubbleStore {
         var b = BubbleStore()

@@ -16,16 +16,37 @@ import Testing
     #expect(q.submit("three", held: false) == "three")
 }
 
-@Test func holdEndedByTheWatchdogReleasesQueuedText() {
-    // NellModel.tick's order: tick the tracker, then release what the queue holds. No hook event comes after an Esc in kitty.
+@Test func holdEndedByTheWatchdogGoesBackToTheBar() {
+    // NellModel.tick's order. No hook event comes after an Esc in kitty, and the prompt may still be open: nothing is sent.
     var t = started(), q = InputQueue()
     t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
     t.settleApproval("r1", answer: .none, now: at(591))
     #expect(q.submit("follow-up", held: t.inputHeld) == nil)
-    t.tick(now: at(592)); #expect(q.release(held: t.inputHeld).isEmpty, "Claude's prompt may still be open")
-    #expect(q.count == 1)
-    t.tick(now: at(591 + Timings.typingWatchdog)); #expect(q.release(held: t.inputHeld) == ["follow-up"])
+    let early = t.tick(now: at(592)), ended = t.tick(now: at(591 + Timings.typingWatchdog))
+    let again = t.tick(now: at(591 + Timings.typingWatchdog + 1))
+    #expect(!early); #expect(ended, "the watchdog ended the hold"); #expect(!again, "reported once")
+    let back = q.release(held: false)
+    #expect(mergedDraft(returned: back, typed: "and also") == "follow-up\nand also", "for the bar, not kitty")
+    #expect(q.count == 0)
+}
+
+@Test func returnedTextKeepsWhatYouAreTyping() {
+    #expect(mergedDraft(returned: ["one", "two"], typed: "") == "one\ntwo")
+    #expect(mergedDraft(returned: [], typed: "typing") == "typing")
+}
+
+@Test func watchdogReportsTheHoldEvenWhileAnotherApprovalWaits() {
+    var t = started()
+    let other: [String: JSONValue] = ["command": .string("pwd")]
+    t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
+    t.handle(ev("PreToolUse", tool: "Bash", input: other, id: "u2"), requestId: nil, now: at(1))
+    t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
+    t.handle(ev("PermissionRequest", tool: "Bash", input: other), requestId: "r2", now: at(1))
+    t.settleApproval("r1", answer: .none, now: at(591))
+    // the model takes the queue now: a later Allow on r2 would otherwise flush it into the prompt the watchdog gave up on
+    let ended = t.tick(now: at(591 + Timings.typingWatchdog))
+    #expect(ended); #expect(t.inputHeld, "r2 still holds the bar")
 }
 
 @Test func emptyOrWhitespaceIgnored() {

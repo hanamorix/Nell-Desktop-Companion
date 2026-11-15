@@ -140,8 +140,20 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     func dismissQuestion(mode m: Mode) {
         trackers[m]?.dismissQuestion()
         bubbles.settleQuestions(mode: m)
-        flushQueue(m)
+        returnQueueToBar(m) // nothing confirms the picker closed
         refresh()
+    }
+
+    /// A hold ended with no event saying Claude's prompt closed, so Enter could still answer it: queued text goes back
+    /// into the bar unsent, even if something else still holds this mode (a later Allow would flush it into that prompt).
+    private func returnQueueToBar(_ m: Mode) {
+        let back = queues[m]?.release(held: false) ?? []
+        guard !back.isEmpty else { return }
+        for t in back { bubbles.removeUser(mode: m, text: t) } // shown when typed, never sent
+        draft = mergedDraft(returned: back, typed: draft)
+        // one bar: the next Enter must reach the Claude this text was for.
+        // shortcut: if both modes handed text back in one tick it would all go to the last; Chat has no tools, so it never holds
+        selected = m
     }
 
     // MARK: Hook events
@@ -228,8 +240,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     func tick(userIdle: TimeInterval) {
         let now = Date()
         for m in Mode.allCases {
-            trackers[m]?.tick(now: now)
-            flushQueue(m) // the watchdog can end a hold with no event
+            if trackers[m]?.tick(now: now) == true { returnQueueToBar(m) } // the watchdog gave up: never send unattended
             let disc = trackers[m]?.state == .disconnected
             if disc, !wasDisconnected.contains(m) { // e.g. the folder-trust dialog: offer the console, don't open it
                 wasDisconnected.insert(m)
