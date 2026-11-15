@@ -13,8 +13,12 @@ import Testing
 }
 
 @Test func codeArgsResumeVsNew() {
-    #expect(claudeArgs(mode: .code, sessionId: "S", resume: false, settings: "/s.json") == ["--session-id", "S", "--settings", "/s.json"])
-    #expect(claudeArgs(mode: .code, sessionId: "S", resume: true, settings: "/s.json") == ["--resume", "S", "--settings", "/s.json"])
+    // Code always starts in Auto mode, fresh or resumed; it's a launch flag, so ~/.claude settings stay untouched
+    #expect(claudeArgs(mode: .code, sessionId: "S", resume: false, settings: "/s.json")
+            == ["--session-id", "S", "--settings", "/s.json", "--permission-mode", "auto"])
+    #expect(claudeArgs(mode: .code, sessionId: "S", resume: true, settings: "/s.json")
+            == ["--resume", "S", "--settings", "/s.json", "--permission-mode", "auto"])
+    #expect(!claudeArgs(mode: .chat, sessionId: "S", resume: true, settings: "/s.json").contains("--permission-mode"))
 }
 
 private func hooks(_ data: Data) throws -> [String: [[String: Any]]] {

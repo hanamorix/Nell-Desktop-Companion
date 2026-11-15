@@ -35,6 +35,7 @@ public func hooksSettingsJSON(script: String, socket: String, mode: Mode) -> Dat
 public func claudeArgs(mode: Mode, sessionId: String, resume: Bool, settings: String) -> [String] {
     var a = resume ? ["--resume", sessionId] : ["--session-id", sessionId]
     a += ["--settings", settings]
+    if mode == .code { a += ["--permission-mode", "auto"] } // the user's choice: Code always starts in Auto
     if mode == .chat {
         a += ["--tools", "", "--strict-mcp-config", "--no-chrome", "--setting-sources", "project",
               "--append-system-prompt", chatSystemPrompt]
