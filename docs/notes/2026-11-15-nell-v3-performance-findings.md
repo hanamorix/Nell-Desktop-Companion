@@ -8,7 +8,7 @@ The user asked for a stress test "to make sure that Nell has little impact on CP
 - **How each phase runs:**
   - Each phase launches the showcase with `open -n`.
   - It samples only the showcase's pid, once a second, with `ps -o %cpu=,rss=,time=`.
-  - It takes one `footprint` snapshot just before the end.
+  - Every 10 s, and once at the end, it samples the physical footprint with `footprint` (that tool is slower than `ps`).
   - It then kills that pid and waits for it to exit.
 - **Phases:**
 
@@ -23,9 +23,15 @@ The user asked for a stress test "to make sure that Nell has little impact on CP
   - `cpu_avg` is CPU time used divided by wall time, in % of one core. `ps`'s `%cpu` is a decaying average, so averaging it would smear the phases together.
   - `cpu_after_quiet` is the same ratio, from 615 s to the end of the idle phase.
   - `cpu_peak` is the highest 1 s `%cpu` sample.
-  - RSS start, peak and end come from the samples.
-  - The leak check is the least-squares RSS slope over the second half of each phase.
-  - `footprint_mb` is the process's physical footprint, which is what Activity Monitor shows. It includes graphics memory that RSS does not count.
+  - **Memory is the physical footprint**, which is what Activity Monitor shows. It includes graphics memory that RSS does not count. The script reports its peak and the least-squares slope over the second half of each phase; the slope is the leak check.
+  - RSS start, peak and end are recorded for information only. They count the shared system-framework pages that every SwiftUI app maps (see the memory section).
+- **Pass bars** (the controller's ruling on memory):
+
+  | Phase | CPU | Memory |
+  |---|---|---|
+  | Idle | average ≤ 1 %, and ≤ 0.2 % after the 600 s quiet switch | footprint peak ≤ 80 MB, second-half slope < 1 MB/min |
+  | Busy | average ≤ 10 % | footprint peak ≤ 80 MB, second-half slope < 1 MB/min |
+  | Burst | average ≤ 25 %, no stalls | report-only, because its once-a-second window resize (placement and console) is a torture case |
 - **Stalls.** The showcase logs `STALL` whenever its main-thread step timer fires more than 1 s late. The burst phase counts those lines.
 - **Profiling.** I profiled the burst with `sample <pid> 5`, and checked candidate causes with 60 s A/B burst runs: CPU time over 60 s after a 10 s warm-up, with one local change each.
 
@@ -38,27 +44,44 @@ The user asked for a stress test "to make sure that Nell has little impact on CP
 
 ## Results
 
-Run `build/stress/20261115-125031` (`bash scripts/stress.sh`, defaults 12 + 5 + 2 min). CPU is in % of one core.
+The verdicts combine two runs:
+- **CPU** comes from the full run `build/stress/20261115-125031` (defaults 12 + 5 + 2 min).
+- **Memory** comes from a short re-run `build/stress/20261115-132307` (`bash scripts/stress.sh 3 3 1`), made after the bar was ruled to be footprint. That run is labelled "memory re-run" below. Its idle phase is too short to reach the quiet switch, so its own idle CPU verdict doesn't count.
 
-| Phase | CPU avg | CPU peak | CPU after quiet | RSS start → peak → end (MB) | RSS slope, 2nd half | Footprint | Stalls | Result |
-|---|---|---|---|---|---|---|---|---|
-| Idle (12 min) | **0.72 %** ✓ | 3.9 % | **0.17 %** ✓ | 9.3 → **81.4** → 60.5 ✗ | +0.05 MB/min ✓ | 21 MB | n/a | FAIL (RSS) |
-| Busy (5 min) | **2.13 %** ✓ | 10.2 % | n/a | 8.4 → **89.4** → 88.9 ✗ | +0.13 MB/min ✓ | 31 MB | n/a | FAIL (RSS) |
-| Burst (2 min) | **29.75 %** ✗ | 38.7 % | n/a | 12.1 → **89.9** → 77.2 ✗ | −9.65 MB/min ✓ | 133 MB (101 MB graphics) | 0 ✓ | FAIL (CPU, RSS) |
+CPU is in % of one core.
+
+| Phase | CPU avg | CPU after quiet | Stalls | Footprint peak | Footprint slope, 2nd half | Graphics peak | Result |
+|---|---|---|---|---|---|---|---|
+| Idle | **0.72 %** ✓ | **0.17 %** ✓ | n/a | **22 MB** ✓ | 0.00 MB/min ✓ | 0 | **PASS** |
+| Busy | **2.13 %** ✓ | n/a | n/a | **119 MB** ✗ | −8.8 MB/min ✓ | 85 MB | **FAIL** (memory) |
+| Burst | **29.75 %** ✗ | n/a | 0 ✓ | 134 MB (report-only) | −1.8 MB/min | 101 MB | **FAIL** (CPU) |
+
+RSS, for information only:
+
+| Run | Idle start / peak / end | Busy | Burst |
+|---|---|---|---|
+| Full run | 9.3 / 81.4 / 60.5 MB | 8.4 / 89.4 / 88.9 MB | 12.1 / 89.9 / 77.2 MB |
+| Memory re-run | 36.6 / 81.4 / 76.7 MB | 46.2 / 89.1 / 88.7 MB | 47.6 / 90.0 / 85.3 MB |
+
+The memory re-run's CPU matched the full run: idle 0.85 % over its first 3 min, busy 2.13 %, burst 29.61 % with 0 stalls.
 
 Against the bars:
-- **CPU passes in idle and busy.**
-  - Idle averages 0.72 % (bar ≤ 1 %) and drops to 0.17 % once the 600 s quiet switch stops her breathing (bar ≤ 0.2 %).
-  - The full showcase cycle averages 2.13 % (bar ≤ 10 %).
-- **Burst CPU fails:** 29.75 % against ≤ 25 %. It never stalled; no main-thread timer fired more than 1 s late.
-- **No leaks.** Every second-half RSS slope is under 1 MB/min, and the burst's is negative.
-- **RSS fails the 80 MB bar in every phase.** Idle exceeds it only for its first 11 s (80.8–81.4 MB during launch), then settles at 76.7 MB and later 60.5 MB. Busy and burst sit around 85–90 MB. The memory section below explains what RSS counts here.
+- **Idle passes everything.**
+  - CPU averages 0.72 % and drops to 0.17 % once the 600 s quiet switch stops her breathing.
+  - Her footprint holds at 22 MB.
+- **Busy CPU passes** (2.13 % against ≤ 10 %).
+- **Busy memory fails the 80 MB footprint bar.**
+  - Between steps the footprint is 26–31 MB, but it spikes to 116–119 MB for 1–2 s at a time, with 84–100 MB of that being graphics memory.
+  - A 0.5 s graphics trace of the full cycle tied the spikes to steps where bubbles appear or change (faces, body, emoji and bubbles scenes).
+  - Removing the bubbles' `.compositingGroup()` didn't change them: 16 vs 13 of 77 samples over 10 MB, peak 100 MB both ways. The cause is still open.
+  - The second-half slope is negative, so it is not a leak.
+- **Burst CPU fails** (29.75 % against ≤ 25 %; see the burst section). It never stalled.
+- **Burst memory is report-only.** It held at 133–134 MB, with 101 MB of graphics, for the whole phase, with a negative slope.
 
-The first full run (`build/stress/20261115-122302`, script defaults then 10 + 5 + 2) gave the same picture:
+The first full run (`build/stress/20261115-122302`, script defaults then 10 + 5 + 2) gave the same CPU picture:
 - idle 0.73 % (the 10 min phase ended at the quiet switch, so there was no after-quiet figure)
 - busy 2.13 %
 - burst 29.5 %, no stalls
-- RSS peaks 81.3, 89.8 and 90.8 MB
 
 ## Fix: decode the sprite sheet once
 
@@ -101,10 +124,12 @@ After the fix, the burst still averages about 29 % of one core, against a 25 % b
 
 ## RSS and memory
 
+The memory bar is footprint, by the controller's ruling. RSS stays in the CSV as information only.
+
 `ps`'s RSS counts every resident page mapped into the process, including the shared framework pages (SwiftUI, AppKit, Core Text) that every app maps. What is Nell's own is much smaller:
 
 - **`vmmap --summary` on a busy showcase:** 91 MB RSS, of which only **28.5 MB is dirty, private memory**. The rest is shared `__TEXT`, `__OBJC_RO` and `__AUTH_CONST` pages of system frameworks.
-- **Physical footprint** (what Activity Monitor shows), snapshots of the showcase:
+- **Physical footprint** (what Activity Monitor shows), one-off snapshots of the showcase taken before footprint was sampled through each phase:
 
   | State | Footprint | Graphics | RSS |
   |---|---|---|---|
@@ -115,21 +140,25 @@ After the fix, the burst still averages about 29 % of one core, against a 25 % b
   | End of the busy phase | 31 MB | 0.5 MB | 88.9 MB |
   | End of the burst phase | **133 MB** | **101 MB** | 77.2 MB |
 
-- **The large graphics figure appears only in the burst.** That phase resizes Nell's window (placement change, console open/minimise) every second. An open console on its own costs almost nothing (24 MB), so the console-sized transparent panel is not the cost. Repeated window resizing leaves Core Animation backing surfaces resident for a while.
-  - It is not a leak: the burst's RSS falls over its second half.
-  - A user moves Nell or toggles the console a few times a session, not once a second.
-- **Code changes won't reach the RSS bar.** Nell's own memory is 21–31 MB in normal use; the remaining ~50–60 MB of RSS is shared framework code that any SwiftUI app maps. Meeting an 80 MB RSS bar would mean dropping SwiftUI, not tuning Nell. I left the bar unchanged in the script, so it reports FAIL.
+- **Those single snapshots missed the busy phase's spikes.** Sampling every 10 s, and a 0.5 s graphics trace, show the busy footprint jumping to 116–119 MB for 1–2 s when bubbles appear or change (84–100 MB graphics), then falling back to 26–31 MB.
+  - An open console on its own costs almost nothing (24 MB), so the console-sized transparent panel is not the cost.
+  - Removing the bubbles' `.compositingGroup()` didn't change the spikes.
+  - The cause is open, so it is reported here rather than fixed.
+- **The burst holds 133–134 MB, 101 MB of it graphics, for its whole run.** It resizes Nell's window (placement change, console open/minimise) every second, which keeps Core Animation surfaces resident.
+  - It is not a leak: the footprint slope is negative.
+  - A user moves Nell or toggles the console a few times a session, not once a second, which is why burst memory is report-only.
+- **RSS (81–90 MB) is mostly shared framework code** that any SwiftUI app maps. That is why the bar measures footprint instead.
 
 ## Takeaways
 
 - **Idle and normal use are cheap.**
   - 0.72 % of one core idle, 0.17 % after 10 quiet minutes.
   - About 2 % during the full showcase cycle.
-  - 21–31 MB of physical footprint, and no leak in any phase.
+  - A 22 MB footprint while idle, 26–31 MB between busy steps, and no leak in any phase.
 - **The decode fix is kept.** It also removes per-frame PNG decoding at normal load.
-- **Two bars fail and are left as findings for a ruling:**
+- **Two bars fail and are left as findings:**
   - **Burst CPU, 29.75 % against 25 %.** The rest is SwiftUI re-rendering once per event at 20 events a second. Coalescing or throttling renders is a design change.
-  - **RSS, 81–90 MB against 80 MB.** That is mostly shared framework pages; Nell's own footprint is 21–31 MB. A footprint-based bar would measure Nell itself.
+  - **Busy footprint, a 119 MB peak against 80 MB.** These are 1–2 s graphics spikes (84–100 MB) when bubbles appear or change; between them she uses 26–31 MB. The cause is open (`.compositingGroup()` is ruled out).
 - **Not measured:**
   - kitty and the `claude` processes, which the showcase never starts
   - a real Claude Code session's event rate
