@@ -11,5 +11,9 @@ public struct InputQueue: Sendable {
         return text
     }
 
-    public mutating func release() -> [String] { defer { queued = [] }; return queued }
+    /// Everything queued, once nothing holds it (call it on every event and tick: a hold can end with no event).
+    public mutating func release(held: Bool) -> [String] {
+        guard !held else { return [] }
+        defer { queued = [] }; return queued
+    }
 }

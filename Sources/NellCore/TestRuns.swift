@@ -32,9 +32,10 @@ public func isPiped(_ command: String) -> Bool {
     unquoted(command).range(of: #"(?<!\|)\|(?!\|)"#, options: .regularExpression) != nil
 }
 
-/// Exit status is trusted only when the test is the last command (or followed solely by `&&`-chained ones):
-/// a pipe, `||`, `;`, newline or `&` after the first test segment can mask its failure.
-func exitStatusUnreliable(_ command: String) -> Bool {
+/// Exit status is trusted only when the test is the last command: a pipe, `||`, `;`, newline or `&` after the first
+/// test segment can mask its failure. A clean exit may also be followed by `&&`-chained commands (they all passed),
+/// but a `failed` exit may not: the failure could be theirs.
+func exitStatusUnreliable(_ command: String, failed: Bool = false) -> Bool {
     let c = unquoted(command).replacingOccurrences(of: #"\d*>&\d*|&>"#, with: " ", options: .regularExpression)
     var start = c.startIndex
     var i = c.startIndex
@@ -42,7 +43,7 @@ func exitStatusUnreliable(_ command: String) -> Bool {
         let atEnd = i == c.endIndex
         if atEnd || c[i] == ";" || c[i] == "\n" || c[i...].hasPrefix("&&") {
             if isTestCommand(String(c[start..<i])) {
-                return c[start...].replacingOccurrences(of: "&&", with: "")
+                return (failed ? String(c[start...]) : c[start...].replacingOccurrences(of: "&&", with: ""))
                     .range(of: #"[|;&\n]"#, options: .regularExpression) != nil
             }
             if atEnd { return true }
@@ -88,12 +89,15 @@ func isBackground(_ e: HookEvent) -> Bool { e.toolInput?["run_in_background"] ==
 /// A failure summary always wins; exit status is trusted only when the command isn't piped.
 public func testOutcome(_ e: HookEvent) -> TestOutcome? {
     guard e.toolName == "Bash", e.name == "PostToolUse" || e.name == "PostToolUseFailure",
-          let command = e.toolInput?["command"]?.string, isTestCommand(command), !isBackground(e) else { return nil }
+          let command = e.toolInput?["command"]?.string, isTestCommand(command), !isBackground(e),
+          command.range(of: #"(^|\s)--no-run(\s|$)"#, options: .regularExpression) == nil else { return nil } // built, not run
     let piped = exitStatusUnreliable(command)
     if e.name == "PostToolUseFailure" {
-        // only a real non-zero exit (the spike's "Exit code N" shape) is a failure: not Esc, not a timeout
-        guard e.isInterrupt != true, let err = e.error, err.range(of: #"^Exit code [1-9]"#, options: .regularExpression) != nil else { return nil }
-        return summary(err, piped: piped) == .fail || !piped ? .fail : nil
+        // only a real non-zero exit (the spike's "Exit code N" shape) is a failure: not Esc, not a timeout, and not
+        // 126/127 (the test couldn't start)
+        guard e.isInterrupt != true, let err = e.error,
+              err.range(of: #"^Exit code (?!12[67]\b)[1-9]"#, options: .regularExpression) != nil else { return nil }
+        return summary(err, piped: piped) == .fail || !exitStatusUnreliable(command, failed: true) ? .fail : nil
     }
     guard case .object(let r)? = e.toolResponse else { return nil }
     if case .bool(true)? = r["interrupted"] { return nil }

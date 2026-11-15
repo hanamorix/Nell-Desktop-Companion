@@ -93,6 +93,8 @@ private func run(_ a: inout Animator, _ now: inout Date, _ shown: inout [Int], u
     #expect(stopFailureMessage(e) == "Usage limit reached — Nell's napping until it resets at Mon 12:00am")
     var other = HookEvent(name: "StopFailure", sessionId: "S"); other.error = "server_error"
     #expect(stopFailureMessage(other) == "server_error")
+    other.lastAssistantMessage = "API Error: 500 Internal server error"
+    #expect(stopFailureMessage(other) == "API Error: 500 Internal server error", "Claude's readable text beats the raw code")
     #expect(stopFailureMessage(HookEvent(name: "StopFailure", sessionId: "S")) == "Something went wrong")
 }
 
