@@ -48,3 +48,4 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 |---|---|---|
 | Spec | [2026-11-15-nell-usage-chips-design.md](specs/2026-11-15-nell-usage-chips-design.md) | 5-hour and weekly usage as two gauge chips above Chat and Code, fed by a status line in Nell's own settings, plus the tired face over 90% (approved) |
 | Plan | [2026-11-15-nell-usage-chips-plan.md](plans/2026-11-15-nell-usage-chips-plan.md) | The 4-task plan: status-line spike, usage logic, socket wiring, gauge chips and showcase |
+| Notes | [2026-11-15-nell-usage-statusline-findings.md](notes/2026-11-15-nell-usage-statusline-findings.md) | Status-line spike: `rate_limits` shape (`resets_at` is epoch seconds), absent before the first reply, runs in hidden windows and with Chat's args |
