@@ -58,3 +58,9 @@ Each round of the user's visual review: what was shown, what they said, and whet
 | Round | Shown | User's notes | Result |
 |---|---|---|---|
 | 1 | The six showcase states of the 7D and 5H gauge chips: no reading (dimmed –), low (green), mid (gold), high (berry), tired (exhausted face over 90%), after a reset (empty meters, normal face). Chips at Chat/Code size with the option A meter. Then the showcase running live, to hover a chip with another app in front | Asked whether the chips look right and whether the hover text appears: "Both work" | **Accepted.** Usage chips and their hover text signed off |
+
+## Colour themes (2026-11-15)
+
+| Round | Shown | User's notes | Result |
+|---|---|---|---|
+| 1 | The five themes in the showcase (Plum Night, Moss, Tide, Ember, Slate), each with a live approval (Allow, Deny, Console), bubbles, the 7D/5H chips, the text box, the minimised console strip and the open console's title bar; plus the right-click menu with Settings ▸. Colours were Claude's picks ("Just dive in with your picks") | Asked whether the five themes look right: "Looks good" | **Accepted.** Colour themes signed off; the submenu tick and live kitty recolouring to be checked on the desktop |

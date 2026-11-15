@@ -86,9 +86,9 @@ These hex values are Claude's picks. The builder may nudge a value to pass the r
 ## Console colours
 
 - **From the tokens:** kitty's background (`plum-900`), foreground (`cream`), cursor (`pink-400`), and selection background and foreground (`plum-700` / `cream`) come from the theme's tokens.
-- **The 16 ANSI colours** are set per theme by hand. Red stays red, green green, yellow yellow, blue blue, magenta magenta and cyan cyan, each harmonised with the theme. Plum Night's 16 stay exactly as in today's `kitty.conf`.
+- **The 16 ANSI colours** are set per theme by hand. Red stays red, green green, yellow yellow, blue blue, magenta magenta and cyan cyan, each harmonised with the theme. Plum Night's 16 stay exactly as in the pre-themes `kitty.conf`.
 - **Applying them:**
-  - On launch, `kitty.conf` is written with the current theme's colours.
+  - On launch, `kitty.conf` (which ends with `include kitty-colors.conf`) is installed, and `kitty-colors.conf` is written with the current theme's colours. *(Changed at the final review so a kitty config reload keeps the theme.)*
   - On a switch, each running Nell kitty window is recoloured through kitty remote control (`set-colors`).
   - If kitty isn't running, the switch does nothing to the console and never errors.
 
@@ -110,7 +110,7 @@ It then steps through every theme. A coverage test checks that the scene visits 
 
 - **Complete palettes:** every theme defines exactly the 22 keys, and each value is a valid hex colour.
 - **Readability:** for the pairs `plum-500`/`plum-800`, `cream`/`plum-800`, `muted`/`plum-800`, `muted`/`plum-900`, `outline`/`leaf`, `outline`/`gold` and `snow`/`berry`, every theme's WCAG contrast ratio is at least `min(4.5, Plum Night's ratio for that pair)`.
-- **Plum Night unchanged:** Plum Night's palette still equals `tokens.json`, and its console colours equal today's `kitty.conf`.
+- **Plum Night unchanged:** Plum Night's palette still equals `tokens.json`, and its console colours equal the pre-themes `kitty.conf` (pinned verbatim in a test).
 
 ## Left to the builder
 

@@ -57,3 +57,4 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 |---|---|---|
 | Spec | [2026-11-15-nell-themes-design.md](specs/2026-11-15-nell-themes-design.md) | Five dark colour themes (Plum Night, Moss, Tide, Ember, Slate) picked from a Settings submenu on her right-click menu, recolouring the interface and the console |
 | Plan | [2026-11-15-nell-themes-plan.md](plans/2026-11-15-nell-themes-plan.md) | The 3-task plan: theme data and saving, console colours, theme-aware interface with the Settings menu and showcase |
+| Notes | [2026-11-15-nell-themes-build-ledger.md](notes/2026-11-15-nell-themes-build-ledger.md) | Every ruling, review fix and deferred minor from the colour-themes build, the final review and its fix wave |
