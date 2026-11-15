@@ -78,3 +78,39 @@ private func five(_ reset: String) -> String { #"{"rate_limits":{"five_hour":{"u
     #expect(statusLineText(UsageReading(session: UsageWindow(used: 42.4))) == "5h 42%")
     #expect(statusLineText(nil) == "")
 }
+
+private func used(_ v: String) -> String { #"{"rate_limits":{"five_hour":{"used_percentage":\#(v)}}}"# }
+
+@Test func usageDecodeBoundsUsed() {
+    let huge = json(used("1e30"))
+    #expect(huge?.session?.used == 999)
+    #expect(statusLineText(huge) == "5h 999%")
+    #expect(gauge(huge?.session, .session, now: noon, timeZone: utc).tooltip == "Session 999%")
+    let neg = json(used("-3"))
+    #expect(neg?.session?.used == 0)
+    #expect(gauge(neg?.session, .session, now: noon, timeZone: utc).tooltip == "Session 0%")
+}
+
+@Test func usageDecodeDropsBadUsed() {
+    #expect(json(used("1e999")) == nil)
+    #expect(json(used(#""42""#)) == nil)
+    #expect(json(used("null")) == nil)
+}
+
+@Test func usageMergeIgnoresStaleWindow() {
+    let old = UsageReading(session: UsageWindow(used: 50, resetsAt: d("2025-11-15T15:00:00Z")))
+    let stale = UsageReading(session: UsageWindow(used: 10, resetsAt: d("2025-11-15T14:00:00Z")))
+    #expect(old.merged(stale) == old)
+}
+
+@Test func usageMergeSameWindowKeepsHigher() {
+    let r = d("2025-11-15T15:00:00Z")
+    let a = UsageReading(session: UsageWindow(used: 60, resetsAt: r)), b = UsageReading(session: UsageWindow(used: 40, resetsAt: r))
+    #expect(a.merged(b) == a); #expect(b.merged(a) == a)
+}
+
+@Test func usageMergeNewWindowWins() {
+    let old = UsageReading(session: UsageWindow(used: 95, resetsAt: d("2025-11-15T15:00:00Z")))
+    let new = UsageReading(session: UsageWindow(used: 10, resetsAt: d("2025-11-15T20:00:00Z")))
+    #expect(old.merged(new) == new)
+}

@@ -192,6 +192,6 @@ struct UsageChip: View {
         }
         .frame(width: 28, height: 26)
         .pixelFrame(fill: PN.plum700, hi: PN.plum600, lo: PN.plum900, drop: .none)
-        .help(gauge.tooltip).accessibilityLabel(gauge.tooltip)
+        .help(gauge.tooltip).accessibilityElement(children: .ignore).accessibilityLabel(gauge.tooltip)
     }
 }

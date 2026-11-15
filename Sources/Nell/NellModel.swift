@@ -277,9 +277,9 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         if nextShown != shown { shown = nextShown } // don't re-render the view every tick
     }
 
-    /// A brief emoji ends on time (2.5 s), and a passed usage reset empties its chip, both without waiting for the next 1 Hz tick or event.
+    /// A brief emoji ends on time (2.5 s) without waiting for the next 1 Hz tick or event.
     private func wakeAtExpiry(_ now: Date) {
-        let at = [reactions.nextExpiry(now: now), usage?.nextReset(after: now)].compactMap { $0 }.min()
+        let at = reactions.nextExpiry(now: now)
         guard at != expiry?.at else { return }
         expiry?.timer.invalidate(); expiry = nil
         guard let at else { return }

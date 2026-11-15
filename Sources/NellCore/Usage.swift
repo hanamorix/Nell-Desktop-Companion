@@ -26,7 +26,8 @@ public struct UsageReading: Equatable, Sendable {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let limits = root["rate_limits"] as? [String: Any] else { return nil }
         func window(_ key: String) -> UsageWindow? {
-            guard let w = limits[key] as? [String: Any], let used = (w["used_percentage"] as? NSNumber)?.doubleValue else { return nil }
+            guard let w = limits[key] as? [String: Any], let raw = (w["used_percentage"] as? NSNumber)?.doubleValue, raw.isFinite else { return nil }
+            let used = min(max(raw, 0), 999) // the socket is a trust boundary: keep Int(rounded()) from trapping
             var reset: Date?
             if let n = w["resets_at"] as? NSNumber { reset = Date(timeIntervalSince1970: n.doubleValue) }
             else if let s = w["resets_at"] as? String { reset = ISO8601DateFormatter().date(from: s) }
@@ -36,9 +37,14 @@ public struct UsageReading: Equatable, Sendable {
         return r.session == nil && r.weekly == nil ? nil : r
     }
 
-    /// A newer reading wins per window, but never erases a window it lacks.
+    /// Per window the fresher post wins (a stale or reordered post never moves a chip back); a missing window is kept.
     public func merged(_ newer: UsageReading) -> UsageReading {
-        UsageReading(session: newer.session ?? session, weekly: newer.weekly ?? weekly)
+        func pick(_ old: UsageWindow?, _ new: UsageWindow?) -> UsageWindow? {
+            guard let old, let new else { return new ?? old }
+            guard let o = old.resetsAt, let n = new.resetsAt else { return new }
+            return n < o ? old : n == o && old.used > new.used ? old : new
+        }
+        return UsageReading(session: pick(session, newer.session), weekly: pick(weekly, newer.weekly))
     }
 
     public func nextReset(after now: Date) -> Date? {
@@ -55,12 +61,24 @@ public struct UsageGauge: Equatable, Sendable {
     }
 }
 
-private func clock(_ date: Date, now: Date, _ tz: TimeZone) -> String {
-    var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+// refresh() runs at 1 Hz, so formatters are built once per time zone and day-form.
+private let formatterLock = NSLock()
+nonisolated(unsafe) private var formatters: [String: DateFormatter] = [:]
+
+private func formatter(_ tz: TimeZone, sameDay: Bool) -> DateFormatter {
+    formatterLock.lock(); defer { formatterLock.unlock() }
+    let key = "\(tz.identifier)|\(sameDay)"
+    if let f = formatters[key] { return f }
     let f = DateFormatter()
     f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = tz
-    f.dateFormat = cal.isDate(date, inSameDayAs: now) ? "h:mma" : "EEE h:mma"
-    return f.string(from: date).replacingOccurrences(of: "AM", with: "am").replacingOccurrences(of: "PM", with: "pm")
+    f.dateFormat = sameDay ? "h:mma" : "EEE h:mma"
+    formatters[key] = f
+    return f
+}
+
+private func clock(_ date: Date, now: Date, _ tz: TimeZone) -> String {
+    var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+    return formatter(tz, sameDay: cal.isDate(date, inSameDayAs: now)).string(from: date).replacingOccurrences(of: "AM", with: "am").replacingOccurrences(of: "PM", with: "pm")
 }
 
 public func gauge(_ w: UsageWindow?, _ kind: UsageKind, now: Date, timeZone: TimeZone = .current) -> UsageGauge {
