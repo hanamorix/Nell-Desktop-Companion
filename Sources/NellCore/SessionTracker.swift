@@ -93,9 +93,13 @@ public struct SessionTracker: Sendable {
         if Self.endsUsageLimit(e) || e.name == "SessionEnd" { usageLimited = false }
         if isPost { testIds.remove(e.toolUseId ?? "") }
         if isPost { openToolUses.removeAll { $0.id != nil && $0.id == e.toolUseId } }
+        if e.name == "PreToolUse" { openToolUses.append((e.toolName ?? "", e.toolInput, e.toolUseId)) }
+        if openToolUses.count > 32 { openToolUses.removeFirst() }
 
-        // late tool events after the turn are noise; a PermissionRequest never is: its hook blocks, so a prompt is open
-        if finalized, ["PreToolUse", "PostToolUse", "PostToolUseFailure"].contains(e.name) { return [] }
+        // late tool events after the turn don't change her state; a PermissionRequest never is noise: its hook blocks,
+        // so a prompt is open. The calls are still tracked, so that prompt's approval can settle on its own tool's Post.
+        if finalized, e.name == "PreToolUse" { return [] }
+        if finalized, isPost { return settleApprovals(of: e.toolUseId) }
 
         switch e.name {
         case "SessionStart":
@@ -107,21 +111,20 @@ public struct SessionTracker: Sendable {
             base = .thinking
             return settleAll()
         case "PreToolUse":
-            openToolUses.append((e.toolName ?? "", e.toolInput, e.toolUseId))
             if e.toolName == "Bash", let c = e.toolInput?["command"]?.string, isTestCommand(c), !isBackground(e) { testIds.insert(e.toolUseId ?? "") }
-            if openToolUses.count > 32 { openToolUses.removeFirst() }
             if isQuestionTool { pendingQuestion = firstQuestion(e.toolInput) ?? "Claude has a question" } else { base = .typing }
         case "PermissionRequest":
             guard let requestId, !isQuestionTool else { break }
-            // the oldest matching call; claiming removes it, so an answered or denied call is never matched again
-            let match = openToolUses.firstIndex { $0.name == e.toolName && $0.input == e.toolInput }.map { openToolUses.remove(at: $0) }
-            pendingApprovals[requestId] = match?.id
+            // PermissionRequest carries no tool_use_id: bind only when exactly one open call matches (claiming removes it,
+            // so an answered or denied call is never matched again). With identical calls open, either could be this
+            // one's, so it binds to none and settles only through its own hook: an answer, the hook closing, the deadline.
+            let matches = openToolUses.indices.filter { openToolUses[$0].name == e.toolName && openToolUses[$0].input == e.toolInput }
+            let id: String? = matches.count == 1 ? openToolUses.remove(at: matches[0]).id : nil
+            pendingApprovals[requestId] = id
         case "PostToolUse", "PostToolUseFailure":
-            let settled = pendingApprovals.filter { $0.value != nil && $0.value == e.toolUseId }.map(\.key)
-            for id in settled { pendingApprovals.removeValue(forKey: id) }
             // Esc: no Stop follows, but the turn may go on, so don't finalize
             base = e.isInterrupt == true ? .idle : .thinking
-            return settled.sorted()
+            return settleApprovals(of: e.toolUseId)
         case "Notification":
             if e.notificationType?.hasPrefix("quota_auto_resume_") == true { break } // the limit's wait ended: not an alert
             if e.notificationType == "permission_prompt", !pendingApprovals.isEmpty || pendingQuestion != nil || hold != nil { break }
@@ -157,6 +160,13 @@ public struct SessionTracker: Sendable {
         if let h = hold, quiet >= Timings.typingWatchdog, now.timeIntervalSince(h.since) >= Timings.typingWatchdog { hold = nil; holdEnded = true }
         if pendingApprovals.isEmpty, pendingQuestion == nil, base == .typing || base == .thinking, quiet >= Timings.typingWatchdog { base = .idle }
         return holdEnded
+    }
+
+    /// The approvals bound to this tool call: it ran, so its prompt (answered in kitty) is closed.
+    private mutating func settleApprovals(of toolUseId: String?) -> [String] {
+        let settled = pendingApprovals.filter { $0.value != nil && $0.value == toolUseId }.map(\.key)
+        for id in settled { pendingApprovals.removeValue(forKey: id) }
+        return settled.sorted()
     }
 
     private mutating func settleAll() -> [String] {

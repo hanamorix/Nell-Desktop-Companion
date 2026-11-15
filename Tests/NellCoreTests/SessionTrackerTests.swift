@@ -271,26 +271,29 @@ func started() -> SessionTracker {
     t.tick(now: at(591 + Timings.typingWatchdog)); #expect(!t.inputHeld)
 }
 
-@Test func identicalParallelCallsMatchInOrder() {
+@Test func identicalParallelCallsAreAmbiguous() {
     var t = started()
     t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
     t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u2"), requestId: nil, now: at(1))
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
     t.settleApproval("r1", answer: .allow, now: at(2)) // answered before the second request arrives
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r2", now: at(3))
-    #expect(t.pendingApprovals["r2"] == "u2")
-    #expect(t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(4)).isEmpty, "u1 isn't r2's")
-    #expect(t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u2"), requestId: nil, now: at(5)) == ["r2"])
+    #expect(t.pendingApprovals["r2"] == .some(nil), "u1 and u2 both still open: either could be r2's")
+    #expect(t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(4)).isEmpty)
+    #expect(t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u2"), requestId: nil, now: at(5)).isEmpty)
+    #expect(t.inputHeld, "only r2's own hook settles it")
 }
 
-@Test func identicalCallsBothPendingMatchInOrder() {
+@Test func identicalCallsBothPendingSettleOnlyThroughTheirHooks() {
     var t = started()
     t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(1))
     t.handle(ev("PreToolUse", tool: "Bash", input: bash, id: "u2"), requestId: nil, now: at(1))
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r1", now: at(1))
     t.handle(ev("PermissionRequest", tool: "Bash", input: bash), requestId: "r2", now: at(1))
-    #expect(t.pendingApprovals["r1"] == "u1"); #expect(t.pendingApprovals["r2"] == "u2")
-    #expect(t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(2)) == ["r1"])
+    #expect(t.pendingApprovals["r1"] == .some(nil)); #expect(t.pendingApprovals["r2"] == .some(nil))
+    #expect(t.handle(ev("PostToolUse", tool: "Bash", input: bash, id: "u1"), requestId: nil, now: at(2)).isEmpty)
+    t.settleApproval("r1", answer: .allow, now: at(3)); t.settleApproval("r2", answer: .none, now: at(3)) // r2's hook closed
+    #expect(t.inputHeld, "no decision: Claude's own prompt may be open, so it holds")
 }
 
 @Test func unfinishedToolUsesDontOutliveTheirTurnOrDenial() {
