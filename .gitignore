@@ -3,3 +3,4 @@ build/
 .superpowers/
 .impeccable/
 .DS_Store
+dist/
