@@ -25,10 +25,13 @@ public struct SavedState: Codable, Equatable, Sendable {
         theme = try c.decodeIfPresent(String.self, forKey: .theme)
     }
 
-    /// `projectDir` while it's still an existing folder: it may have been moved, deleted, or be on a drive not mounted yet.
+    /// `projectDir` while it's still a folder kitty can start in: it may have been moved, deleted, be on a drive not
+    /// mounted yet, or be closed to Nell (permissions, or a macOS privacy denial), and then `Process.run` can't chdir there.
     public var usableProjectDir: String? {
         var isDir: ObjCBool = false
-        guard let projectDir, FileManager.default.fileExists(atPath: projectDir, isDirectory: &isDir), isDir.boolValue else { return nil }
+        let fm = FileManager.default
+        guard let projectDir, fm.fileExists(atPath: projectDir, isDirectory: &isDir), isDir.boolValue,
+              fm.isExecutableFile(atPath: projectDir), fm.isReadableFile(atPath: projectDir) else { return nil } // searchable, listable
         return projectDir
     }
 

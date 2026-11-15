@@ -47,6 +47,10 @@ public final class HookServer: @unchecked Sendable {
             throw e == EWOULDBLOCK ? HookServerError.alreadyRunning : HookServerError.socket("flock: \(e)")
         }
         lock = l
+        var started = false
+        defer { // a failed start gives the lock back (and leaves the path alone: it may be a live Nell's socket)
+            if !started { if fd >= 0 { close(fd); fd = -1 }; close(l); lock = -1 }
+        }
         // a Nell from before the lock still answers on the path: leave its socket alone. Anything else is stale, left by a crash.
         let probe = socket(AF_UNIX, SOCK_STREAM, 0)
         guard probe >= 0 else { throw HookServerError.socket("socket") }
@@ -72,6 +76,7 @@ public final class HookServer: @unchecked Sendable {
         }
         src.resume()
         source = src
+        started = true
     }
 
     public func stop() {

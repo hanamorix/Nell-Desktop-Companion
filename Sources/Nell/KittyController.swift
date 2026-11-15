@@ -14,7 +14,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     p.arguments = Array(argv.dropFirst())
     let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
     let inp = Pipe(); p.standardInput = stdin == nil ? FileHandle.nullDevice : inp
-    do { try p.run() } catch { return (-1, Data()) }
+    do { try p.run() } catch { return (-1, Data()) } // -1: it never ran (e.g. no free fds), so it says nothing about kitty
     // a kitten that exits without reading (kitty gone) breaks the pipe; its exit status reports the failure
     if let stdin { try? inp.fileHandleForWriting.write(contentsOf: stdin); try? inp.fileHandleForWriting.close() }
     let data = out.fileHandleForReading.readDataToEndOfFile()
@@ -37,6 +37,8 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
 
     /// Set by the owner before installSupportFiles runs; decides kitty.conf's colours.
     var theme: Theme = Themes.plumNight
+    /// kitty couldn't start in this project folder, so Code started in the chat folder instead.
+    var onFellBackToChatFolder: ((String) -> Void)?
 
     init(paths: Paths) { self.paths = paths }
 
@@ -71,7 +73,18 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         let files = (try? FileManager.default.contentsOfDirectory(atPath: paths.support.path)) ?? []
         let sockets = files.filter { $0.hasPrefix("kitty-") && $0.hasSuffix(".sock") }.map { paths.support.appending(path: $0).path }
         // a live pid isn't enough: after a reboot the pid may belong to another process, so the socket must answer
-        let live = pickKittySocket(sockets, isLive: { path, pid in kill(pid, 0) == 0 && runTool(KittyCommands.ls(socket: "unix:" + path)).status == 0 })
+        var ls = (status: Int32(0), out: Data())
+        var live = pickKittySocket(sockets, isLive: { path, pid in
+            guard kill(pid, 0) == 0 else { return false }
+            ls = runTool(KittyCommands.ls(socket: "unix:" + path)); return ls.status == 0 || ls.status == -1 // -1 ends the search
+        })
+        // kitten never ran (no free fds): that kitty may be alive, so neither unlink its socket nor start a second one
+        if ls.status == -1 { throw KittenWontRun() }
+        // a kitty from a Nell before windows were tagged: reused, each of its Claudes would get a second one beside it
+        if let l = live, !Mode.allCases.contains(where: { windowExists(lsJSON: ls.out, mode: $0) }) {
+            if let pid = kittyPid(fromSocket: l), isKitty(pid) { kill(pid, SIGTERM) } // ours: Nell's folder, kitty's binary
+            live = nil
+        }
         for s in sockets where s != live { unlink(s) }
         if let live {
             socket = "unix:" + live
@@ -96,7 +109,14 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName())
         p.currentDirectoryURL = URL(fileURLWithPath: codeDir)
         p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-        try p.run()
+        do { try p.run() } catch where codeDir != paths.chatDir.path {
+            // the folder passed the check but can't be entered (a privacy denial, or it changed since): never quit over
+            // it. Only the cwd differs on the retry, so if that starts, the folder was the cause.
+            EventLog.write("kitty couldn't start in \(codeDir): \(error)")
+            let s = try startPanel(codeDir: paths.chatDir.path, state: &state, wait: wait) // its own --resume lookup
+            onFellBackToChatFolder?(codeDir)
+            return s
+        }
         lastRequest = request
         let path = paths.support.appending(path: "kitty-\(p.processIdentifier).sock").path // kitten panel execs into kitty
         let deadline = Date().addingTimeInterval(wait)
@@ -117,6 +137,8 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     func ensureTab(_ m: Mode, cwd: String, state: inout SavedState) -> TabCheck {
         guard var socket else { return .ready } // never started (the showcase): every kitty call is a no-op
         var ls = runTool(KittyCommands.ls(socket: socket))
+        // kitten never ran (no free fds): kitty may be fine and mid-turn, so don't end it; nothing can take text right now
+        if ls.status == -1 { return .unavailable }
         let restarted = ls.status != 0
         if restarted {
             // after a failed restart, try again at most every 30 s, so a kitty that won't start can't freeze every send
@@ -213,6 +235,10 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         if m == .code { state.codeSessionId = id } else { state.chatSessionId = id }
         return claudeArgs(mode: m, sessionId: id, resume: resume, settings: paths.hooksSettings(m).path)
     }
+}
+
+struct KittenWontRun: Error, CustomStringConvertible {
+    var description: String { "kitten couldn't be started to check the running kitty" }
 }
 
 struct KittyNotAnswering: Error, CustomStringConvertible {
