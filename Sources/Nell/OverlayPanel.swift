@@ -35,6 +35,12 @@ struct InteractiveRectsKey: PreferenceKey {
     static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) { value += nextValue() }
 }
 
+/// Chips that only show a tooltip: they take hover but a click must not take the keyboard.
+struct PassiveRectsKey: PreferenceKey {
+    static let defaultValue: [CGRect] = []
+    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) { value += nextValue() }
+}
+
 /// Nell's sprite: takes clicks only while ⌥ is held.
 struct GrabRectsKey: PreferenceKey {
     static let defaultValue: [CGRect] = []
@@ -51,6 +57,9 @@ extension View {
     func interactive() -> some View {
         background(GeometryReader { g in Color.clear.preference(key: InteractiveRectsKey.self, value: [g.frame(in: .global)]) })
     }
+    func passive() -> some View {
+        interactive().background(GeometryReader { g in Color.clear.preference(key: PassiveRectsKey.self, value: [g.frame(in: .global)]) })
+    }
     func grabbable() -> some View {
         background(GeometryReader { g in Color.clear.preference(key: GrabRectsKey.self, value: [g.frame(in: .global)]) })
     }
@@ -61,6 +70,7 @@ extension View {
     let panel: OverlayPanel
     var rects: [CGRect] = []
     var grabRects: [CGRect] = []
+    var passiveRects: [CGRect] = []
     /// Her drawn pixels at a point in the sprite box: those take clicks (the right-click menu) even without ⌥.
     var spriteOpaque: (CGPoint) -> Bool = { _ in false }
     var hoverRects: [UUID: CGRect] = [:]
@@ -87,7 +97,7 @@ extension View {
         panel.isSpriteOnly = { [weak self] w in
             guard let self, let content = panel.contentView else { return false }
             let p = CGPoint(x: w.x, y: content.bounds.height - w.y)
-            return !clickTakesKeyboard(p, rects: rects, grabRects: grabRects)
+            return !clickTakesKeyboard(p, rects: rects, grabRects: grabRects, passiveRects: passiveRects)
         }
     }
 

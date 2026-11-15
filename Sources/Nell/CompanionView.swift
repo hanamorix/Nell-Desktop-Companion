@@ -27,6 +27,7 @@ struct CompanionView: View {
             .font(Fonts.ui())
             .onPreferenceChange(InteractiveRectsKey.self) { r in MainActor.assumeIsolated { controller.rects = r } }
             .onPreferenceChange(GrabRectsKey.self) { r in MainActor.assumeIsolated { controller.grabRects = r } }
+            .onPreferenceChange(PassiveRectsKey.self) { r in MainActor.assumeIsolated { controller.passiveRects = r } }
             .onPreferenceChange(HoverRectsKey.self) { r in MainActor.assumeIsolated { controller.hoverRects = r } }
             .onReceive(NotificationCenter.default.publisher(for: .nellFocusBar)) { _ in barFocused = true }
         }
@@ -90,8 +91,8 @@ struct CompanionView: View {
                 .interactive().place(chips.chat)
             ModeChip(icon: "code", help: "Claude Code console", on: model.selected == .code, news: hasNews(.code)) { model.codeChip() }
                 .interactive().place(chips.code)
-            UsageChip(kind: .weekly, gauge: model.weeklyGauge).interactive().place(usage.weekly)
-            UsageChip(kind: .session, gauge: model.sessionGauge).interactive().place(usage.session)
+            UsageChip(kind: .weekly, gauge: model.weeklyGauge).passive().place(usage.weekly)
+            UsageChip(kind: .session, gauge: model.sessionGauge).passive().place(usage.session)
             MessageBar(model: model, focused: $barFocused, isFocused: barFocused) // grows upward over her when multi-line
                 .interactive()
                 .frame(width: bar.width, height: size.height, alignment: .bottom)

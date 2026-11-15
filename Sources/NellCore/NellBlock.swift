@@ -144,6 +144,8 @@ public struct DragLatch: Sendable {
 
 /// Whether a click at `p` may make Nell's panel key (take the keyboard). Not on her sprite alone: clicking her (for the
 /// right-click menu) must leave your typing where it was. Controls, the bar included, still may.
-public func clickTakesKeyboard(_ p: CGPoint, rects: [CGRect], grabRects: [CGRect]) -> Bool {
-    rects.contains { $0.contains(p) } || !grabRects.contains { $0.contains(p) }
+/// `passiveRects` are controls that only show a tooltip (the usage gauges): they take clicks but never the keyboard.
+public func clickTakesKeyboard(_ p: CGPoint, rects: [CGRect], grabRects: [CGRect], passiveRects: [CGRect] = []) -> Bool {
+    if passiveRects.contains(where: { $0.contains(p) }) { return false }
+    return rects.contains { $0.contains(p) } || !grabRects.contains { $0.contains(p) }
 }

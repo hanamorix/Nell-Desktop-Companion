@@ -180,15 +180,17 @@ struct UsageChip: View {
             Text(kind.label).font(Fonts.ui()).foregroundColor(PN.muted).frame(height: 10)
             ZStack(alignment: .leading) {
                 PN.plum900
+                PN.outline.frame(height: 2).frame(maxHeight: .infinity, alignment: .top)
                 if let f = gauge.fraction {
-                    fill.frame(width: (26 * f / PN.px).rounded() * PN.px, height: 4).padding(.top, 2).frame(maxHeight: .infinity, alignment: .bottom)
+                    // option A: an outline line on top of the well, the fill taking the 6 pt below it
+                    fill.frame(width: (20 * f / PN.px).rounded() * PN.px, height: 6).frame(maxHeight: .infinity, alignment: .bottom)
                 } else {
                     Text("\u{2013}").font(Fonts.ui()).foregroundColor(PN.muted).opacity(0.5).frame(maxWidth: .infinity)
                 }
             }
-            .frame(width: 26, height: 8)
+            .frame(width: 20, height: 8)
         }
-        .frame(width: 34, height: 26)
+        .frame(width: 28, height: 26)
         .pixelFrame(fill: PN.plum700, hi: PN.plum600, lo: PN.plum900, drop: .none)
         .help(gauge.tooltip).accessibilityLabel(gauge.tooltip)
     }

@@ -225,3 +225,15 @@ private func spriteX(_ l: Layout) -> CGFloat { l.nellFrame.minX + NellBlock.spri
         }
     }
 }
+
+@Test func clickingAUsageChipDoesNotTakeTheKeyboard() {
+    let chip = CGSize(width: 38, height: 30)
+    for mirrored in [false, true] {
+        let u = NellBlock.usageChips(chip, mirrored: mirrored)
+        for r in [u.weekly, u.session] {
+            #expect(!clickTakesKeyboard(CGPoint(x: r.midX, y: r.midY), rects: [r], grabRects: [], passiveRects: [r]))
+        }
+        let chat = NellBlock.chips(chip, mirrored: mirrored).chat
+        #expect(clickTakesKeyboard(CGPoint(x: chat.midX, y: chat.midY), rects: [chat], grabRects: [], passiveRects: [u.weekly]), "Chat still does")
+    }
+}
