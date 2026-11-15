@@ -39,3 +39,4 @@ Every document is named `YYYY-MM-DD-<topic>-<type>.md` and filed by what it is.
 | Notes | [2026-11-14-nell-v3-art-review-log.md](notes/2026-11-14-nell-v3-art-review-log.md) | Every round of the user's visual review of the interface and sprites, with their notes and acceptance |
 | Notes | [2026-11-14-design-system-review-findings.md](notes/2026-11-14-design-system-review-findings.md) | Review of `concept-nell-design-system/` (Plum Night): what's usable, what conflicts with v2, and fixes needed |
 | Notes | [2026-11-14-nell-v3-signal-spike-findings.md](notes/2026-11-14-nell-v3-signal-spike-findings.md) | v3 signal spike: test-result events, context usage in the transcript, `/clear` and `/compact` events, documented usage-limit signals |
+| Notes | [2026-11-15-nell-v3-performance-findings.md](notes/2026-11-15-nell-v3-performance-findings.md) | CPU and RAM stress test of the v3 build (idle, busy, burst), with the sprite-sheet decode fix |
