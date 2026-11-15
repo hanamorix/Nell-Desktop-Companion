@@ -12,7 +12,8 @@
 #   idle   CPU average <= 1 %, and <= 0.2 % after the 600 s long-quiet switch (measured from 615 s)
 #   busy   CPU average <= 10 %
 #   burst  CPU average <= 25 %, and no stalls (the showcase logs STALL when its main-thread timer fires > 1 s late)
-#   idle, busy   footprint peak <= 80 MB, and a second-half footprint slope under 1 MB/min (leak check)
+#   idle, busy   steady footprint (median of the phase's second half) <= 80 MB, and a second-half footprint slope
+#                under 1 MB/min (leak check). The footprint peak is reported but not barred.
 #   burst        memory is report-only: its once-a-second window resize (placement and console) is a torture case
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -24,7 +25,7 @@ mkdir -p "$OUT"
 bash scripts/showcase.sh list >/dev/null # bundles the showcase if it's stale
 if pgrep -f "$BIN" >/dev/null; then echo "a showcase is already running; quit it first (kill <its pid>)" >&2; exit 1; fi
 
-echo "phase,minutes,cpu_avg,cpu_peak,cpu_after_quiet,stalls,footprint_peak_mb,footprint_slope_mb_per_min,graphics_peak_mb,rss_start_mb,rss_peak_mb,rss_end_mb,pass" > "$OUT/summary.csv"
+echo "phase,minutes,cpu_avg,cpu_peak,cpu_after_quiet,stalls,footprint_steady_mb,footprint_peak_mb,footprint_slope_mb_per_min,graphics_peak_mb,rss_start_mb,rss_peak_mb,rss_end_mb,pass" > "$OUT/summary.csv"
 
 mb() { awk -v v="$1" -v u="$2" 'BEGIN { print (u == "KB") ? v / 1024 : (u == "GB") ? v * 1024 : (u == "B") ? 0 : v }'; }
 snapshot() { # snapshot <pid> <t> <txt> <csv>: one footprint sample
@@ -32,7 +33,7 @@ snapshot() { # snapshot <pid> <t> <txt> <csv>: one footprint sample
   local f g
   f=$(awk '/Footprint:/ { for (i = 1; i < NF; i++) if ($i == "Footprint:") { print $(i + 1), $(i + 2); exit } }' "$3")
   g=$(awk '/\(graphics\)/ && /Owned physical footprint/ { print $1, $2; exit }' "$3")
-  [ -n "$f" ] && echo "$2,$(mb $f),$( [ -n "$g" ] && mb $g || echo 0)" >> "$4"
+  [ -n "$f" ] && echo "$2,$(mb $f),$( [ -n "$g" ] && mb $g || echo 0)" >> "$4" || true # an unparsable sample is skipped
 }
 
 phase() { # phase <name> <scene, or "" for the full cycle> <minutes>
@@ -65,18 +66,23 @@ phase() { # phase <name> <scene, or "" for the full cycle> <minutes>
         sum += c[i]; if (c[i] > peak) peak = c[i]; if (r[i] > rpeak) rpeak = r[i]
         if (t[i] >= 615 && !q0) q0 = i # 600 s with no events, plus a little settling
       }
-      for (i = 1; i <= fn; i++) if (ft[i] >= half) { m++; x = ft[i] / 60; st += x; sr += fv[i]; str += x * fv[i]; stt += x * x }
+      for (i = 1; i <= fn; i++) if (ft[i] >= half) {
+        m++; x = ft[i] / 60; st += x; sr += fv[i]; str += x * fv[i]; stt += x * x
+        for (j = m; j > 1 && h[j - 1] > fv[i]; j--) h[j] = h[j - 1] # insertion sort for the median
+        h[j] = fv[i]
+      }
+      steady = (m == 0) ? 0 : (m % 2) ? h[(m + 1) / 2] : (h[m / 2] + h[m / 2 + 1]) / 2
       avg = (t[n] > t[1]) ? 100 * (k[n] - k[1]) / (t[n] - t[1]) : 0
       slope = (m > 1) ? (m * str - st * sr) / (m * stt - st * st) : 0
       qn = (q0 && t[n] > t[q0]) ? 1 : 0; qv = qn ? 100 * (k[n] - k[q0]) / (t[n] - t[q0]) : 0
       quiet = qn ? sprintf("%.2f", qv) : "n/a"
       bar = (name == "idle") ? 1 : (name == "busy") ? 10 : 25
       ok = avg <= bar
-      if (name != "burst" && (fn == 0 || fpeak > 80 || slope >= 1)) ok = 0 # burst memory is report-only
+      if (name != "burst" && (m == 0 || steady > 80 || slope >= 1)) ok = 0 # burst memory is report-only
       if (name == "idle" && (!qn || qv > 0.2)) ok = 0
       if (name == "burst" && stalls > 0) ok = 0
-      printf "%s,%s,%.2f,%.1f,%s,%s,%.1f,%.3f,%.1f,%.1f,%.1f,%.1f,%s\n", name, minutes, avg, peak, quiet,
-             (name == "burst") ? stalls : "n/a", fpeak, slope, gpeak, r[1], rpeak, r[n], ok ? "PASS" : "FAIL"
+      printf "%s,%s,%.2f,%.1f,%s,%s,%.1f,%.1f,%.3f,%.1f,%.1f,%.1f,%.1f,%s\n", name, minutes, avg, peak, quiet,
+             (name == "burst") ? stalls : "n/a", steady, fpeak, slope, gpeak, r[1], rpeak, r[n], ok ? "PASS" : "FAIL"
     }' "$fcsv" "$csv" >> "$OUT/summary.csv"
   tail -1 "$OUT/summary.csv"
 }

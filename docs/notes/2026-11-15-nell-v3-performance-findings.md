@@ -29,9 +29,11 @@ The user asked for a stress test "to make sure that Nell has little impact on CP
 
   | Phase | CPU | Memory |
   |---|---|---|
-  | Idle | average ≤ 1 %, and ≤ 0.2 % after the 600 s quiet switch | footprint peak ≤ 80 MB, second-half slope < 1 MB/min |
-  | Busy | average ≤ 10 % | footprint peak ≤ 80 MB, second-half slope < 1 MB/min |
+  | Idle | average ≤ 1 %, and ≤ 0.2 % after the 600 s quiet switch | steady footprint ≤ 80 MB, second-half slope < 1 MB/min |
+  | Busy | average ≤ 10 % | steady footprint ≤ 80 MB, second-half slope < 1 MB/min |
   | Burst | average ≤ 25 %, no stalls | report-only, because its once-a-second window resize (placement and console) is a torture case |
+
+  "Steady footprint" is the median of the footprint samples in the second half of the phase. The peak is reported but not barred (the controller's later ruling).
 - **Stalls.** The showcase logs `STALL` whenever its main-thread step timer fires more than 1 s late. The burst phase counts those lines.
 - **Profiling.** I profiled the burst with `sample <pid> 5`, and checked candidate causes with 60 s A/B burst runs: CPU time over 60 s after a 10 s warm-up, with one local change each.
 
@@ -47,14 +49,15 @@ The user asked for a stress test "to make sure that Nell has little impact on CP
 The verdicts combine two runs:
 - **CPU** comes from the full run `build/stress/20261115-125031` (defaults 12 + 5 + 2 min).
 - **Memory** comes from a short re-run `build/stress/20261115-132307` (`bash scripts/stress.sh 3 3 1`), made after the bar was ruled to be footprint. That run is labelled "memory re-run" below. Its idle phase is too short to reach the quiet switch, so its own idle CPU verdict doesn't count.
+- The steady-footprint verdicts were re-derived from that run's 10 s footprint samples (`<phase>-footprint.csv`) with the current script's summary step. The full run has no footprint samples.
 
 CPU is in % of one core.
 
-| Phase | CPU avg | CPU after quiet | Stalls | Footprint peak | Footprint slope, 2nd half | Graphics peak | Result |
-|---|---|---|---|---|---|---|---|
-| Idle | **0.72 %** ✓ | **0.17 %** ✓ | n/a | **22 MB** ✓ | 0.00 MB/min ✓ | 0 | **PASS** |
-| Busy | **2.13 %** ✓ | n/a | n/a | **119 MB** ✗ | −8.8 MB/min ✓ | 85 MB | **FAIL** (memory) |
-| Burst | **29.75 %** ✗ | n/a | 0 ✓ | 134 MB (report-only) | −1.8 MB/min | 101 MB | **FAIL** (CPU) |
+| Phase | CPU avg | CPU after quiet | Stalls | Steady footprint | Footprint peak (not barred) | Footprint slope, 2nd half | Graphics peak | Result |
+|---|---|---|---|---|---|---|---|---|
+| Idle | **0.72 %** ✓ | **0.17 %** ✓ | n/a | **21 MB** ✓ | 22 MB | 0.00 MB/min ✓ | 0 | **PASS** |
+| Busy | **2.13 %** ✓ | n/a | n/a | **30 MB** ✓ | 119 MB | −8.8 MB/min ✓ | 85 MB | **PASS** |
+| Burst | **29.75 %** ✗ | n/a | 0 ✓ | 133 MB (report-only) | 134 MB | −1.8 MB/min | 101 MB | **FAIL** (CPU) |
 
 RSS, for information only:
 
@@ -68,13 +71,13 @@ The memory re-run's CPU matched the full run: idle 0.85 % over its first 3 min, 
 Against the bars:
 - **Idle passes everything.**
   - CPU averages 0.72 % and drops to 0.17 % once the 600 s quiet switch stops her breathing.
-  - Her footprint holds at 22 MB.
+  - Her steady footprint is 21 MB (peak 22 MB).
 - **Busy CPU passes** (2.13 % against ≤ 10 %).
-- **Busy memory fails the 80 MB footprint bar.**
+- **Busy memory passes: the steady footprint is 30 MB** (bar ≤ 80 MB). The peak is reported but not barred.
   - Between steps the footprint is 26–31 MB, but it spikes to 116–119 MB for 1–2 s at a time, with 84–100 MB of that being graphics memory.
   - A 0.5 s graphics trace of the full cycle tied the spikes to steps where bubbles appear or change (faces, body, emoji and bubbles scenes).
   - Removing the bubbles' `.compositingGroup()` didn't change them: 16 vs 13 of 77 samples over 10 MB, peak 100 MB both ways. The cause is still open.
-  - The second-half slope is negative, so it is not a leak.
+  - The second-half slope is negative, so it is not a leak. Its size (−8.8 MB/min) comes from a spike landing early in the second half, not from a real fall.
 - **Burst CPU fails** (29.75 % against ≤ 25 %; see the burst section). It never stalled.
 - **Burst memory is report-only.** It held at 133–134 MB, with 101 MB of graphics, for the whole phase, with a negative slope.
 
@@ -156,9 +159,8 @@ The memory bar is footprint, by the controller's ruling. RSS stays in the CSV as
   - About 2 % during the full showcase cycle.
   - A 22 MB footprint while idle, 26–31 MB between busy steps, and no leak in any phase.
 - **The decode fix is kept.** It also removes per-frame PNG decoding at normal load.
-- **Two bars fail and are left as findings:**
-  - **Burst CPU, 29.75 % against 25 %.** The rest is SwiftUI re-rendering once per event at 20 events a second. Coalescing or throttling renders is a design change.
-  - **Busy footprint, a 119 MB peak against 80 MB.** These are 1–2 s graphics spikes (84–100 MB) when bubbles appear or change; between them she uses 26–31 MB. The cause is open (`.compositingGroup()` is ruled out).
+- **One bar fails and is left as a finding: burst CPU, 29.75 % against 25 %.** The rest is SwiftUI re-rendering once per event at 20 events a second. Coalescing or throttling renders is a design change.
+- **Busy memory passes on its steady footprint (30 MB), but it has transient spikes, reported rather than barred.** These are 1–2 s graphics spikes (peak 119 MB, 84–100 MB of graphics) when bubbles appear or change. The cause is open; `.compositingGroup()` is ruled out.
 - **Not measured:**
   - kitty and the `claude` processes, which the showcase never starts
   - a real Claude Code session's event rate
