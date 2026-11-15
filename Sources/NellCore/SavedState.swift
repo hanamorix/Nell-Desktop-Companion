@@ -9,6 +9,8 @@ public struct SavedState: Codable, Equatable, Sendable {
     public var positions: [String: CGPoint] = [:]
     /// kitty's measured panel offsets (nil until the console has been shown once).
     public var calibration: PanelCalibration?
+    /// Colour theme name; nil or unknown means Plum Night (see `Themes.named`).
+    public var theme: String?
 
     public init() {}
 

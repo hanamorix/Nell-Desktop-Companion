@@ -24,3 +24,24 @@ import Testing
     try s.save(url)
     #expect(SavedState.load(url).calibration == s.calibration)
 }
+
+@Test func savedStateKeepsTheme() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "nell-theme-\(UUID().uuidString).json")
+    var s = SavedState()
+    s.theme = "Ember"
+    try s.save(url)
+    #expect(SavedState.load(url).theme == "Ember")
+}
+
+@Test func savedStateUnknownThemeFallsBack() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "nell-theme-\(UUID().uuidString).json")
+    try Data(#"{"positions":{},"theme":"Neon"}"#.utf8).write(to: url)
+    #expect(Themes.named(SavedState.load(url).theme) == Themes.plumNight)
+}
+
+@Test func savedStateWithoutThemeStillLoads() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "nell-theme-\(UUID().uuidString).json")
+    try Data(#"{"projectDir":"/x","positions":{}}"#.utf8).write(to: url)
+    let s = SavedState.load(url)
+    #expect(s.projectDir == "/x" && s.theme == nil)
+}
