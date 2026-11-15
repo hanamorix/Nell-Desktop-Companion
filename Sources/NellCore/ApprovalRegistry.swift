@@ -4,7 +4,6 @@ import Foundation
 public final class ApprovalRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private var waiters: [String: (sem: DispatchSemaphore, answer: ApprovalAnswer?)] = [:]
-    private var done: [String: ApprovalAnswer] = [:]
 
     public init() {}
 
@@ -28,21 +27,11 @@ public final class ApprovalRegistry: @unchecked Sendable {
     /// Blocks until answered or `timeout`; the request is then gone. Timeout counts as `.none`.
     public func wait(id: String, timeout: TimeInterval) -> ApprovalAnswer {
         lock.lock()
-        if let d = done[id] { lock.unlock(); return d }
         guard let w = waiters[id] else { lock.unlock(); return .none }
         lock.unlock()
         _ = w.sem.wait(timeout: .now() + timeout)
         lock.lock(); defer { lock.unlock() }
-        let a = waiters[id]?.answer ?? .none
-        waiters[id]?.answer = a
-        waiters.removeValue(forKey: id)
-        done[id] = a
-        return a
-    }
-
-    public var pendingIds: [String] {
-        lock.lock(); defer { lock.unlock() }
-        return waiters.filter { $0.value.answer == nil }.keys.sorted()
+        return waiters.removeValue(forKey: id)?.answer ?? .none
     }
 }
 
