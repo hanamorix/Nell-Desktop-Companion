@@ -238,13 +238,14 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         refresh()
     }
 
-    /// Showcase only: start a scene from a fresh Nell. No real path clears every session, bubble and the console at once.
+    /// Switches the interface and any running console to this theme, and saves the choice.
     func setTheme(_ name: String) {
         let t = Themes.named(name)
         PN.theme = t; theme = t; state.theme = t.id; onStateChanged?()
         kitty.applyTheme(t)
     }
 
+    /// Showcase only: start a scene from a fresh Nell. No real path clears every session, bubble and the console at once.
     func resetForShowcase() {
         setTheme(Themes.plumNight.id)
         trackers = [.code: SessionTracker(), .chat: SessionTracker()]

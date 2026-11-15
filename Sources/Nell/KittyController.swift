@@ -53,8 +53,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
             try? fm.removeItem(at: dest)
             try fm.copyItem(at: resourceURL(name), to: dest)
         }
-        let conf = try String(contentsOf: paths.kittyConf, encoding: .utf8) + "\n" + kittyColorsConf(theme)
-        try conf.write(to: paths.kittyConf, atomically: true, encoding: .utf8)
+        try kittyColorsConf(theme).write(to: paths.kittyColors, atomically: true, encoding: .utf8) // kitty.conf includes it
         for s in [paths.hookScript, paths.statusScript] { try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: s.path) }
         for m in Mode.allCases {
             try hooksSettingsJSON(script: paths.hookScript.path, statusScript: paths.statusScript.path, socket: paths.nellSocket.path, mode: m).write(to: paths.hooksSettings(m))
@@ -74,6 +73,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         if let live {
             socket = "unix:" + live
             hideConsole() // the console phase always starts hidden
+            applyTheme(theme)
         } else {
             let request = PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before it's ever shown
             let args = sessionArgs(.code, cwd: projectDir, state: &state)

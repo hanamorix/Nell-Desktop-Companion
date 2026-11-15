@@ -12,10 +12,11 @@ extension PlumNight {
 
     /// The theme the interface is drawn in; switching it and rebuilding the views recolours everything.
     @MainActor static var theme = Themes.plumNight
-    @MainActor static func color(_ name: String) -> Color {
-        let v = UInt32(theme.palette[name]!.dropFirst(), radix: 16)!
+    static func hex(_ hex: String) -> Color {
+        let v = UInt32(hex.dropFirst(), radix: 16)!
         return Color(.sRGB, red: Double(v >> 16 & 0xff) / 255, green: Double(v >> 8 & 0xff) / 255, blue: Double(v & 0xff) / 255)
     }
+    @MainActor static func color(_ name: String) -> Color { hex(theme.palette[name]!) }
     @MainActor static var outline: Color { color("outline") }
     @MainActor static var plum900: Color { color("plum-900") }
     @MainActor static var plum800: Color { color("plum-800") }
@@ -34,13 +35,11 @@ extension PlumNight {
     @MainActor static var wine: Color { color("wine") }
     @MainActor static var leaf: Color { color("leaf") }
     @MainActor static var leaf700: Color { color("leaf-700") }
-    /// The Allow button's top highlight: the theme's leaf halfway to white (Plum Night keeps its drawn #c6efb7).
-    @MainActor static var leafHi: Color {
-        if theme == Themes.plumNight { return Color(.sRGB, red: 0xc6 / 255, green: 0xef / 255, blue: 0xb7 / 255) }
-        let v = UInt32(theme.palette["leaf"]!.dropFirst(), radix: 16)!
-        let mix = { (c: UInt32) in (Double(c & 0xff) + 255) / 2 / 255 }
-        return Color(.sRGB, red: mix(v >> 16), green: mix(v >> 8), blue: mix(v))
-    }
+    /// The Allow and Deny buttons' top highlights: the theme's leaf / berry halfway to white (see `Theme.leafHi`).
+    @MainActor static var leafHi: Color { hex(theme.leafHi) }
+    @MainActor static var berryHi: Color { hex(theme.berryHi) }
+    /// The FAILED label's ink on a wine bubble.
+    @MainActor static var failedInk: Color { hex(theme.failedInk) }
     @MainActor static var gold: Color { color("gold") }
     @MainActor static var gold700: Color { color("gold-700") }
 }
@@ -164,7 +163,7 @@ struct PixelButton: ButtonStyle {
         guard enabled else { return (PN.plum800, PN.plum800, PN.plum800, PN.plum500) }
         switch kind {
         case .allow: return (PN.leaf, PN.leafHi, PN.leaf700, PN.outline)
-        case .deny: return (PN.berry, PN.pink600, PN.wine, PN.snow)
+        case .deny: return (PN.berry, PN.berryHi, PN.wine, PN.snow)
         case .quiet: return (PN.plum800, PN.plum600, PN.plum900, PN.cream)
         case .plain: return (PN.plum600, PN.pink400, PN.plum800, PN.cream)
         }

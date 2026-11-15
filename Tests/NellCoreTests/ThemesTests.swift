@@ -69,7 +69,7 @@ private func hue(_ hex: String) -> Double {
 
 @Test func everyThemeIsAsReadableAsPlumNight() {
     let pairs = [("cream", "plum-800"), ("muted", "plum-800"), ("muted", "plum-900"),
-                 ("outline", "leaf"), ("outline", "gold"), ("snow", "berry")]
+                 ("outline", "leaf"), ("outline", "gold"), ("snow", "berry"), ("plum-500", "plum-800")]
     let plum = Themes.plumNight.palette
     for t in Themes.all {
         for (a, b) in pairs {
@@ -82,6 +82,7 @@ private func hue(_ hex: String) -> Double {
 @Test func consoleColoursAreReadableOnTheWell() {
     for t in Themes.all {
         for i in [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15] {
+            // Plum Night's 16 are kept exactly as the user's kitty.conf had them, so it is exempt from the 4.5 bar.
             #expect(contrastRatio(t.ansi[i], t.palette["plum-900"]!) >= 4.5 || t.id == "Plum Night", "\(t.id) color\(i)")
         }
     }
@@ -104,4 +105,21 @@ private func hue(_ hex: String) -> Double {
 @Test func themesNamedFallsBack() {
     for n in [nil, "Neon", ""] as [String?] { #expect(Themes.named(n) == Themes.plumNight) }
     #expect(Themes.named("Tide").id == "Tide")
+}
+
+@Test func berryHighlightFollowsTheThemesBerry() {
+    #expect(Themes.plumNight.berryHi == "#cf7d8b")
+    #expect(Themes.plumNight.failedInk == PlumNight.palette["blush"])
+    #expect(Themes.tide.berryHi == "#d5a4ac") // berry #ac4a5a halfway to white
+    for t in Themes.all where t.id != "Plum Night" {
+        let h = hue(t.berryHi)
+        #expect(h >= 340 || h <= 20, "\(t.id) berryHi hue \(h)")
+        #expect(t.failedInk == t.berryHi)
+    }
+}
+
+@Test func failedLabelIsReadableOnWine() {
+    for t in Themes.all {
+        #expect(contrastRatio(t.failedInk, t.palette["wine"]!) >= 4.5, "\(t.id) FAILED/wine")
+    }
 }

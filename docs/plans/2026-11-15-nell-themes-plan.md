@@ -5,7 +5,7 @@
 **Goal:** Add five dark colour themes (Plum Night, Moss, Tide, Ember and Slate). The user picks one from a Settings submenu in Nell's right-click menu. A theme recolours her interface and her kitty console instantly, and the choice is saved.
 
 **Architecture:**
-- Themes are plain data in NellCore. Each one has the same 21 Plum Night token keys plus 16 ANSI console colours.
+- Themes are plain data in NellCore. Each one has the same 22 Plum Night token keys plus 16 ANSI console colours.
 - `PN.*` in the app reads the current theme instead of a fixed palette.
 - `NellModel` publishes the theme. The root view rebuilds when it changes.
 - On a switch, `KittyController` recolours running kitty windows through remote control. On launch, it writes `kitty.conf` with the theme's colours.
@@ -17,7 +17,7 @@
 ## Global Constraints
 
 - **Themes:** exactly five, in this menu order: **Plum Night** (default), **Moss**, **Tide**, **Ember**, **Slate**. All are dark. The hex values are in the spec's table, and Plum Night equals `concept-nell-design-system/tokens.json`.
-- **Palette keys:** every theme defines exactly the 21 keys of `PlumNight.palette`, as valid `#rrggbb` values.
+- **Palette keys:** every theme defines exactly the 22 keys of `PlumNight.palette`, as valid `#rrggbb` values.
 - **Meaning colours:** in every theme, `leaf` reads green (allow, low), `gold` amber or yellow (pending, mid) and `berry` red (deny, high).
 - **Readability:** for the pairs `cream`/`plum-800`, `muted`/`plum-800`, `muted`/`plum-900`, `outline`/`leaf`, `outline`/`gold` and `snow`/`berry`, every theme's WCAG contrast ratio is at least `min(4.5, Plum Night's ratio for that pair)`.
 - **Console colours:**
@@ -52,7 +52,7 @@
 
 **Interfaces:**
 - Produces:
-  - `public struct Theme: Sendable, Equatable, Identifiable`, with `id: String` (the display name), `palette: [String: String]` (the 21 keys) and `ansi: [String]` (16 `#rrggbb`);
+  - `public struct Theme: Sendable, Equatable, Identifiable`, with `id: String` (the display name), `palette: [String: String]` (the 22 keys) and `ansi: [String]` (16 `#rrggbb`);
   - `public enum Themes`, with `static let all: [Theme]` (in menu order), `static let plumNight: Theme`, and `static func named(_ name: String?) -> Theme` (falls back to `plumNight`);
   - `public func contrastRatio(_ a: String, _ b: String) -> Double` (WCAG 2, hex in);
   - `SavedState.theme: String?`.

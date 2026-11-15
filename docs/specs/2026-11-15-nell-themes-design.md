@@ -30,13 +30,13 @@ The user wants to change Nell's look from her right-click menu by picking from a
 
 | Approach | Trade-off | Verdict |
 |---|---|---|
-| **Swap the palette:** each theme supplies the same 21 Plum Night token names, and `PN.*` reads the current theme | It's small, and every existing view keeps working. It can't do light themes. | **Chosen** |
+| **Swap the palette:** each theme supplies the same 22 Plum Night token names, and `PN.*` reads the current theme | It's small, and every existing view keeps working. It can't do light themes. | **Chosen** |
 | Split tokens into roles (`panelFill`, `bodyText`, `userPaper` and so on), then theme those roles | Light themes become possible, but it means rewriting every view's colour use. | Deferred until a light theme is wanted |
 | Recolour the sprite per theme | Nell would match the theme, but each theme needs art work and review. | Rejected (non-goal) |
 
 ## The themes
 
-Each theme supplies all 21 keys of `PlumNight.palette`. Plum Night stays exactly as it is (`tokens.json`). The roles, as the views use them:
+Each theme supplies all 22 keys of `PlumNight.palette`. Plum Night stays exactly as it is (`tokens.json`). The roles, as the views use them:
 - `outline`: frame lines.
 - `plum-900`: wells and the deepest background.
 - `plum-800`: panels and bubbles.
@@ -61,7 +61,7 @@ Each theme supplies all 21 keys of `PlumNight.palette`. Plum Night stays exactly
 | plum-800 | #1a261e | #172133 | #261c17 | #1d2127 |
 | plum-700 | #2c3f31 | #263650 | #3d2d25 | #2e343d |
 | plum-600 | #384a3c | #30415c | #4a382e | #39404a |
-| plum-500 | #56635a | #4f5d73 | #6a5a50 | #5a616b |
+| plum-500 | #57645b | #526076 | #6a5a50 | #5a616b |
 | hair-700 | #2e2a1f | #2a2a3a | #3a2a20 | #2b2b30 |
 | hair-500 | #4d4635 | #474a60 | #5e4636 | #4a4a52 |
 | cream | #e4ead0 | #d6e4f0 | #f2dcc4 | #dfe3e8 |
@@ -78,6 +78,8 @@ Each theme supplies all 21 keys of `PlumNight.palette`. Plum Night stays exactly
 | leaf-700 | #5a8a3f | #3f8a5a | #5a8a38 | #4f8a46 |
 | gold | #e6c15c | #e8c060 | #f0c25a | #e9b45f |
 | gold-700 | #a3812c | #a5822c | #aa8228 | #a8762f |
+
+*Final review:* `plum-500` (disabled ink) on `plum-800` missed Plum Night's 2.49:1, so it was lightened by one step: Moss #56635a to #57645b (2.48 to 2.52), Tide #4f5d73 to #526076 (2.42 to 2.53). The readability check now includes this pair.
 
 These hex values are Claude's picks. The builder may nudge a value to pass the readability test below. Any change gets recorded in the build ledger and shown at the visual sign-off.
 
@@ -106,8 +108,8 @@ It then steps through every theme. A coverage test checks that the scene visits 
 
 ## Checks
 
-- **Complete palettes:** every theme defines exactly the 21 keys, and each value is a valid hex colour.
-- **Readability:** for the pairs `cream`/`plum-800`, `muted`/`plum-800`, `muted`/`plum-900`, `outline`/`leaf`, `outline`/`gold` and `snow`/`berry`, every theme's WCAG contrast ratio is at least `min(4.5, Plum Night's ratio for that pair)`.
+- **Complete palettes:** every theme defines exactly the 22 keys, and each value is a valid hex colour.
+- **Readability:** for the pairs `plum-500`/`plum-800`, `cream`/`plum-800`, `muted`/`plum-800`, `muted`/`plum-900`, `outline`/`leaf`, `outline`/`gold` and `snow`/`berry`, every theme's WCAG contrast ratio is at least `min(4.5, Plum Night's ratio for that pair)`.
 - **Plum Night unchanged:** Plum Night's palette still equals `tokens.json`, and its console colours equal today's `kitty.conf`.
 
 ## Left to the builder

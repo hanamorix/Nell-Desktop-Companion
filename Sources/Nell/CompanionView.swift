@@ -278,7 +278,7 @@ struct BubbleView: View {
         case .approval, .consoleNeeded: bubble.settled ? nil : ("alert", "NEEDS YOU", PN.gold)
         case .question: bubble.settled ? nil : ("more", "QUESTION", PN.gold)
         case .alert: ("alert", "HEADS UP", PN.gold)
-        case .error: ("deny", "FAILED", PN.blush)
+        case .error: ("deny", "FAILED", PN.failedInk)
         default: nil
         }
     }

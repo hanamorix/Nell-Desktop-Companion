@@ -192,7 +192,10 @@ public enum Showcase {
                     + permission(.chat, "r1", "u1", "rm -rf build")
                     + [.usage(session: 85, weekly: 60, resetsIn: 3600), .openConsole],
                  shows: [.bubble(.user), .bubble(.reply), .bubble(.approval), .gauge(.session, .high), .gauge(.weekly, .mid), .console(.open)]),
-        ] + Themes.all.map { Step($0.id, [.theme($0.id)], shows: [.theme($0.id)]) }),
+        ] + Themes.all.flatMap { [
+            Step($0.id, [.theme($0.id), .openConsole], shows: [.theme($0.id), .console(.open)]),
+            Step("\($0.id) minimised", [.minimiseConsole], shows: [.console(.minimised)]),
+        ] }),
         Scene(name: "placement", steps: [
             ("bottom-left quadrant", 0.25, 0.25), ("bottom-right quadrant", 0.75, 0.25),
             ("top-left quadrant", 0.25, 0.75), ("top-right quadrant", 0.75, 0.75),

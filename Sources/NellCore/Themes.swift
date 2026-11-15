@@ -1,11 +1,29 @@
 import Foundation
 
-/// A dark colour theme: the 21 Plum Night token keys plus the 16 console (ANSI) colours.
+/// A dark colour theme: the 22 Plum Night token keys plus the 16 console (ANSI) colours.
 public struct Theme: Sendable, Equatable, Identifiable {
     /// The display name.
     public let id: String
     public let palette: [String: String]
     public let ansi: [String]
+
+    /// The Allow button's top highlight: leaf halfway to white (Plum Night keeps its drawn #c6efb7).
+    public var leafHi: String { id == "Plum Night" ? "#c6efb7" : halfwayToWhite(palette["leaf"]!) }
+    /// The Deny button's top highlight: berry halfway to white (Plum Night keeps its pink-600).
+    public var berryHi: String { id == "Plum Night" ? palette["pink-600"]! : halfwayToWhite(palette["berry"]!) }
+    /// The FAILED label on a wine bubble: Plum Night's blush, elsewhere a berry-family tint so it stays red-family.
+    public var failedInk: String { id == "Plum Night" ? palette["blush"]! : berryHi }
+}
+
+/// A `#rrggbb` colour mixed halfway toward white.
+public func halfwayToWhite(_ hex: String) -> String {
+    "#" + (0..<3).map { i in
+        String((Int(hex.dropFirst(1 + 2 * i).prefix(2), radix: 16)! + 255) / 2, radix: 16).leftPad(2)
+    }.joined()
+}
+
+private extension String {
+    func leftPad(_ n: Int) -> String { String(repeating: "0", count: max(0, n - count)) + self }
 }
 
 public enum Themes {
@@ -15,18 +33,19 @@ public enum Themes {
         Theme(id: id, palette: Dictionary(uniqueKeysWithValues: zip(keys, values)), ansi: ansi)
     }
 
+    // Plum Night's palette has no cyan, so blue and cyan (4/6, 12/14) share user-blue-hi; dim text (color8) is muted, not plum-500.
     public static let plumNight = Theme(id: "Plum Night", palette: PlumNight.palette, ansi: [
         "#261a22", "#cf7d8b", "#4f8a46", "#a8762f", "#6f8fd0", "#f4b6ac", "#6f8fd0", "#f5d4c9", "#c4a9ab", "#ec9394", "#8ccf7a", "#e9b45f", "#6f8fd0", "#f4b6ac", "#6f8fd0", "#fff4ec",
     ])
 
     static let moss = make("Moss", [
-        "#0c120e", "#121a15", "#1a261e", "#2c3f31", "#384a3c", "#56635a", "#2e2a1f", "#4d4635", "#e4ead0", "#f6f9ea", "#a9b59f", "#d9c79a", "#c9a85b", "#a8873f", "#b0574a", "#6a2f28", "#3d6470", "#6fa3b0", "#9fd37a", "#5a8a3f", "#e6c15c", "#a3812c",
+        "#0c120e", "#121a15", "#1a261e", "#2c3f31", "#384a3c", "#57645b", "#2e2a1f", "#4d4635", "#e4ead0", "#f6f9ea", "#a9b59f", "#d9c79a", "#c9a85b", "#a8873f", "#b0574a", "#6a2f28", "#3d6470", "#6fa3b0", "#9fd37a", "#5a8a3f", "#e6c15c", "#a3812c",
     ], [
         "#1a261e", "#d9806f", "#7fb85a", "#c9a03f", "#6f9fd0", "#c48fb8", "#5fb8a8", "#e4ead0", "#a9b59f", "#ee9a8a", "#9fd37a", "#e6c15c", "#8fbbe6", "#deaad0", "#86d4c4", "#f6f9ea",
     ])
 
     static let tide = make("Tide", [
-        "#0a0f17", "#0f1622", "#172133", "#263650", "#30415c", "#4f5d73", "#2a2a3a", "#474a60", "#d6e4f0", "#f2f8fd", "#9fb1c4", "#a9d8d6", "#5cc8c0", "#3fa39c", "#ac4a5a", "#6e2a36", "#5a4a9e", "#9283d6", "#7fd49a", "#3f8a5a", "#e8c060", "#a5822c",
+        "#0a0f17", "#0f1622", "#172133", "#263650", "#30415c", "#526076", "#2a2a3a", "#474a60", "#d6e4f0", "#f2f8fd", "#9fb1c4", "#a9d8d6", "#5cc8c0", "#3fa39c", "#ac4a5a", "#6e2a36", "#5a4a9e", "#9283d6", "#7fd49a", "#3f8a5a", "#e8c060", "#a5822c",
     ], [
         "#172133", "#e0707f", "#6cc58a", "#d4aa4a", "#6fa0e0", "#b58ae0", "#4fc4c0", "#d6e4f0", "#9fb1c4", "#f2909c", "#7fd49a", "#e8c060", "#90bdf5", "#cfa8f2", "#7fdcd8", "#f2f8fd",
     ])
@@ -64,6 +83,7 @@ public func contrastRatio(_ a: String, _ b: String) -> Double {
 }
 
 /// The kitty colour lines for a theme: ground and text from the palette, the 16 ANSI colours from the theme.
+/// selection_foreground is set because kitty's default black selection text is unreadable on plum-700.
 public func kittyColorsConf(_ t: Theme) -> String {
     let p = t.palette
     let base = ["background": p["plum-900"]!, "foreground": p["cream"]!, "cursor": p["pink-400"]!,
