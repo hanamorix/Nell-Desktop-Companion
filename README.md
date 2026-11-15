@@ -2,7 +2,7 @@
 
 Nell is a small animated character who sits on your Mac desktop and stands in for the Claude App. You chat with Claude through her, or drive Claude Code. She shows what Claude is doing with animations and speech bubbles that fade away, and you can approve or deny Claude's actions from her bubbles.
 
-- **💬 Chat:** a plain conversation with Claude, with no tools.
+- **💬 Chat:** full Claude Code in Nell's chat folder, with your own settings, skills, hooks and MCP servers. Its approvals come to Nell's bubbles too.
 - **⌘ Code:** Claude Code in your project. The full session lives in a kitty window that Nell owns.
 
 ## Requirements

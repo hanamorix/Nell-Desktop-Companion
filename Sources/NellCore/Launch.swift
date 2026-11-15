@@ -20,11 +20,23 @@ public let hookEvents = ["SessionStart", "UserPromptSubmit", "PreToolUse", "Post
                          "PermissionRequest", "Notification", "Stop", "StopFailure", "SubagentStop", "SessionEnd",
                          "PreCompact", "PostCompact"]
 
-public let chatSystemPrompt = "You are in a plain chat inside Nell, a desktop companion. You have no tools; never write tool-call markup."
-
 func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
-public func hooksSettingsJSON(script: String, statusScript: String, socket: String, mode: Mode) -> Data {
+/// Your own status line from ~/.claude/settings.json. Nell's `--settings` replaces it, so her status script runs it for you.
+public struct UserStatusLine: Equatable, Sendable {
+    public let command: String
+    public let padding: Int?
+    public init(command: String, padding: Int?) { self.command = command; self.padding = padding }
+}
+
+public func userStatusLine(fromSettings data: Data) -> UserStatusLine? {
+    guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let s = obj["statusLine"] as? [String: Any],
+          s["type"] as? String == "command", let c = s["command"] as? String,
+          !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+    return UserStatusLine(command: c, padding: s["padding"] as? Int)
+}
+
+public func hooksSettingsJSON(script: String, statusScript: String, socket: String, mode: Mode, userStatusLine: UserStatusLine? = nil) -> Data {
     var hooks: [String: Any] = [:]
     for e in hookEvents {
         let timeout = e == "PermissionRequest" ? Timings.hookTimeout : 5
@@ -32,17 +44,16 @@ public func hooksSettingsJSON(script: String, statusScript: String, socket: Stri
         let command = "\(shellQuote(script)) \(mode.rawValue) \(shellQuote(socket)) \(shellQuote(e))"
         hooks[e] = [["hooks": [["type": "command", "command": command, "timeout": timeout]]]]
     }
-    return try! JSONSerialization.data(withJSONObject: ["hooks": hooks, "statusLine": ["type": "command", "command": "\(shellQuote(statusScript)) \(shellQuote(socket))", "padding": 0] as [String: Any]], options: [.prettyPrinted, .sortedKeys])
+    let status = ([statusScript, socket] + (userStatusLine.map { [$0.command] } ?? [])).map(shellQuote).joined(separator: " ")
+    let statusLine: [String: Any] = ["type": "command", "command": status, "padding": userStatusLine?.padding ?? 0]
+    return try! JSONSerialization.data(withJSONObject: ["hooks": hooks, "statusLine": statusLine], options: [.prettyPrinted, .sortedKeys])
 }
 
 public func claudeArgs(mode: Mode, sessionId: String, resume: Bool, settings: String) -> [String] {
     var a = resume ? ["--resume", sessionId] : ["--session-id", sessionId]
     a += ["--settings", settings]
-    if mode == .code { a += ["--permission-mode", "auto"] } // the user's choice: Code always starts in Auto
-    if mode == .chat {
-        a += ["--tools", "", "--strict-mcp-config", "--no-chrome", "--setting-sources", "project",
-              "--append-system-prompt", chatSystemPrompt]
-    }
+    // the user's choice: Code always starts in Auto. Chat is full Claude Code in its default permission mode.
+    if mode == .code { a += ["--permission-mode", "auto"] }
     return a
 }
 

@@ -90,7 +90,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
     func chatChip() { selected = .chat; refresh() }
 
-    /// ⌘: from Chat, select Code and open the console; in Code, toggle open ↔ minimised.
+    /// ⌘: from Chat (or the console on Chat), select Code and open the console on it; in Code, toggle open ↔ minimised.
     func codeChip() { let was = console; console.pressCodeChip(selected: &selected); applyConsole(was) }
 
     /// Every console open comes from a click: ⌘, the minimised bubble, Open console, Answer in the console.
@@ -145,10 +145,10 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         kitty.place(content: content, display: displayFrame(), cal: state.calibration ?? .spike)
     }
 
-    /// While the console is open it shows Code's chatter itself; while minimised, Code's status lives in that bubble.
+    /// The open console shows its tab's chatter itself; while minimised, Code's status lives in that bubble.
     private func columnAllows(_ kind: BubbleKind, _ m: Mode) -> Bool {
         if m == .code, kind == .status, console.phase == .minimised { return false }
-        return showsInColumn(kind, mode: m, consoleOpen: console.phase == .open)
+        return showsInColumn(kind, mode: m, consoleShowing: console.phase == .open ? console.tab : nil)
     }
     private func addBubble(_ kind: BubbleKind, _ m: Mode, _ text: String, _ now: Date) {
         if columnAllows(kind, m) { bubbles.add(kind, mode: m, text: text, now: now) }
@@ -209,7 +209,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         let settled = trackers[m]?.handle(e, requestId: requestId, now: now) ?? []
         endUsageLimitAccountWide(e, &trackers)
         let newAlert = e.name == "Notification" && trackers[m]?.lastAlert != nil && trackers[m]?.lastAlert != alertBefore
-        if let emoji = flash(for: e, mode: m, approvedInKitty: approvedInKitty, newAlert: newAlert) { reactions.flash(emoji, now: now) }
+        if let emoji = flash(for: e, approvedInKitty: approvedInKitty, newAlert: newAlert) { reactions.flash(emoji, now: now) }
         switch contextAction(for: e, mode: m) {
         case .reset: context.reset()
         case .read(let path):
@@ -228,9 +228,9 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         case "SessionStart":
             if m == .code, !kitty.codeAway, state.codeSessionId != e.sessionId { state.codeSessionId = e.sessionId; onStateChanged?() }
             if m == .chat, state.chatSessionId != e.sessionId { state.chatSessionId = e.sessionId; onStateChanged?() }
-            if m == .chat, console.tab == .chat { // Chat's one-time trust prompt is done: back to Code
-                console.chatConnected()
-                if console.phase == .open { kitty.selectTab(.code) }
+            if m == .chat, console.tab == .chat { // after Chat's one-time trust prompt, back to Code
+                console.chatConnected(afterTrustPrompt: wasDisconnected.contains(.chat))
+                if console.phase == .open, console.tab == .code { kitty.selectTab(.code) }
             }
         case "UserPromptSubmit":
             bubbles.clearStatus(mode: m)

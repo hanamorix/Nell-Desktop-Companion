@@ -14,23 +14,32 @@ import Testing
     c.pressCodeChip(selected: &selected); #expect(c.phase == .open)
 }
 
-@Test func chatConnectedReturnsToCodeTab() {
+@Test func chatConnectedReturnsToCodeTabOnlyAfterTheTrustPrompt() {
     var c = ConsoleState()
     c.open(tab: .chat); #expect(c.tab == .chat); #expect(c.phase == .open)
-    c.chatConnected(); #expect(c.tab == .code)
-    var selected = Mode.code
-    c.open(tab: .chat); c.pressCodeChip(selected: &selected)
-    #expect(c.tab == .code)
+    // a /clear or compaction while you answer a Chat approval there also starts a session: the tab stays
+    c.chatConnected(afterTrustPrompt: false); #expect(c.tab == .chat)
+    c.chatConnected(afterTrustPrompt: true); #expect(c.tab == .code)
 }
 
-@Test func codeChatterHiddenWhileConsoleOpen() {
+@Test func codePressWithTheConsoleOnChatShowsCode() {
+    var c = ConsoleState(); var selected = Mode.code
+    c.open(tab: .chat); c.pressCodeChip(selected: &selected)
+    #expect(c.tab == .code); #expect(c.phase == .open, "switches to Code rather than minimising")
+    c.pressCodeChip(selected: &selected); #expect(c.phase == .minimised)
+}
+
+@Test func chatterHiddenOnlyForTheTabTheConsoleShows() {
     for k in [BubbleKind.reply, .status, .user] {
-        #expect(!showsInColumn(k, mode: .code, consoleOpen: true))
-        #expect(showsInColumn(k, mode: .code, consoleOpen: false))
-        #expect(showsInColumn(k, mode: .chat, consoleOpen: true))
+        #expect(!showsInColumn(k, mode: .code, consoleShowing: .code))
+        #expect(showsInColumn(k, mode: .code, consoleShowing: nil))
+        #expect(showsInColumn(k, mode: .chat, consoleShowing: .code))
+        // answering a Chat approval in the console: Chat's chatter is there, Code's still needs the column
+        #expect(!showsInColumn(k, mode: .chat, consoleShowing: .chat))
+        #expect(showsInColumn(k, mode: .code, consoleShowing: .chat))
     }
     for k in [BubbleKind.approval(requestId: "r"), .question, .alert, .error, .consoleNeeded] {
-        #expect(showsInColumn(k, mode: .code, consoleOpen: true))
+        for m in Mode.allCases { #expect(showsInColumn(k, mode: m, consoleShowing: m)) }
     }
 }
 

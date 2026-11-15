@@ -45,7 +45,7 @@ import Testing
     #expect(body(code: idle, chat: idle, selected: .code) == .idle)
     #expect(body(code: idle, chat: typing, selected: .code) == .idle)
     #expect(body(code: idle, chat: typing, selected: .chat) == .typing)
-    #expect(body(code: idle, chat: testing, selected: .code) == .idle) // yawning is Code-only
+    #expect(body(code: idle, chat: testing, selected: .code) == .yawning) // Chat runs tests too
 }
 
 @Test func faceFollowsEmojiThenBody() {

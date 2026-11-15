@@ -5,21 +5,26 @@ public struct ConsoleState: Equatable, Sendable {
     public private(set) var tab: Mode = .code
     public init() {}
 
-    /// ⌘: from Chat it selects Code and opens the console; in Code it toggles open ↔ minimised.
+    /// ⌘: from Chat, or with the console on Chat's tab, it selects Code and opens the console on Code; otherwise it
+    /// toggles open ↔ minimised.
     public mutating func pressCodeChip(selected: inout Mode) {
+        let onCode = selected == .code && tab == .code
         tab = .code
-        if selected != .code { selected = .code; phase = .open; return }
+        if !onCode { selected = .code; phase = .open; return }
         phase = phase == .open ? .minimised : .open
     }
 
     public mutating func open(tab: Mode = .code) { self.tab = tab; phase = .open }
     public mutating func minimise() { phase = .minimised; tab = .code }
-    public mutating func chatConnected() { if tab == .chat { tab = .code } }
+    /// Chat's session started. Back to Code only if it was stuck before its first connect (the trust prompt): a /clear
+    /// or compaction while you answer a Chat approval in the console also starts one, and must not pull the tab away.
+    public mutating func chatConnected(afterTrustPrompt: Bool) { if afterTrustPrompt, tab == .chat { tab = .code } }
 }
 
-/// While the console is open it already shows Code's progress, replies and your prompts, so those skip the column.
-public func showsInColumn(_ kind: BubbleKind, mode: Mode, consoleOpen: Bool) -> Bool {
-    guard mode == .code, consoleOpen else { return true }
+/// The tab the open console shows already has its progress, replies and your prompts, so those skip the column.
+/// `consoleShowing`: that tab, or nil while the console isn't open.
+public func showsInColumn(_ kind: BubbleKind, mode: Mode, consoleShowing: Mode?) -> Bool {
+    guard mode == consoleShowing else { return true }
     return !(kind == .status || kind == .reply || kind == .user)
 }
 

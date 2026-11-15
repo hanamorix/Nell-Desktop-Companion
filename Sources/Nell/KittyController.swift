@@ -7,8 +7,9 @@ func resourceURL(_ name: String) -> URL {
     return Bundle.module.url(forResource: "Resources", withExtension: nil)!.appending(path: name)
 }
 
-/// Owns Nell's kitty panel: tab 1 runs Claude Code (the console shows it), tab 2 runs Chat (never shown, except
-/// once for Chat's first-run trust prompt). The panel starts hidden and only appears inside Nell's console bubble.
+/// Owns Nell's kitty panel: tab 1 runs Claude Code, tab 2 runs Chat, each through your login shell. The console rests on
+/// Code and shows Chat when Chat needs you there (its first-run trust prompt, an approval or a question you answer there).
+/// The panel starts hidden and only appears inside Nell's console bubble.
 /// shortcut: kitten @ calls run synchronously on the main thread (each ~20 ms); move to a queue if they ever stall the UI.
 @MainActor final class KittyController {
     let paths: Paths
@@ -16,9 +17,11 @@ func resourceURL(_ name: String) -> URL {
     private var lastRequest: PanelRequest?
     private var measured = false
     private var shown = false // the console is on screen, so a restarted panel must come back shown
+    private var tab: Mode = .code // the tab the console last showed
     private var restartFailedAt: Date?
     private let home = FileManager.default.homeDirectoryForCurrentUser
     var claude: String { home.appending(path: ".local/bin/claude").path }
+    private let shell = KittyCommands.userLoginShell()
 
     /// Set by the owner before installSupportFiles runs; decides kitty.conf's colours.
     var theme: Theme = Themes.plumNight
@@ -47,8 +50,11 @@ func resourceURL(_ name: String) -> URL {
         }
         try kittyColorsConf(theme).write(to: paths.kittyColors, atomically: true, encoding: .utf8) // kitty.conf includes it
         for s in [paths.hookScript, paths.statusScript] { try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: s.path) }
+        // read-only: Nell's --settings replaces your status line, so her status script runs yours (read at each launch)
+        let yours = (try? Data(contentsOf: home.appending(path: ".claude/settings.json"))).flatMap(userStatusLine(fromSettings:))
         for m in Mode.allCases {
-            try hooksSettingsJSON(script: paths.hookScript.path, statusScript: paths.statusScript.path, socket: paths.nellSocket.path, mode: m).write(to: paths.hooksSettings(m))
+            try hooksSettingsJSON(script: paths.hookScript.path, statusScript: paths.statusScript.path, socket: paths.nellSocket.path, mode: m,
+                                  userStatusLine: yours).write(to: paths.hooksSettings(m))
         }
     }
 
@@ -92,10 +98,10 @@ func resourceURL(_ name: String) -> URL {
     private func startPanel(codeDir: String, state: inout SavedState, wait: TimeInterval) throws -> String {
         let request = lastRequest ?? PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before shown
         let args = sessionArgs(.code, cwd: codeDir, state: &state)
-        let argv = KittyCommands.launchPanel(paths: paths, request: request, claude: claude, args: args)
+        let argv = KittyCommands.launchPanel(paths: paths, request: request, shell: shell, claude: claude, args: args)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
-        p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName())
+        p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName(), shell: shell, session: sessionEnvironment())
         p.currentDirectoryURL = URL(fileURLWithPath: codeDir)
         p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
         do { try p.run() } catch where codeDir != paths.chatDir.path {
@@ -150,8 +156,8 @@ func resourceURL(_ name: String) -> URL {
         let started: [Mode] = restarted ? [.code] : [] // the new panel's first window is Code
         guard !windowExists(lsJSON: ls.out, mode: m) else { return started.isEmpty ? .ready : .launched(started) }
         let args = sessionArgs(m, cwd: cwd, state: &state)
-        let launched = runTool(KittyCommands.launchTab(socket: socket, mode: m, cwd: cwd, claude: claude, args: args)).status == 0
-        runTool(KittyCommands.focusTab(socket: socket, mode: .code)) // the console always rests on Code
+        let launched = runTool(KittyCommands.launchTab(socket: socket, mode: m, cwd: cwd, shell: shell, claude: claude, args: args)).status == 0
+        runTool(KittyCommands.focusTab(socket: socket, mode: tab)) // the console stays on the tab it shows
         let all = started + (launched ? [m] : [])
         return all.isEmpty ? .unavailable : .launched(all)
     }
@@ -169,7 +175,7 @@ func resourceURL(_ name: String) -> URL {
     /// the calibration so the caller can store it and re-place.
     func showConsole(tab: Mode) -> PanelCalibration? {
         guard let socket else { return nil }
-        shown = true
+        shown = true; self.tab = tab
         runTool(KittyCommands.focusTab(socket: socket, mode: tab))
         runTool(KittyCommands.showPanel(socket: socket))
         runTool(KittyCommands.focus(socket: socket, mode: tab))
@@ -179,7 +185,7 @@ func resourceURL(_ name: String) -> URL {
     }
 
     /// Switch the console's visible tab without showing it or taking the keyboard.
-    func selectTab(_ m: Mode) { if let socket { runTool(KittyCommands.focusTab(socket: socket, mode: m)) } }
+    func selectTab(_ m: Mode) { tab = m; if let socket { runTool(KittyCommands.focusTab(socket: socket, mode: m)) } }
 
     func hideConsole() { shown = false; if let socket { runTool(KittyCommands.hidePanel(socket: socket)) } }
 
@@ -213,6 +219,14 @@ func resourceURL(_ name: String) -> URL {
             }
         }
         return nil
+    }
+
+    /// What a terminal inherits from launchd but a login shell doesn't set, read from the system rather than Nell's env.
+    private func sessionEnvironment() -> [String: String] {
+        var tmp = [CChar](repeating: 0, count: Int(PATH_MAX))
+        let tmpdir = confstr(_CS_DARWIN_USER_TEMP_DIR, &tmp, tmp.count) > 0 ? String(cString: tmp) : ""
+        let agent = String(decoding: runTool(["/bin/launchctl", "getenv", "SSH_AUTH_SOCK"]).out, as: UTF8.self)
+        return ["TMPDIR": tmpdir, "SSH_AUTH_SOCK": agent.trimmingCharacters(in: .whitespacesAndNewlines)]
     }
 
     /// `--resume` the saved session if its transcript exists, otherwise a fresh `--session-id`.

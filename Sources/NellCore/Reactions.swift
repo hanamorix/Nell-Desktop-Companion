@@ -36,7 +36,7 @@ public struct ReactionState: Sendable {
 
 public func body(code: SessionTracker, chat: SessionTracker, selected: Mode) -> Body {
     if code.usageLimited || chat.usageLimited { return .sleeping }
-    if code.testRunning { return .yawning }
+    if code.testRunning || chat.testRunning { return .yawning }
     return (selected == .code ? code : chat).turnRunning ? .typing : .idle
 }
 
@@ -66,13 +66,13 @@ public func heldEmoji(code: SessionTracker, chat: SessionTracker) -> Set<Emoji> 
     return s
 }
 
-/// The brief emoji a hook event earns. Test results react in Code only, and a piped or unclear result gets nothing
-/// (never ❗). `approvedInKitty`: `SessionTracker.ranAfterKittyApproval`. `newAlert`: the tracker raised a new alert.
-public func flash(for e: HookEvent, mode: Mode, approvedInKitty: Bool, newAlert: Bool) -> Emoji? {
+/// The brief emoji a hook event earns, in either mode. A piped or unclear test result gets nothing (never ❗).
+/// `approvedInKitty`: `SessionTracker.ranAfterKittyApproval`. `newAlert`: the tracker raised a new alert.
+public func flash(for e: HookEvent, approvedInKitty: Bool, newAlert: Bool) -> Emoji? {
     switch e.name {
     case "PostToolUse", "PostToolUseFailure":
         if e.toolName == "Bash", let c = e.toolInput?["command"]?.string, isTestCommand(c) {
-            if mode == .code, let o = testOutcome(e) { return o == .pass ? .heart : .crying }
+            if let o = testOutcome(e) { return o == .pass ? .heart : .crying }
         } else if e.name == "PostToolUseFailure" {
             return e.isInterrupt == true ? nil : .alert
         }

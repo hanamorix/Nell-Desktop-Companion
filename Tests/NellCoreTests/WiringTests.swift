@@ -7,45 +7,43 @@ private func event(_ name: String) throws -> HookEvent { try HookEvent.decode(fi
 
 // MARK: Event → brief emoji
 
-@Test func testResultsReactInCodeOnly() throws {
+@Test func testResultsReactInEitherMode() throws {
     let pass = try event("PostToolUse-Bash-testpass"), fail = try event("PostToolUseFailure-Bash-testfail")
-    #expect(flash(for: pass, mode: .code, approvedInKitty: false, newAlert: false) == .heart)
-    #expect(flash(for: fail, mode: .code, approvedInKitty: false, newAlert: false) == .crying)
-    #expect(flash(for: pass, mode: .chat, approvedInKitty: false, newAlert: false) == nil)
-    #expect(flash(for: fail, mode: .chat, approvedInKitty: false, newAlert: false) == nil, "a test failure is never ❗")
+    #expect(flash(for: pass, approvedInKitty: false, newAlert: false) == .heart)
+    #expect(flash(for: fail, approvedInKitty: false, newAlert: false) == .crying, "a test failure is never ❗")
 }
 
 @Test func pipedRunReactsOnlyToAWholeRunSummary() throws {
     let piped = try event("PostToolUse-Bash-testfail-piped")
-    #expect(flash(for: piped, mode: .code, approvedInKitty: false, newAlert: false) == .crying, "its stdout says FAILED")
+    #expect(flash(for: piped, approvedInKitty: false, newAlert: false) == .crying, "its stdout says FAILED")
     let unclear = HookEvent(name: "PostToolUse", sessionId: "S", toolName: "Bash", toolInput: ["command": .string("swift test | tail")],
                             toolResponse: .object(["stdout": .string("done"), "stderr": .string("")]))
-    #expect(flash(for: unclear, mode: .code, approvedInKitty: false, newAlert: false) == nil)
+    #expect(flash(for: unclear, approvedInKitty: false, newAlert: false) == nil)
     var failed = unclear; failed.name = "PostToolUseFailure"; failed.error = "Exit code 1\nsomething"
-    #expect(flash(for: failed, mode: .code, approvedInKitty: false, newAlert: false) == nil, "piped failure: no reaction, not ❗")
-    #expect(flash(for: unclear, mode: .code, approvedInKitty: true, newAlert: false) == .thumbsup, "still approved in kitty")
+    #expect(flash(for: failed, approvedInKitty: false, newAlert: false) == nil, "piped failure: no reaction, not ❗")
+    #expect(flash(for: unclear, approvedInKitty: true, newAlert: false) == .thumbsup, "still approved in kitty")
 }
 
 @Test func nonTestFailureIsAlert() throws {
     var e = try event("PostToolUse-Bash"); e.name = "PostToolUseFailure"
-    #expect(flash(for: e, mode: .code, approvedInKitty: false, newAlert: false) == .alert)
+    #expect(flash(for: e, approvedInKitty: false, newAlert: false) == .alert)
     e.isInterrupt = true
-    #expect(flash(for: e, mode: .code, approvedInKitty: false, newAlert: false) == nil, "you pressed Esc")
-    #expect(flash(for: try event("PostToolUse-Bash"), mode: .code, approvedInKitty: false, newAlert: false) == nil)
-    #expect(flash(for: try event("PostToolUse-Bash"), mode: .code, approvedInKitty: true, newAlert: false) == .thumbsup)
+    #expect(flash(for: e, approvedInKitty: false, newAlert: false) == nil, "you pressed Esc")
+    #expect(flash(for: try event("PostToolUse-Bash"), approvedInKitty: false, newAlert: false) == nil)
+    #expect(flash(for: try event("PostToolUse-Bash"), approvedInKitty: true, newAlert: false) == .thumbsup)
     var failedAfterKitty = try event("PostToolUse-Bash"); failedAfterKitty.name = "PostToolUseFailure"
-    #expect(flash(for: failedAfterKitty, mode: .code, approvedInKitty: true, newAlert: false) == .alert, "no 👍 for a failed run")
+    #expect(flash(for: failedAfterKitty, approvedInKitty: true, newAlert: false) == .alert, "no 👍 for a failed run")
 }
 
 @Test func stopFailureAndNotifications() throws {
     let limit = try event("StopFailure-rate_limit.documented-not-observed")
-    #expect(flash(for: limit, mode: .code, approvedInKitty: false, newAlert: false) == nil, "a limit sleeps instead")
+    #expect(flash(for: limit, approvedInKitty: false, newAlert: false) == nil, "a limit sleeps instead")
     var other = limit; other.error = "server_error"
-    #expect(flash(for: other, mode: .chat, approvedInKitty: false, newAlert: false) == .alert)
+    #expect(flash(for: other, approvedInKitty: false, newAlert: false) == .alert)
     let n = try event("Notification-idle_prompt")
-    #expect(flash(for: n, mode: .chat, approvedInKitty: false, newAlert: true) == .alert)
-    #expect(flash(for: n, mode: .chat, approvedInKitty: false, newAlert: false) == nil, "already shown")
-    #expect(flash(for: try event("Stop"), mode: .code, approvedInKitty: false, newAlert: false) == nil)
+    #expect(flash(for: n, approvedInKitty: false, newAlert: true) == .alert)
+    #expect(flash(for: n, approvedInKitty: false, newAlert: false) == nil, "already shown")
+    #expect(flash(for: try event("Stop"), approvedInKitty: false, newAlert: false) == nil)
 }
 
 // MARK: Held emoji

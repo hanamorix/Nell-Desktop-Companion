@@ -15,7 +15,7 @@ struct CompanionView: View {
                 Color.clear
                 column(l).place(local(l.columnFrame, in: l))
                 if let c = l.consoleFrame {
-                    ConsoleFrame(project: projectName, toward: l.side, minimise: model.minimiseConsole).place(local(c, in: l))
+                    ConsoleFrame(project: projectName, tab: model.console.tab, toward: l.side, minimise: model.minimiseConsole).place(local(c, in: l))
                 }
                 if let m = l.minimisedFrame {
                     MinimisedConsole(status: model.codeStatus, toward: l.side, open: { model.openConsole(tab: .code) })
@@ -354,13 +354,13 @@ struct BubbleColumn: SwiftUI.Layout {
 /// The pixel frame Nell draws around the kitty panel: outline, an uppercase title strip with minimise, and a stepped
 /// tail toward her. The middle stays hollow: kitty shows through it and it never takes clicks.
 struct ConsoleFrame: View {
-    let project: String; let toward: Side; let minimise: () -> Void
+    let project: String; let tab: Mode; let toward: Side; let minimise: () -> Void
     var body: some View {
         let ring = ConsoleChrome.border - PN.px // plum between the outline and kitty
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                Icon(name: "code")
-                Text("CLAUDE CODE · \(project.uppercased())").lineLimit(1)
+                Icon(name: tab == .chat ? "chat" : "code") // the console shows Chat when Chat needs you there
+                Text(tab == .chat ? "CHAT" : "CLAUDE CODE · \(project.uppercased())").lineLimit(1)
                 Spacer(minLength: 4)
                 Button(action: minimise) {
                     PN.cream.frame(width: 8, height: PN.px).offset(y: 3).frame(width: 16, height: 16)
