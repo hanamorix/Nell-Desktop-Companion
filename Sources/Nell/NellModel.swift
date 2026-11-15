@@ -47,6 +47,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     private var reactions = ReactionState()
     private var context = ContextMeter()
     private var expiry: (at: Date, timer: Timer)?
+    /// What the sprite was last asked to show (the showcase checks its steps against it).
+    private(set) var pose: (body: Body, face: Face, emoji: Emoji?, stacks: Int) = (.idle, .idle, nil, 0)
 
     init(kitty: KittyController, registry: ApprovalRegistry, paths: Paths, state: SavedState, sprite: SpriteDriver) {
         self.kitty = kitty; self.registry = registry; self.paths = paths; self.state = state; self.sprite = sprite
@@ -228,6 +230,19 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         refresh()
     }
 
+    /// Showcase only: start a scene from a fresh Nell. No real path clears every session, bubble and the console at once.
+    func resetForShowcase() {
+        trackers = [.code: SessionTracker(), .chat: SessionTracker()]
+        bubbles = BubbleStore()
+        queues = [.code: InputQueue(), .chat: InputQueue()]
+        sentByNell = [.code: [], .chat: []]
+        questionIds = []; settledInKitty = []; wasDisconnected = []
+        reactions = ReactionState(); context = ContextMeter()
+        console = ConsoleState(); selected = .chat; draft = ""; codeStatus = nil
+        relayoutNow()
+        refresh()
+    }
+
     func refresh() {
         guard let code = trackers[.code], let chat = trackers[.chat] else { return }
         let now = Date()
@@ -238,7 +253,8 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         for e in [Emoji.warning, .question, .plug] { reactions.setHeld(e, holding.contains(e)) }
         let emoji = reactions.current(now: now)
         let b = NellCore.body(code: code, chat: chat, selected: selected)
-        sprite.show(body: b, face: face(body: b, emoji: emoji), emoji: emoji, stacks: context.stacks)
+        pose = (b, face(body: b, emoji: emoji), emoji, context.stacks)
+        sprite.show(body: b, face: pose.face, emoji: emoji, stacks: context.stacks)
         wakeAtExpiry(now)
         let held = trackers[selected]?.inputHeld ?? false
         if barHeld != held { barHeld = held }
