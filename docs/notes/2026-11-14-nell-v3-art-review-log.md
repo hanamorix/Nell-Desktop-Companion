@@ -64,3 +64,4 @@ Each round of the user's visual review: what was shown, what they said, and whet
 | Round | Shown | User's notes | Result |
 |---|---|---|---|
 | 1 | The five themes in the showcase (Plum Night, Moss, Tide, Ember, Slate), each with a live approval (Allow, Deny, Console), bubbles, the 7D/5H chips, the text box, the minimised console strip and the open console's title bar; plus the right-click menu with Settings ▸. Colours were Claude's picks ("Just dive in with your picks") | Asked whether the five themes look right: "Looks good" | **Accepted.** Colour themes signed off; the submenu tick and live kitty recolouring to be checked on the desktop |
+| 2 | On the desktop after the merge: the Settings submenu's tick on the current theme, and the kitty console recolouring on a switch | "Both work" | **Accepted.** Menu tick and live console recolouring confirmed |
