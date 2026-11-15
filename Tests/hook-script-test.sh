@@ -69,10 +69,20 @@ status() { env -i PATH=/var/empty /bin/bash Sources/Nell/Resources/nell-status.s
 answers "NELL LINE"; out=$(status "$T/fake.sock"); rc=$?; kill $SRV 2>/dev/null; wait $SRV 2>/dev/null
 if [ $rc -eq 0 ] && [ "$out" = "NELL LINE" ]; then echo PASS statusPrintsNellsLineWithoutYours; else echo "FAIL status without yours rc=$rc out=[$out]"; fail=1; fi
 YOURS="/bin/cat > $(printf %q "$T/yours-stdin"); echo 'YOUR LINE'"
-answers "NELL LINE"; out=$(status "$T/fake.sock" "$YOURS"); rc=$?; kill $SRV 2>/dev/null; wait $SRV 2>/dev/null
+answers "NELL LINE"; out=$(status "$T/fake.sock" "$YOURS"); rc=$?
+for _ in $(seq 20); do kill -0 $SRV 2>/dev/null || break; sleep 0.1; done; kill $SRV 2>/dev/null; wait $SRV 2>/dev/null # the post runs on in the background
 if [ $rc -eq 0 ] && [ "$out" = "YOUR LINE" ] && cmp -s "$T/yours-stdin" $F/statusline.json && cmp -s "$T/posted" $F/statusline.json
 then echo PASS statusRunsYoursWithTheSameStdinAndStillPosts; else echo "FAIL status with yours rc=$rc out=[$out] posted=$(cmp "$T/posted" $F/statusline.json 2>&1) stdin=$(cmp "$T/yours-stdin" $F/statusline.json 2>&1)"; fail=1; fi
 rm -f "$T/yours-stdin"; start=$(date +%s); out=$(status "$T/nope.sock" "$YOURS"); rc=$?; secs=$(( $(date +%s) - start ))
 if [ $rc -eq 0 ] && [ "$out" = "YOUR LINE" ] && cmp -s "$T/yours-stdin" $F/statusline.json && [ $secs -le 1 ]
 then echo PASS statusRunsYoursWhenNellIsDown; else echo "FAIL status with yours, Nell down rc=$rc out=[$out] secs=$secs"; fail=1; fi
+# yours is read on each run (/statusline inside Nell takes effect at once); the launch-time copy is only the fallback
+mkdir -p "$T/home/.claude"; printf '%s' '{"statusLine":{"type":"command","command":"echo FRESH LINE","padding":0}}' > "$T/home/.claude/settings.json"
+out=$(env -i PATH=/var/empty HOME="$T/home" /bin/bash Sources/Nell/Resources/nell-status.sh "$T/nope.sock" "$YOURS" < $F/statusline.json); rc=$?
+if [ $rc -eq 0 ] && [ "$out" = "FRESH LINE" ]; then echo PASS statusReadsYoursOnEachRun; else echo "FAIL status per-run read rc=$rc out=[$out]"; fail=1; fi
+# Claude ends a slow status line with SIGTERM: it must reach your command, never leave it running
+SLOW="/bin/sleep 41.$$"
+env -i PATH=/var/empty /bin/bash Sources/Nell/Resources/nell-status.sh "$T/nope.sock" "$SLOW" < $F/statusline.json & P=$!
+sleep 0.5; kill -TERM $P; wait $P 2>/dev/null; sleep 0.2
+if pgrep -f "$SLOW" >/dev/null; then echo "FAIL status left your command running after SIGTERM"; pkill -f "$SLOW"; fail=1; else echo PASS statusSigtermReachesYourCommand; fi
 exit $fail

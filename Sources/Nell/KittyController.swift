@@ -50,7 +50,8 @@ func resourceURL(_ name: String) -> URL {
         }
         try kittyColorsConf(theme).write(to: paths.kittyColors, atomically: true, encoding: .utf8) // kitty.conf includes it
         for s in [paths.hookScript, paths.statusScript] { try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: s.path) }
-        // read-only: Nell's --settings replaces your status line, so her status script runs yours (read at each launch)
+        // read-only: Nell's --settings replaces your status line, so hers keeps yours and her script runs your command
+        // (which it re-reads on each run; this launch-time copy is its fallback)
         let yours = (try? Data(contentsOf: home.appending(path: ".claude/settings.json"))).flatMap(userStatusLine(fromSettings:))
         for m in Mode.allCases {
             try hooksSettingsJSON(script: paths.hookScript.path, statusScript: paths.statusScript.path, socket: paths.nellSocket.path, mode: m,
@@ -98,7 +99,7 @@ func resourceURL(_ name: String) -> URL {
     private func startPanel(codeDir: String, state: inout SavedState, wait: TimeInterval) throws -> String {
         let request = lastRequest ?? PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before shown
         let args = sessionArgs(.code, cwd: codeDir, state: &state)
-        let argv = KittyCommands.launchPanel(paths: paths, request: request, shell: shell, claude: claude, args: args)
+        let argv = KittyCommands.launchPanel(paths: paths, request: request, cwd: codeDir, shell: shell, claude: claude, args: args)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
         p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName(), shell: shell, session: sessionEnvironment())

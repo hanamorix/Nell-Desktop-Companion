@@ -22,21 +22,16 @@ public let hookEvents = ["SessionStart", "UserPromptSubmit", "PreToolUse", "Post
 
 func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
-/// Your own status line from ~/.claude/settings.json. Nell's `--settings` replaces it, so her status script runs it for you.
-public struct UserStatusLine: Equatable, Sendable {
-    public let command: String
-    public let padding: Int?
-    public init(command: String, padding: Int?) { self.command = command; self.padding = padding }
-}
-
-public func userStatusLine(fromSettings data: Data) -> UserStatusLine? {
+/// Your own `statusLine` from ~/.claude/settings.json, whole, if it runs a command. Nell's `--settings` replaces it, so
+/// hers keeps all of yours (padding, refreshInterval, …) and only swaps the command for her script, which runs yours.
+public func userStatusLine(fromSettings data: Data) -> [String: Any]? {
     guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let s = obj["statusLine"] as? [String: Any],
           s["type"] as? String == "command", let c = s["command"] as? String,
           !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-    return UserStatusLine(command: c, padding: s["padding"] as? Int)
+    return s
 }
 
-public func hooksSettingsJSON(script: String, statusScript: String, socket: String, mode: Mode, userStatusLine: UserStatusLine? = nil) -> Data {
+public func hooksSettingsJSON(script: String, statusScript: String, socket: String, mode: Mode, userStatusLine: [String: Any]? = nil) -> Data {
     var hooks: [String: Any] = [:]
     for e in hookEvents {
         let timeout = e == "PermissionRequest" ? Timings.hookTimeout : 5
@@ -44,8 +39,9 @@ public func hooksSettingsJSON(script: String, statusScript: String, socket: Stri
         let command = "\(shellQuote(script)) \(mode.rawValue) \(shellQuote(socket)) \(shellQuote(e))"
         hooks[e] = [["hooks": [["type": "command", "command": command, "timeout": timeout]]]]
     }
-    let status = ([statusScript, socket] + (userStatusLine.map { [$0.command] } ?? [])).map(shellQuote).joined(separator: " ")
-    let statusLine: [String: Any] = ["type": "command", "command": status, "padding": userStatusLine?.padding ?? 0]
+    var statusLine = userStatusLine ?? ["type": "command", "padding": 0]
+    let yours = (userStatusLine?["command"] as? String).map { [$0] } ?? []
+    statusLine["command"] = ([statusScript, socket] + yours).map(shellQuote).joined(separator: " ")
     return try! JSONSerialization.data(withJSONObject: ["hooks": hooks, "statusLine": statusLine], options: [.prettyPrinted, .sortedKeys])
 }
 

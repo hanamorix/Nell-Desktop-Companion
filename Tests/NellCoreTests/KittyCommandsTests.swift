@@ -22,7 +22,8 @@ let sock = "unix:/A/Nell/kitty-42.sock"
 @Test func cleanEnvironmentHasNoClaudeVars() {
     let env = KittyCommands.cleanEnvironment(home: "/Users/x", user: "x", shell: "/opt/homebrew/bin/fish",
                                              session: ["TMPDIR": "/var/folders/T/", "SSH_AUTH_SOCK": ""])
-    #expect(Set(env.keys) == ["HOME", "USER", "LOGNAME", "SHELL", "LANG", "PATH", "TMPDIR"], "an empty value is left out")
+    // no LANG: kitty sets it from your macOS language and region, as a terminal does
+    #expect(Set(env.keys) == ["HOME", "USER", "LOGNAME", "SHELL", "PATH", "TMPDIR"], "an empty value is left out")
     #expect(env["SHELL"] == "/opt/homebrew/bin/fish")
     // launchd's default, as a terminal starts with: your login shell builds the rest, so nothing extra is left in it
     #expect(env["PATH"] == "/usr/bin:/bin:/usr/sbin:/sbin")
@@ -41,13 +42,31 @@ let sock = "unix:/A/Nell/kitty-42.sock"
 }
 
 @Test func loginShellArgvPerShell() {
-    let posix = #"exec "$0" "$@""#
-    #expect(KittyCommands.viaLoginShell("/bin/zsh", ["/c/claude", "--resume", "S"])
-            == ["/bin/zsh", "-l", "-i", "-c", posix, "/c/claude", "--resume", "S"])
-    #expect(KittyCommands.viaLoginShell("/bin/bash", ["/c/claude"]) == ["/bin/bash", "-l", "-i", "-c", posix, "/c/claude"])
+    // the folder comes first, so an rc file that cds can't move Claude, and the cd runs your chpwd hooks (direnv, mise)
+    #expect(KittyCommands.viaLoginShell("/bin/zsh", cwd: "/p", ["/c/claude", "--resume", "S"])
+            == ["/bin/zsh", "-l", "-i", "-c", #"cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude", "--resume", "S"])
+    #expect(KittyCommands.viaLoginShell("/bin/bash", cwd: "/p", ["/c/claude"])
+            == ["/bin/bash", "-l", "-i", "-c", #"cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"])
+    #expect(KittyCommands.viaLoginShell("/bin/sh", cwd: "/p", ["/c/claude"])
+            == ["/bin/sh", "-l", "-i", "-c", #"cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"], "macOS's sh is bash")
+    #expect(KittyCommands.viaLoginShell("/bin/ksh", cwd: "/p", ["/c/claude"]) // ksh and dash leave SHLVL as a terminal does
+            == ["/bin/ksh", "-l", "-i", "-c", #"cd -- "$0"; exec "$@""#, "/p", "/c/claude"])
     // fish has no $0/$@: everything after the command is $argv
-    #expect(KittyCommands.viaLoginShell("/opt/homebrew/bin/fish", ["/c/claude", "--resume", "S"])
-            == ["/opt/homebrew/bin/fish", "-l", "-i", "-c", "exec $argv", "/c/claude", "--resume", "S"])
+    #expect(KittyCommands.viaLoginShell("/opt/homebrew/bin/fish", cwd: "/p", ["/c/claude", "--resume", "S"])
+            == ["/opt/homebrew/bin/fish", "-l", "-i", "-c", "cd $argv[1]; exec $argv[2..-1]", "/p", "/c/claude", "--resume", "S"])
+}
+
+/// Runs `program` through the real shell from the clean base, in `home` as both HOME and the folder; returns its stdout.
+private func throughShell(_ shell: String, home: URL, folder: URL, _ program: [String]) throws -> (out: String, status: Int32) {
+    let p = Process()
+    let argv = KittyCommands.viaLoginShell(shell, cwd: folder.path, program)
+    p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
+    p.environment = KittyCommands.cleanEnvironment(home: home.path, user: "nobody", shell: shell, session: [:])
+    p.currentDirectoryURL = folder
+    let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice; p.standardInput = FileHandle.nullDevice
+    try p.run()
+    let data = out.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
+    return (String(decoding: data, as: UTF8.self), p.terminationStatus)
 }
 
 /// The real zsh and bash, from the clean base and an empty home: every argument arrives intact and the shell is gone.
@@ -57,16 +76,26 @@ let sock = "unix:/A/Nell/kitty-42.sock"
     defer { try? FileManager.default.removeItem(at: home) }
     let args = ["[%s]", "two words", "it's", "", "$HOME", "-c", "\"q\""]
     for shell in ["/bin/zsh", "/bin/bash"] {
-        let p = Process()
-        let argv = KittyCommands.viaLoginShell(shell, ["/usr/bin/printf"] + args)
-        p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
-        p.environment = KittyCommands.cleanEnvironment(home: home.path, user: "nobody", shell: shell, session: [:])
-        p.currentDirectoryURL = home
-        let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice; p.standardInput = FileHandle.nullDevice
-        try p.run()
-        let data = out.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
-        #expect(String(decoding: data, as: UTF8.self) == "[two words][it's][][$HOME][-c][\"q\"]", "\(shell)")
-        #expect(p.terminationStatus == 0, "\(shell)")
+        let r = try throughShell(shell, home: home, folder: home, ["/usr/bin/printf"] + args)
+        #expect(r.out == "[two words][it's][][$HOME][-c][\"q\"]", "\(shell)")
+        #expect(r.status == 0, "\(shell)")
+    }
+}
+
+/// rc files that end in `cd /`: Claude still starts in its folder, with the folder's chpwd / PROMPT_COMMAND hooks run
+/// (where direnv and mise load a project's environment) and SHLVL 1, as at a terminal prompt.
+@Test func loginShellStartsInItsFolderWithYourFolderHooks() throws {
+    let home = FileManager.default.temporaryDirectory.appending(path: "nell-shell-\(UUID().uuidString)")
+    let folder = home.appending(path: "my project")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: home) }
+    try #"chpwd() { export NELL_HOOK="$PWD"; }; cd /"#.write(to: home.appending(path: ".zshrc"), atomically: true, encoding: .utf8)
+    try "cd /\nPROMPT_COMMAND='export NELL_HOOK=\"$PWD\"'\n".write(to: home.appending(path: ".bash_profile"), atomically: true, encoding: .utf8)
+    for shell in ["/bin/zsh", "/bin/bash"] {
+        let env = try throughShell(shell, home: home, folder: folder, ["/usr/bin/env"]).out.split(separator: "\n").map(String.init)
+        #expect(env.contains("PWD=\(folder.path)"), "\(shell): in its folder")
+        #expect(env.contains("NELL_HOOK=\(folder.path)"), "\(shell): its folder hook ran there")
+        #expect(env.contains("SHLVL=1"), "\(shell)")
     }
 }
 

@@ -24,7 +24,7 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
 @Test func launchPanelArgsMatchGlobalConstraints() {
     let p = Paths(support: URL(fileURLWithPath: "/A/Nell"))
     let a = KittyCommands.launchPanel(paths: p, request: PanelRequest(marginLeft: 10, marginTop: 20, widthPx: 700, heightPx: 420),
-                                      shell: "/bin/zsh", claude: "/c/claude", args: ["--resume", "S"])
+                                      cwd: "/p q", shell: "/bin/zsh", claude: "/c/claude", args: ["--resume", "S"])
     #expect(a.first == KittyCommands.kitten)
     #expect(Array(a.dropFirst().prefix(1)) == ["panel"])
     let joined = a.joined(separator: " ")
@@ -34,8 +34,8 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
                  "--listen-on unix:/A/Nell/kitty-{kitty_pid}.sock"] {
         #expect(joined.contains(part), "\(part)")
     }
-    // Claude runs as the last act of your interactive login shell, so it gets your terminal's environment
-    #expect(Array(a.suffix(8)) == ["/bin/zsh", "-l", "-i", "-c", #"exec "$0" "$@""#, "/c/claude", "--resume", "S"])
+    // Claude runs as the last act of your interactive login shell, in its folder, so it gets your terminal's environment
+    #expect(Array(a.suffix(9)) == ["/bin/zsh", "-l", "-i", "-c", #"cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p q", "/c/claude", "--resume", "S"])
     #expect(!a.contains("--session"))
 }
 
@@ -48,7 +48,7 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
 @Test func tabAndVisibilityCommands() {
     #expect(Array(KittyCommands.launchTab(socket: "unix:/s", mode: .chat, cwd: "/c d", shell: "/bin/bash", claude: "/cl", args: ["-x"]).dropFirst())
             == ["@", "--to", "unix:/s", "launch", "--type=tab", "--keep-focus", "--var", "nell_mode=chat", "--env", "NELL_MODE=chat", "--cwd", "/c d",
-                "/bin/bash", "-l", "-i", "-c", #"exec "$0" "$@""#, "/cl", "-x"])
+                "/bin/bash", "-l", "-i", "-c", #"cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/c d", "/cl", "-x"])
     #expect(KittyCommands.showPanel(socket: "unix:/s").suffix(2) == ["--action", "show"])
     #expect(KittyCommands.hidePanel(socket: "unix:/s").suffix(2) == ["--action", "hide"])
     #expect(KittyCommands.focusTab(socket: "unix:/s", mode: .chat).suffix(3) == ["focus-tab", "--match", "var:nell_mode=chat"])

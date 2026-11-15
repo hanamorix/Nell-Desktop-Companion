@@ -80,22 +80,29 @@ private func hooks(_ data: Data) throws -> [String: [[String: Any]]] {
 }
 
 @Test func settingsChainYourStatusLine() throws {
-    let yours = UserStatusLine(command: "~/bin/line --it's", padding: 2)
+    let yours = try #require(userStatusLine(fromSettings: Data(#"""
+        {"statusLine":{"type":"command","command":"~/bin/line --it's","padding":2,"refreshInterval":5,"hideVimModeIndicator":true}}
+        """#.utf8)))
     let data = hooksSettingsJSON(script: "/x/nell-hook.sh", statusScript: "/A B/nell-status.sh", socket: "/A B/nell.sock", mode: .chat,
                                  userStatusLine: yours)
     let s = try #require((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["statusLine"] as? [String: Any])
     #expect(s["command"] as? String == #"'/A B/nell-status.sh' '/A B/nell.sock' '~/bin/line --it'\''s'"#)
-    #expect(s["padding"] as? Int == 2, "your padding, as in your terminal")
+    // the rest of yours as it is, as in your terminal: only the command is Nell's
+    #expect(s["type"] as? String == "command")
+    #expect(s["padding"] as? Int == 2)
+    #expect(s["refreshInterval"] as? Int == 5)
+    #expect(s["hideVimModeIndicator"] as? Bool == true)
+    #expect(s.count == 5)
 }
 
 @Test func userStatusLineIsReadFromSettings() {
-    func read(_ json: String) -> UserStatusLine? { userStatusLine(fromSettings: Data(json.utf8)) }
-    #expect(read(#"{"statusLine":{"type":"command","command":"npx ccstatusline","padding":1}}"#) == UserStatusLine(command: "npx ccstatusline", padding: 1))
-    #expect(read(#"{"statusLine":{"type":"command","command":"~/s.sh"}}"#) == UserStatusLine(command: "~/s.sh", padding: nil))
-    #expect(read(#"{"model":"opus"}"#) == nil)
-    #expect(read(#"{"statusLine":{"type":"command","command":"  "}}"#) == nil)
-    #expect(read(#"{"statusLine":{"type":"other","command":"x"}}"#) == nil)
-    #expect(read("not json") == nil)
+    func command(_ json: String) -> String? { userStatusLine(fromSettings: Data(json.utf8))?["command"] as? String }
+    #expect(command(#"{"statusLine":{"type":"command","command":"npx ccstatusline","padding":1}}"#) == "npx ccstatusline")
+    #expect(command(#"{"statusLine":{"type":"command","command":"~/s.sh"}}"#) == "~/s.sh")
+    #expect(userStatusLine(fromSettings: Data(#"{"model":"opus"}"#.utf8)) == nil)
+    #expect(userStatusLine(fromSettings: Data(#"{"statusLine":{"type":"command","command":"  "}}"#.utf8)) == nil)
+    #expect(userStatusLine(fromSettings: Data(#"{"statusLine":{"type":"other","command":"x"}}"#.utf8)) == nil)
+    #expect(userStatusLine(fromSettings: Data("not json".utf8)) == nil)
 }
 
 @Test func statusScriptGivesUpQuietly() throws {
