@@ -73,7 +73,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     /// ⌘: from Chat, select Code and open the console; in Code, toggle open ↔ minimised.
     func codeChip() { console.pressCodeChip(selected: &selected); applyConsole() }
 
-    /// Every console open comes from a click: ⌘, the minimised bubble, Open console, Answer in console.
+    /// Every console open comes from a click: ⌘, the minimised bubble, Open console, Answer in the console.
     func openConsole(tab: Mode = .code) { console.open(tab: tab); applyConsole() }
     func minimiseConsole() { console.minimise(); applyConsole() }
 
@@ -190,7 +190,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
             if let r = e.lastAssistantMessage, !r.isEmpty { addBubble(.reply, m, r, now) }
         case "StopFailure":
             bubbles.clearStatus(mode: m); if m == .code { codeStatus = nil }
-            addBubble(.error, m, e.error ?? "Something went wrong", now)
+            addBubble(e.error == "rate_limit" ? .alert : .error, m, stopFailureMessage(e), now) // a limit is a nap, not a failure
         case "SessionEnd":
             bubbles.clearStatus(mode: m)
             if kitty.ensureTab(m, cwd: cwd(m), state: &state) { trackers[m]?.markLaunched(now: now); onStateChanged?() }

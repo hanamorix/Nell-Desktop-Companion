@@ -95,16 +95,34 @@ public struct Animator: Sendable {
             between = nil
             return loop(body).lowerBound
         }
-        if resting && target != body {
-            if let r = sheet.tag("between:\(body.rawValue)-\(target.rawValue)") {
-                between = (target, r.upperBound)
+        if resting && target != body, let step = nextStep(toward: target) {
+            if let r = sheet.tag("between:\(body.rawValue)-\(step.rawValue)") {
+                between = (step, r.upperBound)
                 return r.lowerBound
             }
-            body = target
+            body = step // a seamless pair: identical resting poses
             return loop(body).lowerBound
         }
         let r = loop(body)
         return r.contains(frame + 1) ? frame + 1 : r.lowerBound
+    }
+
+    /// The first hop on the shortest route to `goal`, moving only through drawn in-betweens or seamless switches. A pair with
+    /// no drawn in-between (sleeping→typing, say) goes through idle or typing instead of cutting straight across.
+    private func nextStep(toward goal: Body) -> Body? {
+        let all: [Body] = [.idle, .typing, .yawning, .sleeping]
+        func hops(_ b: Body) -> [Body] {
+            all.filter { $0 != b && (sheet.tag("between:\(b.rawValue)-\($0.rawValue)") != nil || Self.seamless.contains([b, $0])) }
+        }
+        var first: [Body: Body] = [:], queue = [body], seen: Set<Body> = [body]
+        while !queue.isEmpty {
+            let b = queue.removeFirst()
+            for n in hops(b) where !seen.contains(n) {
+                seen.insert(n); first[n] = b == body ? n : first[b]; queue.append(n)
+                if n == goal { return first[n] }
+            }
+        }
+        return goal // no route in this sheet (the real one has them all): cut at the resting frame rather than never arrive
     }
 
     private mutating func blinkInterval() -> TimeInterval {
@@ -122,4 +140,10 @@ struct SplitMix64: RandomNumberGenerator, Sendable {
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
         return z ^ (z >> 31)
     }
+}
+
+extension Animator {
+    /// Body pairs that may switch straight across at a resting frame, because their resting poses are pixel-identical
+    /// (Task 8 ruling; `seamlessPairsHaveIdenticalRestingPoses` checks the art).
+    public static let seamless: Set<[Body]> = [[.idle, .typing], [.typing, .idle]]
 }

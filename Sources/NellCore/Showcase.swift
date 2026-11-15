@@ -119,6 +119,18 @@ public enum Showcase {
                  shows: [.body(.idle), .between("sleeping-idle")]),
             Step("typing again", [prompt(.chat, "and again")], shows: [.body(.typing), .between("idle-typing")]),
             Step("typing to idle", [stop(.chat)], shows: [.body(.idle), .between("typing-idle")]),
+            // pairs with no drawn in-between: the animator routes them through idle or typing
+            Step("idle to yawning", [prompt(.code, "run the tests"), pre("t2", "swift test")], shows: [.body(.yawning), .between("idle-yawning")]),
+            Step("yawning to idle", [post("t2", "swift test", stdout: passOut)], shows: [.body(.idle), .between("yawning-idle")]),
+            Step("yawning again", [prompt(.code, "and again"), pre("t3", "swift test")], shows: [.body(.yawning), .between("idle-yawning")]),
+            Step("yawning to sleeping", [stopFailure(.code, "rate_limit")], shows: [.body(.sleeping), .between("yawning-sleeping")]),
+            Step("sleeping to yawning", [prompt(.code, "try again"), pre("t4", "swift test")],
+                 shows: [.body(.yawning), .between("sleeping-yawning")]),
+            Step("yawning to sleeping again", [stopFailure(.code, "rate_limit")], shows: [.body(.sleeping), .between("yawning-sleeping")]),
+            // her usual Code wake-up: the first tool call of a turn clears the limit mid-turn
+            Step("sleeping to typing", [prompt(.chat, "wake up"), .hook(.chat, hook("PreToolUse", ["tool_name": .string("Read"), "tool_use_id": .string("c2")]))],
+                 shows: [.body(.typing), .between("sleeping-typing")]),
+            Step("typing to idle again", [stop(.chat)], shows: [.body(.idle)]),
         ]),
         Scene(name: "paper", steps:
             (1...5).map { n in Step("\(n) stacks", [.stopWithContext(tokens: n * 100_000 + 5_000)], shows: [.paper(n)]) }

@@ -217,7 +217,7 @@ struct BubbleView: View {
             }
         }
         if bubble.kind == .question, !bubble.settled {
-            Button { model.openTerminal(bubble.mode, requestId: nil) } label: { Icon(name: "terminal"); Text("Answer in console") }
+            Button { model.openTerminal(bubble.mode, requestId: nil) } label: { Icon(name: "terminal"); Text("Answer in the console") }
                 .buttonStyle(PixelButton(kind: .quiet))
         }
         if bubble.kind == .consoleNeeded, !bubble.settled {

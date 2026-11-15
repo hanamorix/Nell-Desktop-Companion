@@ -90,7 +90,10 @@ public func contextAction(for e: HookEvent, mode: Mode) -> ContextAction? {
     guard mode == .code else { return nil }
     switch e.name {
     case "PreCompact", "PostCompact": return .reset
-    case "SessionStart": return e.source == "clear" ? .reset : nil
+    case "SessionStart":
+        if e.source == "clear" { return .reset }
+        // a relaunch or resume: show the stacks it already has instead of 0 until the first Stop
+        return ["startup", "resume"].contains(e.source ?? "") ? e.transcriptPath.map { .read(transcriptPath: $0) } : nil
     case "Stop": return e.transcriptPath.map { .read(transcriptPath: $0) }
     default: return nil
     }
@@ -102,4 +105,13 @@ public struct PauseState: Sendable {
     public var locked = false, asleep = false
     public init() {}
     public var paused: Bool { locked || asleep }
+}
+
+/// The bubble text for a `StopFailure`. A usage limit is a nap, not a failure, with the reset time when Claude gave one
+/// ("You've hit your session limit · resets 3:45pm").
+public func stopFailureMessage(_ e: HookEvent) -> String {
+    guard e.error == "rate_limit" else { return e.error ?? "Something went wrong" }
+    let base = "Usage limit reached — Nell's napping until it resets"
+    guard let m = e.lastAssistantMessage, let r = m.range(of: #"resets\s+([^\n·]+?)\s*$"#, options: .regularExpression) else { return base }
+    return base + " at " + m[r].replacingOccurrences(of: #"^resets\s+"#, with: "", options: .regularExpression)
 }

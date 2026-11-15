@@ -15,7 +15,7 @@ private func event(_ name: String) throws -> HookEvent { try HookEvent.decode(fi
     #expect(flash(for: fail, mode: .chat, approvedInKitty: false, newAlert: false) == nil, "a test failure is never ❗")
 }
 
-@Test func pipedOrUnclearTestGetsNoReaction() throws {
+@Test func pipedRunReactsOnlyToAWholeRunSummary() throws {
     let piped = try event("PostToolUse-Bash-testfail-piped")
     #expect(flash(for: piped, mode: .code, approvedInKitty: false, newAlert: false) == .crying, "its stdout says FAILED")
     let unclear = HookEvent(name: "PostToolUse", sessionId: "S", toolName: "Bash", toolInput: ["command": .string("swift test | tail")],
@@ -126,7 +126,11 @@ private func event(_ name: String) throws -> HookEvent { try HookEvent.decode(fi
     #expect(contextAction(for: try event("PreCompact-manual"), mode: .code) == .reset)
     #expect(contextAction(for: try event("PostCompact-manual"), mode: .code) == .reset)
     #expect(contextAction(for: try event("SessionStart-compact"), mode: .code) == nil)
-    #expect(contextAction(for: try event("SessionStart"), mode: .code) == nil)
+    #expect(contextAction(for: try event("SessionStart"), mode: .code) == .read(transcriptPath: "/Users/x/.claude/projects/-Users-x-proj/S.jsonl"),
+            "after a relaunch the stacks come back before the first Stop")
+    var resumed = try event("SessionStart"); resumed.source = "resume"
+    #expect(contextAction(for: resumed, mode: .code) == .read(transcriptPath: "/Users/x/.claude/projects/-Users-x-proj/S.jsonl"))
+    #expect(contextAction(for: resumed, mode: .chat) == nil)
     #expect(contextAction(for: try event("Stop"), mode: .code) == .read(transcriptPath: "/Users/x/.claude/projects/-Users-x-proj/S.jsonl"))
     #expect(contextAction(for: try event("Stop"), mode: .chat) == nil)
     #expect(contextAction(for: try event("SessionStart-clear"), mode: .chat) == nil)

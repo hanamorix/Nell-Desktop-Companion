@@ -85,3 +85,10 @@ private let shows = Set(Showcase.scenes.flatMap { $0.steps.flatMap(\.shows) })
         #expect(burst.steps.contains { $0.actions.contains { if case .hook(_, let f, _) = $0 { f["hook_event_name"] == .string(kind) } else { false } } }, "\(kind)")
     }
 }
+
+@Test func showcasePlaysTheRoutedBodyChanges() {
+    // pairs with no drawn in-between of their own: the animator routes them through idle or typing
+    for pair in ["sleeping-typing", "sleeping-yawning", "yawning-idle", "yawning-sleeping", "idle-yawning"] {
+        #expect(shows.contains(.between(pair)), "\(pair)")
+    }
+}

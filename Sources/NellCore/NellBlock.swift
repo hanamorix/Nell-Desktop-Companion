@@ -104,8 +104,9 @@ public struct SpriteMask: Sendable {
 /// A fully decoded copy of `image`. A CGImage straight from ImageIO decodes lazily, and cropping it re-decodes PNG
 /// blocks on every draw; the sprite sheet is cropped on every frame, so decode it once up front.
 public func decodedBitmap(_ image: CGImage) -> CGImage? {
+    // always sRGB RGBA: an indexed or grey export has a colour space a bitmap context can't take
     guard let ctx = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
-                              space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                              space: CGColorSpace(name: CGColorSpace.sRGB)!,
                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
     ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
     return ctx.makeImage()
