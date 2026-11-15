@@ -15,7 +15,8 @@ public struct Paths: Sendable {
 }
 
 public let hookEvents = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure",
-                         "PermissionRequest", "Notification", "Stop", "StopFailure", "SubagentStop", "SessionEnd"]
+                         "PermissionRequest", "Notification", "Stop", "StopFailure", "SubagentStop", "SessionEnd",
+                         "PreCompact", "PostCompact"]
 
 public let chatSystemPrompt = "You are in a plain chat inside Nell, a desktop companion. You have no tools; never write tool-call markup."
 

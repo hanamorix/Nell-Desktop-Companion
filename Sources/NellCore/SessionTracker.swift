@@ -3,7 +3,7 @@ import Foundation
 public enum ApprovalAnswer: Sendable, Equatable { case allow, deny, none }
 
 public enum NellState: String, CaseIterable, Sendable {
-    case idle, listening, thinking, typing, needsYou = "needs-you", question, oops, alert, done, sleepy, error, disconnected
+    case idle, listening, thinking, typing, needsYou = "needs-you", question, oops, alert, done, error, disconnected
 }
 
 /// One Claude session's state, driven by hook events. Pure: time comes in as `now`.
@@ -27,7 +27,7 @@ public struct SessionTracker: Sendable {
     public private(set) var lastAlert: String?
     /// The live session id from SessionStart (it changes after /clear).
     public private(set) var sessionId: String?
-    /// A `StopFailure` with `error == "rate_limit"` set this; the next `Stop` clears it.
+    /// A `StopFailure` with `error == "rate_limit"` set this; the next `Stop`, tool call or `quota_auto_resume_*` notification clears it.
     public private(set) var usageLimited = false
     public var testRunning: Bool { !testIds.isEmpty }
     /// A turn is in flight (not finalized, and thinking/typing or waiting on the user).
@@ -50,6 +50,13 @@ public struct SessionTracker: Sendable {
     public mutating func clearAlert() {
         lastAlert = nil
         if base == .alert { base = beforeAlert; transient = nil }
+    }
+
+    /// True when this `PostToolUse` ran a tool whose approval was answered in kitty (still pending here, or handed
+    /// to the console). Call it before `handle`, which clears both.
+    public func ranAfterKittyApproval(_ e: HookEvent) -> Bool {
+        guard e.name == "PostToolUse", !finalized, let id = e.toolUseId else { return false }
+        return hold?.toolUseId == id || pendingApprovals.values.contains(id)
     }
 
     public mutating func settleApproval(_ id: String, answer: ApprovalAnswer) {
@@ -83,6 +90,7 @@ public struct SessionTracker: Sendable {
             set(.thinking)
             return settleAll()
         case "PreToolUse":
+            usageLimited = false // Claude answered, so the limit is over
             openToolUses.append((e.toolName ?? "", e.toolInput, e.toolUseId))
             if e.toolName == "Bash", let c = e.toolInput?["command"]?.string, isTestCommand(c) { testIds.insert(e.toolUseId ?? "") }
             if openToolUses.count > 32 { openToolUses.removeFirst() }
@@ -98,6 +106,7 @@ public struct SessionTracker: Sendable {
             if e.name == "PostToolUse" { set(.thinking) } else { set(.oops, for: Timings.oopsBeat, then: .thinking, now: now) }
             return settled.sorted()
         case "Notification":
+            if e.notificationType?.hasPrefix("quota_auto_resume_") == true { usageLimited = false; break } // the limit's wait ended
             if e.notificationType == "permission_prompt", !pendingApprovals.isEmpty || pendingQuestion != nil { break }
             let msg = e.message ?? "Claude needs you"
             guard !shownAlerts.contains(msg) else { break }
@@ -150,5 +159,5 @@ public func bodyState(selected: Mode, code: SessionTracker, chat: SessionTracker
     for s in [NellState.needsYou, .question] where both.contains(s) { return s }
     for s in [NellState.error, .alert, .disconnected] where both.contains(s) { return s }
     let mine = selected == .code ? code.state : chat.state
-    return listening && (mine == .idle || mine == .sleepy) ? .listening : mine
+    return listening && mine == .idle ? .listening : mine
 }

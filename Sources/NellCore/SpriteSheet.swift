@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// An Aseprite "array" JSON export: frame rects + durations, tags, slices and layer names.
-/// The concept placeholder uses NellState-named tags; v3 art uses `body:`, `face:`, `between:`, `eyes:closed`, `paper:` and `emoji:` tags.
+/// Tags: `body:`, `face:`, `between:`, `eyes:closed`, `paper:` and `emoji:`. Tag user data is whitespace-separated tokens.
 public struct SpriteSheet: Sendable {
     public struct Frame: Sendable, Equatable { public let rect: CGRect; public let duration: TimeInterval }
     public let frames: [Frame]
@@ -11,9 +11,6 @@ public struct SpriteSheet: Sendable {
     public let slices: [String: [Int: CGRect]]
     public let layers: [String]
     private let tagData: [String: String]
-
-    /// shortcut: frames wider than 128 px are the smooth concept placeholder; switch to a meta flag once real pixel art lands.
-    public var isPlaceholder: Bool { (frames.first?.rect.width ?? 0) > 128 }
 
     public static func parse(_ json: Data) throws -> SpriteSheet {
         struct R: Decodable { let x, y, w, h: Double; var rect: CGRect { CGRect(x: x, y: y, width: w, height: h) } }
@@ -33,11 +30,6 @@ public struct SpriteSheet: Sendable {
         return SpriteSheet(frames: frames, tags: tags, slices: slices, layers: f.meta.layers?.map(\.name) ?? [], tagData: data)
     }
 
-    public func frames(for state: NellState) -> [Frame] {
-        guard let r = tags[state.rawValue] ?? tags[NellState.idle.rawValue] else { return Array(frames.prefix(1)) }
-        return Array(frames[r])
-    }
-
     public func tag(_ name: String) -> ClosedRange<Int>? { tags[name] }
 
     /// Bounds from the latest key at or before `frame`.
@@ -53,6 +45,47 @@ public struct SpriteSheet: Sendable {
             .dropFirst(5).split(separator: ",").compactMap { Int($0) }.map { r.lowerBound + $0 }.filter(r.contains) ?? []
         return rest.isEmpty ? [r.lowerBound] : rest
     }
+
+    /// True when `frame` is in a tag marked `face=drawn` (yawning, sleeping and their in-betweens): no face or blink overlay.
+    public func faceDrawn(frame: Int) -> Bool {
+        tags.contains { $0.value.contains(frame) && tagData[$0.key]?.split(whereSeparator: \.isWhitespace).contains("face=drawn") == true }
+    }
+
+    /// What to draw, back to front, in sprite pixels (y down): the body frame, the face (or the closed eyes over it),
+    /// the paper stack and the emoji. Overlay art sits at its slice's frame-0 key in its own frame and is drawn at the
+    /// body frame's key, so it follows her breathing. `mirrored` turns her to face right; the emoji stays readable.
+    public func blits(_ f: Animator.Frame, stacks: Int, emoji: Emoji?, mirrored: Bool) -> [Blit] {
+        guard frames.indices.contains(f.body) else { return [] }
+        let size = frames[f.body].rect.size
+        var out = [Blit(src: frames[f.body].rect, dst: CGRect(origin: .zero, size: size), flipped: false)]
+        func overlay(_ slice: String, frame: Int?) {
+            guard let frame, frames.indices.contains(frame), let src = self.slice(slice, frame: 0),
+                  let dst = self.slice(slice, frame: f.body) else { return }
+            let o = frames[frame].rect.origin
+            out.append(Blit(src: src.offsetBy(dx: o.x, dy: o.y), dst: CGRect(origin: dst.origin, size: src.size), flipped: false))
+        }
+        if !faceDrawn(frame: f.body) {
+            if let src = slice("face", frame: 0), frames.indices.contains(f.face) {
+                let o = frames[f.face].rect.origin
+                out.append(Blit(src: src.offsetBy(dx: o.x, dy: o.y), dst: CGRect(origin: f.faceAt.origin, size: src.size), flipped: false))
+            }
+            if f.eyesClosed { overlay("eyes", frame: tag("eyes:closed")?.lowerBound) }
+        }
+        if stacks > 0 { overlay("paper", frame: tag("paper:\(min(stacks, 5))")?.lowerBound) }
+        if let emoji { overlay("emoji", frame: tag("emoji:\(emoji.rawValue)")?.lowerBound) }
+        guard mirrored else { return out }
+        return out.enumerated().map { i, b in
+            let isEmoji = emoji != nil && i == out.count - 1
+            return Blit(src: b.src, dst: CGRect(x: size.width - b.dst.maxX, y: b.dst.minY, width: b.dst.width, height: b.dst.height), flipped: !isEmoji)
+        }
+    }
+}
+
+/// Copy `src` (sheet pixels) to `dst` (sprite pixels), mirrored left-right when `flipped`.
+public struct Blit: Equatable, Sendable {
+    public let src: CGRect
+    public let dst: CGRect
+    public let flipped: Bool
 }
 
 /// Clicks pass through Nell unless they land on something with a control, or on her sprite while ⌥ is held.

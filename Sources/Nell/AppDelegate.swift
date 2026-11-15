@@ -19,7 +19,8 @@ import SwiftUI
         EventLog.write("start")
         let registry = ApprovalRegistry()
         kitty = KittyController(paths: paths)
-        model = NellModel(kitty: kitty, registry: registry, paths: paths, state: SavedState.load(paths.stateFile))
+        model = NellModel(kitty: kitty, registry: registry, paths: paths, state: SavedState.load(paths.stateFile),
+                          sprite: SpriteDriver(sheet: sheet, image: image))
 
         let model = self.model!
         let server = HookServer(socketPath: paths.nellSocket.path, registry: registry,
@@ -43,7 +44,7 @@ import SwiftUI
 
         panel = OverlayPanel(size: NSSize(width: 320, height: 520))
         controller = PanelController(panel: panel)
-        panel.contentView = NSHostingView(rootView: CompanionView(model: model, sheet: sheet, image: image, controller: controller))
+        panel.contentView = NSHostingView(rootView: CompanionView(model: model, controller: controller))
         controller.restore(positions: model.state.positions)
         controller.onPositionSaved = { [weak self] key, p in self?.model.state.positions[key] = p; self?.save() }
         controller.onHover = { [weak self] id in self?.model.hovered = id }

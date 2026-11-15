@@ -9,10 +9,10 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 /// Nell's brain on the main actor: routes hook events into trackers + bubbles, and UI actions into kitty + approvals.
 @MainActor final class NellModel: ObservableObject {
     @Published var selected: Mode = .chat
-    @Published private(set) var body: NellState = .idle
     @Published private(set) var shown: [ShownBubble] = []
     @Published var draft = ""
-    @Published var paused = false
+    /// The screen is locked or asleep: the sprite stops entirely.
+    var paused = false { didSet { sprite.paused = paused } }
     /// The bar is holding text because Claude has a prompt open in kitty (or is still starting).
     @Published private(set) var barHeld = false
     @Published private(set) var console = ConsoleState()
@@ -25,6 +25,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     var displayFrame: () -> CGRect = { NSScreen.main?.frame ?? .zero }
 
     let kitty: KittyController
+    let sprite: SpriteDriver
     let registry: ApprovalRegistry
     let paths: Paths
     var state: SavedState
@@ -41,9 +42,14 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     private var questionIds: Set<String> = []
     private var settledInKitty: Set<String> = []
     private var wasDisconnected: Set<Mode> = []
+    /// v2's needs-you priority, kept for the sound and bringing her forward.
+    private var needsYouState: NellState = .idle
+    private var reactions = ReactionState()
+    private var context = ContextMeter()
+    private var expiry: (at: Date, timer: Timer)?
 
-    init(kitty: KittyController, registry: ApprovalRegistry, paths: Paths, state: SavedState) {
-        self.kitty = kitty; self.registry = registry; self.paths = paths; self.state = state
+    init(kitty: KittyController, registry: ApprovalRegistry, paths: Paths, state: SavedState, sprite: SpriteDriver) {
+        self.kitty = kitty; self.registry = registry; self.paths = paths; self.state = state; self.sprite = sprite
     }
 
     func cwd(_ m: Mode) -> String { m == .code ? (state.projectDir ?? paths.chatDir.path) : paths.chatDir.path }
@@ -69,7 +75,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     func openConsole(tab: Mode = .code) { console.open(tab: tab); applyConsole() }
     func minimiseConsole() { console.minimise(); applyConsole() }
 
-    func relayoutNow() { if let l = relayout?(console.phase) { layout = l } }
+    func relayoutNow() { if let l = relayout?(console.phase) { layout = l; sprite.mirrored = l.faceRight } }
 
     /// Drag with ⌥: the console hides so the two windows never drift apart, and comes back where Nell lands.
     func dragBegan() { if console.phase == .open { kitty.hideConsole() } }
@@ -125,7 +131,19 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     func handle(_ m: Mode, _ e: HookEvent, requestId: String?) {
         let now = Date()
         let alertBefore = trackers[m]?.lastAlert
+        let approvedInKitty = trackers[m]?.ranAfterKittyApproval(e) ?? false
         let settled = trackers[m]?.handle(e, requestId: requestId, now: now) ?? []
+        let newAlert = e.name == "Notification" && trackers[m]?.lastAlert != nil && trackers[m]?.lastAlert != alertBefore
+        if let emoji = flash(for: e, mode: m, approvedInKitty: approvedInKitty, newAlert: newAlert) { reactions.flash(emoji, now: now) }
+        switch contextAction(for: e, mode: m) {
+        case .reset: context.reset()
+        case .read(let path):
+            // shortcut: assumes the transcript is flushed when Stop fires (unverified); a stale read is corrected next turn
+            if let tail = ContextMeter.tail(of: URL(fileURLWithPath: path), maxBytes: 1 << 20),
+               let tokens = ContextMeter.tokens(fromTranscriptTail: tail) { context.update(tokens: tokens) }
+        case nil: break
+        }
+        sprite.eventArrived()
         for id in settled {   // answered in kitty, or the turn ended: release the hanging hook too
             settledInKitty.insert(id)
             bubbles.settle(requestId: id, as: "Answered in console")
@@ -181,6 +199,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
     func requestSettled(_ m: Mode, _ id: String, _ a: ApprovalAnswer) {
         trackers[m]?.settleApproval(id, answer: a)
+        if a == .allow { reactions.flash(.thumbsup, now: Date()) }
         let quiet = questionIds.remove(id) != nil || settledInKitty.remove(id) != nil
         bubbles.settle(requestId: id, as: a == .allow ? "Allowed" : a == .deny ? "Denied" : "Answer in the console")
         // a deadline or a dead hook: Claude now asks in the console, which only opens when you click
@@ -210,13 +229,31 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
 
     func refresh() {
         guard let code = trackers[.code], let chat = trackers[.chat] else { return }
+        let now = Date()
         let next = bodyState(selected: selected, code: code, chat: chat, listening: !draft.isEmpty)
-        if (next == .needsYou || next == .question), body != next { onNeedsYou?() }
-        if body != next { body = next }
+        if (next == .needsYou || next == .question), needsYouState != next { onNeedsYou?() }
+        needsYouState = next
+        let holding = heldEmoji(code: code, chat: chat)
+        for e in [Emoji.warning, .question, .plug] { reactions.setHeld(e, holding.contains(e)) }
+        let emoji = reactions.current(now: now)
+        let b = NellCore.body(code: code, chat: chat, selected: selected)
+        sprite.show(body: b, face: face(body: b, emoji: emoji), emoji: emoji, stacks: context.stacks)
+        wakeAtExpiry(now)
         let held = trackers[selected]?.inputHeld ?? false
         if barHeld != held { barHeld = held }
         let nextShown = bubbles.visible(now: Date()).map { ShownBubble(bubble: $0.bubble, opacity: $0.opacity) }
         if nextShown != shown { shown = nextShown } // don't re-render the view every tick
+    }
+
+    /// A brief emoji ends on time (2.5 s), not on the next 1 Hz tick.
+    private func wakeAtExpiry(_ now: Date) {
+        let at = reactions.nextExpiry(now: now)
+        guard at != expiry?.at else { return }
+        expiry?.timer.invalidate(); expiry = nil
+        guard let at else { return }
+        expiry = (at, Timer.scheduledTimer(withTimeInterval: at.timeIntervalSince(now), repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        })
     }
 
     private func send(_ text: String, _ m: Mode) {

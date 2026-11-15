@@ -60,7 +60,9 @@ extension View {
     private var timer: Timer?
     private var dragStart: (mouse: NSPoint, origin: NSPoint, nell: CGPoint)?
 
-    static let nellSize = CGSize(width: 320, height: 200) // wide enough for a ~250 pt message bar beside the chips
+    /// 320 wide for the ~250 pt message bar beside the chips; 296 tall = the 256 pt sprite + 6 pt gap + the 34 pt bar
+    /// (one 14 pt Departure Mono line + 6 + 10 padding + 4 frame).
+    static let nellSize = CGSize(width: 320, height: 296)
     static let columnSize = CGSize(width: 270, height: 320)
     static let minimisedSize = CGSize(width: 340, height: 30)
 
@@ -104,8 +106,9 @@ extension View {
         let first = dragStart == nil
         if first { dragStart = (m, panel.frame.origin, nellOrigin) }
         guard let s = dragStart else { return false }
-        panel.setFrameOrigin(NSPoint(x: s.origin.x + m.x - s.mouse.x, y: s.origin.y + m.y - s.mouse.y))
-        nellOrigin = CGPoint(x: s.nell.x + m.x - s.mouse.x, y: s.nell.y + m.y - s.mouse.y)
+        let dx = (m.x - s.mouse.x).rounded(), dy = (m.y - s.mouse.y).rounded() // whole points keep her pixels crisp
+        panel.setFrameOrigin(NSPoint(x: s.origin.x + dx, y: s.origin.y + dy))
+        nellOrigin = CGPoint(x: s.nell.x + dx, y: s.nell.y + dy)
         return first
     }
 
@@ -121,7 +124,7 @@ extension View {
     /// Saved spot for the main display, else bottom-right of it.
     func restore(positions: [String: CGPoint]) {
         let main = NSScreen.main ?? NSScreen.screens.first
-        if let p = positions[displayKey(main)] { nellOrigin = p }
+        if let p = positions[displayKey(main)] { nellOrigin = CGPoint(x: p.x.rounded(), y: p.y.rounded()) }
         else if let v = main?.visibleFrame { nellOrigin = CGPoint(x: v.maxX - Self.nellSize.width - 16, y: v.minY + 16) }
     }
 }

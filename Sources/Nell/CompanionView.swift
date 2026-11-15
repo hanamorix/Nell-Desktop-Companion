@@ -6,8 +6,6 @@ import SwiftUI
 /// Drawn in Plum Night (`PlumNight.swift`, from `concept-nell-design-system/`).
 struct CompanionView: View {
     @ObservedObject var model: NellModel
-    let sheet: SpriteSheet
-    let image: CGImage
     let controller: PanelController
     @FocusState private var barFocused: Bool
 
@@ -61,8 +59,7 @@ struct CompanionView: View {
 
     private func nell(_ l: NellCore.Layout) -> some View {
         VStack(spacing: 6) {
-            SpriteView(state: model.body, sheet: sheet, image: image, paused: model.paused, width: 150)
-                .scaleEffect(x: l.faceRight ? -1 : 1, y: 1)
+            SpriteCompositor(driver: model.sprite) // mirrored inside when she faces right, so the emoji stays readable
                 .grabbable()
                 .gesture(DragGesture(minimumDistance: 2)
                     .onChanged { _ in if controller.dragChanged() { model.dragBegan() } }

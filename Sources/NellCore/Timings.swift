@@ -11,4 +11,6 @@ public enum Timings {
     public static let maxVisibleBubbles = 4
     public static let approvalScriptDeadline: TimeInterval = 590
     public static let hookTimeout = 600
+    /// No events for this long: breathing rests and blinks slow.
+    public static let longQuiet: TimeInterval = 600
 }
