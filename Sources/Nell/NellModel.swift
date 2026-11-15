@@ -133,6 +133,7 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         let alertBefore = trackers[m]?.lastAlert
         let approvedInKitty = trackers[m]?.ranAfterKittyApproval(e) ?? false
         let settled = trackers[m]?.handle(e, requestId: requestId, now: now) ?? []
+        endUsageLimitAccountWide(e, &trackers)
         let newAlert = e.name == "Notification" && trackers[m]?.lastAlert != nil && trackers[m]?.lastAlert != alertBefore
         if let emoji = flash(for: e, mode: m, approvedInKitty: approvedInKitty, newAlert: newAlert) { reactions.flash(emoji, now: now) }
         switch contextAction(for: e, mode: m) {

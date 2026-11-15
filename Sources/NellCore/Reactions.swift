@@ -95,3 +95,11 @@ public func contextAction(for e: HookEvent, mode: Mode) -> ContextAction? {
     default: return nil
     }
 }
+
+/// The sprite stops while the screen is locked or the display sleeps. The two are tracked apart, because the display
+/// can wake on the lock screen.
+public struct PauseState: Sendable {
+    public var locked = false, asleep = false
+    public init() {}
+    public var paused: Bool { locked || asleep }
+}

@@ -44,15 +44,17 @@ public struct Animator: Sendable {
         self.quiet = quiet
         if let due = bodyDue, now >= due { frame = nextFrame(); frameStart = now }
 
+        // A face drawn into the body (yawning, sleeping) hides the face and the blink: hold the swap until it shows.
+        let swap = pendingFace != nil && !sheet.faceDrawn(frame: frame)
         if let end = blinkEnd {
             if now >= end {
-                if pendingFace != nil { blinkEnd = now + Self.blinkDuration }  // stay closed for the new face
+                if swap { blinkEnd = now + Self.blinkDuration }  // stay closed for the new face
                 else { blinkEnd = nil; nextBlink = now + blinkInterval() }
             }
-        } else if now >= nextBlink || pendingFace != nil {
+        } else if now >= nextBlink || swap {
             blinkEnd = now + Self.blinkDuration
         }
-        if blinkEnd != nil, let f = pendingFace { face = f; pendingFace = nil }
+        if blinkEnd != nil, swap, let f = pendingFace { face = f; pendingFace = nil }
 
         let faceFrame = (sheet.tag("face:\(face.rawValue)") ?? sheet.tag("face:idle"))?.lowerBound ?? 0
         let f = Frame(body: frame, face: faceFrame, faceAt: sheet.slice("face", frame: frame) ?? .zero, eyesClosed: blinkEnd != nil)
@@ -63,7 +65,7 @@ public struct Animator: Sendable {
 
     /// When the next tick can return a frame, so the caller can sleep until then.
     public var nextChange: Date {
-        guard frameStart != nil, pendingFace == nil else { return .distantPast }
+        guard frameStart != nil, pendingFace == nil || sheet.faceDrawn(frame: frame) else { return .distantPast }
         return min(bodyDue ?? .distantFuture, blinkEnd ?? nextBlink)
     }
 

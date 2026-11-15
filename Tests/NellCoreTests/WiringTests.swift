@@ -187,3 +187,86 @@ private func ev(_ name: String, errorText: String) -> HookEvent {
     t.handle(ev("Notification", message: "Claude needs your permission", type: "idle_prompt"), requestId: nil, now: at(3))
     #expect(body(code: t, chat: SessionTracker(), selected: .code) == .typing)
 }
+
+// MARK: Fix round 1
+
+@Test func limitClearIsAccountWide() {
+    var trackers: [Mode: SessionTracker] = [.code: started(), .chat: started()]
+    trackers[.chat]?.handle(ev("StopFailure", errorText: "rate_limit"), requestId: nil, now: at(1))
+    #expect(trackers[.chat]?.usageLimited == true)
+    // The limit lifts and you work only in Code: Code's next turn wakes her in both.
+    let stop = ev("Stop")
+    trackers[.code]?.handle(stop, requestId: nil, now: at(2))
+    endUsageLimitAccountWide(stop, &trackers)
+    #expect(trackers[.chat]?.usageLimited == false)
+    #expect(body(code: trackers[.code]!, chat: trackers[.chat]!, selected: .code) == .idle)
+    #expect(heldEmoji(code: trackers[.code]!, chat: trackers[.chat]!).isEmpty)
+    for e in [ev("PreToolUse", tool: "Bash", input: bash, id: "u9"), ev("Notification", message: "Resuming", type: "quota_auto_resume_fired")] {
+        trackers[.chat]?.handle(ev("StopFailure", errorText: "rate_limit"), requestId: nil, now: at(3))
+        endUsageLimitAccountWide(e, &trackers)
+        #expect(trackers[.chat]?.usageLimited == false, "\(e.name)")
+    }
+    // A session ending clears only its own flag: the other may still be limited.
+    trackers[.chat]?.handle(ev("StopFailure", errorText: "rate_limit"), requestId: nil, now: at(4))
+    trackers[.code]?.handle(ev("StopFailure", errorText: "rate_limit"), requestId: nil, now: at(4))
+    let end = ev("SessionEnd")
+    trackers[.code]?.handle(end, requestId: nil, now: at(5))
+    endUsageLimitAccountWide(end, &trackers)
+    #expect(trackers[.code]?.usageLimited == false)
+    #expect(trackers[.chat]?.usageLimited == true)
+    endUsageLimitAccountWide(ev("UserPromptSubmit"), &trackers)
+    #expect(trackers[.chat]?.usageLimited == true, "a prompt alone proves nothing")
+}
+
+/// Ticks at each `nextChange` (or 10 ms on, if it is due now) until `stop` holds for a returned frame.
+private func tickUntil(_ a: inout Animator, _ now: inout Date, max: Int = 400, _ stop: (Animator.Frame) -> Bool) -> Animator.Frame? {
+    for _ in 0..<max {
+        let next = a.nextChange
+        now = next > now ? next : now.addingTimeInterval(0.01)
+        if let f = a.tick(now: now, quiet: false), stop(f) { return f }
+    }
+    return nil
+}
+
+@Test func faceSwapWaitsForTheFaceToShow() throws {
+    let s = try realSheet()
+    var a = Animator(sheet: s, seed: 7), now = t0
+    _ = a.tick(now: now, quiet: false)
+    a.request(body: .yawning, face: .exhausted, now: now)
+    _ = try #require(tickUntil(&a, &now) { s.tag("body:yawning")!.contains($0.body) })
+    a.request(body: .yawning, face: .happy, now: now) // ❤️ while she yawns: the hand hides her mouth
+    let end = now.addingTimeInterval(3)
+    while now < end {
+        now = max(a.nextChange, now.addingTimeInterval(0.01))
+        if let f = a.tick(now: now, quiet: false) { #expect(f.face == s.tag("face:exhausted")!.lowerBound, "no swap behind a drawn face") }
+    }
+    a.request(body: .typing, face: .happy, now: now)
+    let first = try #require(tickUntil(&a, &now) { !s.faceDrawn(frame: $0.body) })
+    #expect(s.tag("body:typing")!.contains(first.body))
+    #expect(first.face == s.tag("face:happy")!.lowerBound)
+    #expect(first.eyesClosed, "the new face opens out of a blink")
+}
+
+@Test func heldFaceSwapDoesNotSpin() throws {
+    let s = try realSheet()
+    var a = Animator(sheet: s, seed: 7), now = t0
+    _ = a.tick(now: now, quiet: false)
+    a.request(body: .yawning, face: .exhausted, now: now)
+    _ = try #require(tickUntil(&a, &now) { s.tag("body:yawning")!.contains($0.body) })
+    a.request(body: .yawning, face: .scared, now: now)
+    for _ in 0..<20 {
+        #expect(a.nextChange > now, "a held swap must not ask for an immediate tick")
+        now = a.nextChange
+        _ = a.tick(now: now, quiet: false)
+    }
+}
+
+@Test func pausedWhileLockedOrAsleep() {
+    var p = PauseState()
+    #expect(!p.paused)
+    p.locked = true; #expect(p.paused)
+    p.asleep = true; #expect(p.paused)
+    p.asleep = false; #expect(p.paused, "display wakes on the lock screen: still locked")
+    p.locked = false; #expect(!p.paused)
+    p.asleep = true; #expect(p.paused)
+}

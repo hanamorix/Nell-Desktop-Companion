@@ -27,8 +27,9 @@ public struct SessionTracker: Sendable {
     public private(set) var lastAlert: String?
     /// The live session id from SessionStart (it changes after /clear).
     public private(set) var sessionId: String?
-    /// A `StopFailure` with `error == "rate_limit"` set this; the next `Stop`, tool call or `quota_auto_resume_*` notification clears it.
-    public private(set) var usageLimited = false
+    /// A `StopFailure` with `error == "rate_limit"` set this. `endsUsageLimit` events clear it (in both sessions, via
+    /// `endUsageLimitAccountWide`); `SessionEnd` clears only this session's.
+    public fileprivate(set) var usageLimited = false
     public var testRunning: Bool { !testIds.isEmpty }
     /// A turn is in flight (not finalized; a failed tool or a mid-turn alert doesn't end it).
     public var turnRunning: Bool { !finalized && [.thinking, .typing, .needsYou, .question, .oops, .alert].contains(state) }
@@ -59,6 +60,11 @@ public struct SessionTracker: Sendable {
         return hold?.toolUseId == id || pendingApprovals.values.contains(id)
     }
 
+    /// Claude answered (a finished turn or a tool call) or the limit's wait ended. Limits are account-wide.
+    public static func endsUsageLimit(_ e: HookEvent) -> Bool {
+        e.name == "Stop" || e.name == "PreToolUse" || e.notificationType?.hasPrefix("quota_auto_resume_") == true
+    }
+
     public mutating func settleApproval(_ id: String, answer: ApprovalAnswer) {
         guard let toolUseId = pendingApprovals.removeValue(forKey: id) else { return }
         if answer == .none { hold = (toolUseId, lastEventAt ?? .distantPast) } // Claude's own prompt is now open in kitty
@@ -76,6 +82,7 @@ public struct SessionTracker: Sendable {
         if turnEnds || (isPost && hold != nil && (hold?.toolUseId == nil ? false : hold?.toolUseId == e.toolUseId)) { hold = nil }
         if turnEnds || (isPost && isQuestionTool) { pendingQuestion = nil }
         if turnEnds { testIds = [] }
+        if Self.endsUsageLimit(e) || e.name == "SessionEnd" { usageLimited = false }
         if isPost { testIds.remove(e.toolUseId ?? "") }
         if isPost { openToolUses.removeAll { $0.id != nil && $0.id == e.toolUseId } }
 
@@ -90,7 +97,6 @@ public struct SessionTracker: Sendable {
             set(.thinking)
             return settleAll()
         case "PreToolUse":
-            usageLimited = false // Claude answered, so the limit is over
             openToolUses.append((e.toolName ?? "", e.toolInput, e.toolUseId))
             if e.toolName == "Bash", let c = e.toolInput?["command"]?.string, isTestCommand(c) { testIds.insert(e.toolUseId ?? "") }
             if openToolUses.count > 32 { openToolUses.removeFirst() }
@@ -106,7 +112,7 @@ public struct SessionTracker: Sendable {
             if e.name == "PostToolUse" { set(.thinking) } else { set(.oops, for: Timings.oopsBeat, then: .thinking, now: now) }
             return settled.sorted()
         case "Notification":
-            if e.notificationType?.hasPrefix("quota_auto_resume_") == true { usageLimited = false; break } // the limit's wait ended
+            if e.notificationType?.hasPrefix("quota_auto_resume_") == true { break } // the limit's wait ended: not an alert
             if e.notificationType == "permission_prompt", !pendingApprovals.isEmpty || pendingQuestion != nil { break }
             let msg = e.message ?? "Claude needs you"
             guard !shownAlerts.contains(msg) else { break }
@@ -114,7 +120,7 @@ public struct SessionTracker: Sendable {
             beforeAlert = base == .alert ? beforeAlert : base
             set(.alert)
         case "Stop":
-            finalized = true; usageLimited = false
+            finalized = true
             set(.done, for: Timings.doneBeat, then: .idle, now: now)
             return settleAll()
         case "StopFailure":
@@ -160,4 +166,10 @@ public func bodyState(selected: Mode, code: SessionTracker, chat: SessionTracker
     for s in [NellState.error, .alert, .disconnected] where both.contains(s) { return s }
     let mine = selected == .code ? code.state : chat.state
     return listening && mine == .idle ? .listening : mine
+}
+
+/// Usage limits are per account, not per session: an event that ends one session's limit ends the other's too.
+public func endUsageLimitAccountWide(_ e: HookEvent, _ trackers: inout [Mode: SessionTracker]) {
+    guard SessionTracker.endsUsageLimit(e) else { return }
+    for m in trackers.keys { trackers[m]?.usageLimited = false }
 }

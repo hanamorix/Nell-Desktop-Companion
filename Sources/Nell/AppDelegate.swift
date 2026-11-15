@@ -11,6 +11,7 @@ import SwiftUI
     private var panel: OverlayPanel!
     private var controller: PanelController!
     private var timer: Timer?
+    private var pause = PauseState()
 
     func applicationDidFinishLaunching(_ note: Notification) {
         try? FileManager.default.createDirectory(at: paths.support, withIntermediateDirectories: true)
@@ -105,16 +106,23 @@ import SwiftUI
     private func save() { try? model?.state.save(paths.stateFile) }
 
     /// Stop animating and polling the mouse while the screen is locked or asleep.
+    /// Locked and asleep are tracked apart: the display can wake on the lock screen.
     private func observePauses() {
-        let set: @Sendable (Bool) -> Void = { [weak self] p in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.model.paused = p; self?.controller.paused = p } }
+        let set: @Sendable (_ lock: Bool, _ on: Bool) -> Void = { [weak self] lock, on in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if lock { self.pause.locked = on } else { self.pause.asleep = on }
+                    self.model.paused = self.pause.paused; self.controller.paused = self.pause.paused
+                }
+            }
         }
         let dnc = DistributedNotificationCenter.default()
-        dnc.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { _ in set(true) }
-        dnc.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { _ in set(false) }
+        dnc.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { _ in set(true, true) }
+        dnc.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { _ in set(true, false) }
         let wnc = NSWorkspace.shared.notificationCenter
-        wnc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { _ in set(true) }
-        wnc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { _ in set(false) }
+        wnc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { _ in set(false, true) }
+        wnc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { _ in set(false, false) }
     }
 
     private func pickFolder() -> String? {
