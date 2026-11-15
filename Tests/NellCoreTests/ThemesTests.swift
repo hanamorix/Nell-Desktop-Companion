@@ -29,15 +29,42 @@ private func hue(_ hex: String) -> Double {
     #expect(Themes.plumNight.palette == PlumNight.palette)
 }
 
-@Test func plumNightConsoleMatchesKittyConf() throws {
-    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/Nell/Resources/kitty.conf")
-    var found: [Int: String] = [:]
-    for line in try String(contentsOf: url, encoding: .utf8).split(separator: "\n") {
-        let p = line.split(separator: " ", omittingEmptySubsequences: true)
-        if p.count == 2, p[0].hasPrefix("color"), let n = Int(p[0].dropFirst(5)) { found[n] = String(p[1]) }
+/// Today's Plum Night console colours, captured verbatim from kitty.conf before the colours moved into kittyColorsConf.
+@Test func plumNightKittyConfUnchanged() {
+    let original = """
+    background #1a1214
+    foreground #f5d4c9
+    cursor #ec9394
+    selection_background #3f3039
+    selection_foreground #f5d4c9
+    color0  #261a22
+    color1  #cf7d8b
+    color2  #4f8a46
+    color3  #a8762f
+    color4  #6f8fd0
+    color5  #f4b6ac
+    color6  #6f8fd0
+    color7  #f5d4c9
+    color8  #c4a9ab
+    color9  #ec9394
+    color10 #8ccf7a
+    color11 #e9b45f
+    color12 #6f8fd0
+    color13 #f4b6ac
+    color14 #6f8fd0
+    color15 #fff4ec
+    """
+    let norm = { (s: String) in s.split(separator: "\n").map { $0.split(separator: " ").joined(separator: " ") } }
+    #expect(norm(kittyColorsConf(Themes.plumNight)) == norm(original))
+}
+
+@Test func kittyConfUsesTheme() throws {
+    let t = Themes.named("Tide")
+    let lines = kittyColorsConf(t).split(separator: "\n").map(String.init)
+    for l in ["background #0f1622", "foreground #d6e4f0", "cursor #5cc8c0", "selection_background #263650", "selection_foreground #d6e4f0"] {
+        #expect(lines.contains(l), "\(l)")
     }
-    #expect(found.count == 16)
-    #expect(Themes.plumNight.ansi == (0..<16).map { found[$0] })
+    for i in 0..<16 { #expect(lines.contains { $0.split(separator: " ").map(String.init) == ["color\(i)", t.ansi[i]] }, "color\(i)") }
 }
 
 @Test func everyThemeIsAsReadableAsPlumNight() {

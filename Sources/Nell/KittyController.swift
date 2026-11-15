@@ -32,7 +32,18 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     private let home = FileManager.default.homeDirectoryForCurrentUser
     private var claude: String { home.appending(path: ".local/bin/claude").path }
 
+    /// Set by the owner before installSupportFiles runs; decides kitty.conf's colours.
+    var theme: Theme = Themes.plumNight
+
     init(paths: Paths) { self.paths = paths }
+
+    /// Recolours the running kitty's windows. Does nothing when kitty isn't up, and ignores failure (it may have just exited).
+    func applyTheme(_ t: Theme) {
+        theme = t
+        guard let socket else { return }
+        do { try kittyColorsConf(t).write(to: paths.kittyColors, atomically: true, encoding: .utf8) } catch { return }
+        runTool(KittyCommands.setColors(socket: socket, conf: paths.kittyColors.path))
+    }
 
     /// Writes kitty.conf, the hook and status scripts and both hook settings files into Application Support.
     func installSupportFiles() throws {
@@ -42,6 +53,8 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
             try? fm.removeItem(at: dest)
             try fm.copyItem(at: resourceURL(name), to: dest)
         }
+        let conf = try String(contentsOf: paths.kittyConf, encoding: .utf8) + "\n" + kittyColorsConf(theme)
+        try conf.write(to: paths.kittyConf, atomically: true, encoding: .utf8)
         for s in [paths.hookScript, paths.statusScript] { try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: s.path) }
         for m in Mode.allCases {
             try hooksSettingsJSON(script: paths.hookScript.path, statusScript: paths.statusScript.path, socket: paths.nellSocket.path, mode: m).write(to: paths.hooksSettings(m))

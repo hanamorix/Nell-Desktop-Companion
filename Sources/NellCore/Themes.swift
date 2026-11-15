@@ -62,3 +62,12 @@ public func contrastRatio(_ a: String, _ b: String) -> Double {
     let (la, lb) = (lum(a), lum(b))
     return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
 }
+
+/// The kitty colour lines for a theme: ground and text from the palette, the 16 ANSI colours from the theme.
+public func kittyColorsConf(_ t: Theme) -> String {
+    let p = t.palette
+    let base = ["background": p["plum-900"]!, "foreground": p["cream"]!, "cursor": p["pink-400"]!,
+                "selection_background": p["plum-700"]!, "selection_foreground": p["cream"]!]
+    return (["background", "foreground", "cursor", "selection_background", "selection_foreground"].map { "\($0) \(base[$0]!)" }
+            + t.ansi.enumerated().map { "color\($0.offset) \($0.element)" }).joined(separator: "\n") + "\n"
+}

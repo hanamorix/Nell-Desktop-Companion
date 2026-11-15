@@ -36,3 +36,8 @@ let sock = "unix:/A/Nell/kitty-42.sock"
     #expect(!windowExists(lsJSON: ls, mode: .code))
     #expect(!windowExists(lsJSON: Data("garbage".utf8), mode: .chat))
 }
+
+@Test func setColorsCommandShape() {
+    #expect(KittyCommands.setColors(socket: "unix:/x", conf: "/A/colors.conf")
+            == [KittyCommands.kitten, "@", "--to", "unix:/x", "set-colors", "--all", "--configured", "/A/colors.conf"])
+}

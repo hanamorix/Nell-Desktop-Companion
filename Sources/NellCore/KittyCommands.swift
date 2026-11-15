@@ -36,6 +36,8 @@ public enum KittyCommands {
 
     public static func sendEnter(socket: String, mode: Mode) -> [String] { at(socket, ["send-key"] + match(mode) + ["enter"]) }
     public static func focus(socket: String, mode: Mode) -> [String] { at(socket, ["focus-window"] + match(mode)) }
+    /// Recolours every window of Nell's kitty from a colour file, both existing and future ones.
+    public static func setColors(socket: String, conf: String) -> [String] { at(socket, ["set-colors", "--all", "--configured", conf]) }
     public static func ls(socket: String) -> [String] { at(socket, ["ls"]) }
 
     /// kitty must not inherit a parent Claude Code's env (CLAUDECODE, ANTHROPIC_BASE_URL, …).
