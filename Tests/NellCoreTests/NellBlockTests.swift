@@ -131,3 +131,27 @@ private func layoutWith(columnUp: Bool) -> Layout {
     #expect(columnOrder([1, 2, 3], columnUp: false) == [3, 2, 1], "below her: newest at the top")
     #expect(columnOrder([Int](), columnUp: false).isEmpty)
 }
+
+@Test func spriteMaskFromAnImage() throws {
+    let ctx = try #require(CGContext(data: nil, width: 4, height: 3, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    ctx.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+    ctx.fill(CGRect(x: 3, y: 2, width: 1, height: 1)) // CG is y-up: the top-right pixel
+    let img = try #require(ctx.makeImage())
+    let m = try #require(SpriteMask(image: img))
+    #expect(m.width == 4 && m.height == 3)
+    #expect(m.opaque(at: CGPoint(x: 3.5, y: 0.5), scale: 1), "top row first")
+    #expect(!m.opaque(at: CGPoint(x: 3.5, y: 2.5), scale: 1))
+    #expect(m.alpha.filter { $0 > 0 }.count == 1)
+}
+
+@Test func decodedSheetIsAPlainBitmap() throws {
+    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/Nell/Resources/sprites/nell.png")
+    let src = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+    let lazy = try #require(CGImageSourceCreateImageAtIndex(src, 0, nil))
+    let sheet = try #require(decodedBitmap(lazy))
+    #expect(sheet.width == lazy.width && sheet.height == lazy.height)
+    let eyes = try #require(sheet.cropping(to: CGRect(x: 0, y: 128, width: 128, height: 128))) // frame 8
+    let a = try #require(SpriteMask(image: eyes))
+    #expect(a.alpha.filter { $0 > 0 }.count == 259, "the closed-eyes patch survives decoding unchanged")
+}

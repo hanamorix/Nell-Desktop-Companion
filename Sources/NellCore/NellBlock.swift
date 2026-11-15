@@ -79,10 +79,34 @@ public struct SpriteMask: Sendable {
     public let alpha: [UInt8]
     public init(width: Int, height: Int, alpha: [UInt8]) { self.width = width; self.height = height; self.alpha = alpha }
 
+    /// The alpha of `image`, top row first.
+    public init?(image: CGImage) {
+        let w = image.width, h = image.height
+        var a = [UInt8](repeating: 0, count: w * h)
+        let ok = a.withUnsafeMutableBytes { buf in
+            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue) else { return false }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard ok else { return nil }
+        self.init(width: w, height: h, alpha: a)
+    }
+
     /// `p` in points from the sprite's top-left, `scale` points per art pixel.
     public func opaque(at p: CGPoint, scale: CGFloat) -> Bool {
         guard p.x >= 0, p.y >= 0 else { return false }
         let x = Int(p.x / scale), y = Int(p.y / scale)
         return x < width && y < height && alpha[y * width + x] > 0
     }
+}
+
+/// A fully decoded copy of `image`. A CGImage straight from ImageIO decodes lazily, and cropping it re-decodes PNG
+/// blocks on every draw; the sprite sheet is cropped on every frame, so decode it once up front.
+public func decodedBitmap(_ image: CGImage) -> CGImage? {
+    guard let ctx = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    return ctx.makeImage()
 }

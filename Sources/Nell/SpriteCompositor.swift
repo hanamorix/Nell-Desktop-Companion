@@ -11,8 +11,13 @@ import SwiftUI
     var mirrored = false { didSet { if mirrored != oldValue { redraw() } } }
 
     let sheet: SpriteSheet
-    /// The alpha of the frame on screen, so a click on her drawn pixels is hers and a gap clicks through.
-    private(set) var mask: SpriteMask?
+    /// The alpha of the frame on screen, so a click on her drawn pixels is hers and a gap clicks through. Built only when
+    /// the pointer asks, not on every frame.
+    var mask: SpriteMask? {
+        if maskCache == nil, let image { maskCache = SpriteMask(image: image) }
+        return maskCache
+    }
+    private var maskCache: SpriteMask?
     private let sheetImage: CGImage
     private var animator: Animator
     private var frame: Animator.Frame?
@@ -79,10 +84,7 @@ import SwiftUI
             ctx.restoreGState()
         }
         image = ctx.makeImage()
-        if let data = ctx.data {
-            let px = data.assumingMemoryBound(to: UInt8.self), w = ctx.width, h = ctx.height, row = ctx.bytesPerRow
-            mask = SpriteMask(width: w, height: h, alpha: (0..<(w * h)).map { px[($0 / w) * row + ($0 % w) * 4 + 3] }) // RGBA, top row first
-        }
+        maskCache = nil
     }
 }
 
@@ -103,7 +105,7 @@ func loadSprites() -> (SpriteSheet, CGImage)? {
     guard let json = try? Data(contentsOf: resourceURL("sprites/nell.json")),
           let sheet = try? SpriteSheet.parse(json),
           let src = CGImageSourceCreateWithURL(resourceURL("sprites/nell.png") as CFURL, nil),
-          let img = CGImageSourceCreateImageAtIndex(src, 0, nil)
+          let lazy = CGImageSourceCreateImageAtIndex(src, 0, nil), let img = decodedBitmap(lazy)
     else { return nil }
     return (sheet, img)
 }
