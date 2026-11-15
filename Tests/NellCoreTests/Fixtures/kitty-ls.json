@@ -10,7 +10,10 @@
       "id": 1,
       "title": "Three-word greeting",
       "pid": 49689,
-      "env": {},
+      "env": {
+       "NELL_MODE": "code"
+      },
+      "user_vars": {},
       "cmdline": [
        "/Users/me/.local/bin/claude",
        "--session-id"
@@ -33,6 +36,9 @@
       "pid": 50574,
       "env": {
        "NELL_MODE": "chat"
+      },
+      "user_vars": {
+       "nell_mode": "chat"
       },
       "cmdline": [
        "/Users/me/.local/bin/claude",

@@ -46,9 +46,9 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
 
 @Test func tabAndVisibilityCommands() {
     #expect(Array(KittyCommands.launchTab(socket: "unix:/s", mode: .chat, cwd: "/c d", claude: "/cl", args: ["-x"]).dropFirst())
-            == ["@", "--to", "unix:/s", "launch", "--type=tab", "--keep-focus", "--env", "NELL_MODE=chat", "--cwd", "/c d", "/cl", "-x"])
+            == ["@", "--to", "unix:/s", "launch", "--type=tab", "--keep-focus", "--var", "nell_mode=chat", "--env", "NELL_MODE=chat", "--cwd", "/c d", "/cl", "-x"])
     #expect(KittyCommands.showPanel(socket: "unix:/s").suffix(2) == ["--action", "show"])
     #expect(KittyCommands.hidePanel(socket: "unix:/s").suffix(2) == ["--action", "hide"])
-    #expect(KittyCommands.focusTab(socket: "unix:/s", mode: .chat).suffix(3) == ["focus-tab", "--match", "env:NELL_MODE=chat"])
-    #expect(KittyCommands.closeTab(socket: "unix:/s", mode: .code).suffix(3) == ["close-tab", "--match", "env:NELL_MODE=code"])
+    #expect(KittyCommands.focusTab(socket: "unix:/s", mode: .chat).suffix(3) == ["focus-tab", "--match", "var:nell_mode=chat"])
+    #expect(KittyCommands.closeTab(socket: "unix:/s", mode: .code).suffix(3) == ["close-tab", "--match", "var:nell_mode=code"])
 }

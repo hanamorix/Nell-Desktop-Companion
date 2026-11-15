@@ -15,7 +15,8 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
     let inp = Pipe(); p.standardInput = stdin == nil ? FileHandle.nullDevice : inp
     do { try p.run() } catch { return (-1, Data()) }
-    if let stdin { inp.fileHandleForWriting.write(stdin); try? inp.fileHandleForWriting.close() }
+    // a kitten that exits without reading (kitty gone) breaks the pipe; its exit status reports the failure
+    if let stdin { try? inp.fileHandleForWriting.write(contentsOf: stdin); try? inp.fileHandleForWriting.close() }
     let data = out.fileHandleForReading.readDataToEndOfFile()
     p.waitUntilExit()
     return (p.terminationStatus, data)
@@ -30,7 +31,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     private var lastRequest: PanelRequest?
     private var measured = false
     private let home = FileManager.default.homeDirectoryForCurrentUser
-    private var claude: String { home.appending(path: ".local/bin/claude").path }
+    var claude: String { home.appending(path: ".local/bin/claude").path }
 
     /// Set by the owner before installSupportFiles runs; decides kitty.conf's colours.
     var theme: Theme = Themes.plumNight
@@ -75,39 +76,58 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
             hideConsole() // the console phase always starts hidden
             applyTheme(theme)
         } else {
-            let request = PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before it's ever shown
-            let args = sessionArgs(.code, cwd: projectDir, state: &state)
-            let argv = KittyCommands.launchPanel(paths: paths, request: request, claude: claude, args: args)
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
-            p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName())
-            p.currentDirectoryURL = URL(fileURLWithPath: projectDir)
-            p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-            try p.run()
-            lastRequest = request
-            for _ in 0..<50 {
-                if let s = (try? FileManager.default.contentsOfDirectory(atPath: paths.support.path))?
-                    .first(where: { $0.hasPrefix("kitty-") && $0.hasSuffix(".sock") }) {
-                    socket = "unix:" + paths.support.appending(path: s).path; break
-                }
-                usleep(100_000)
-            }
+            socket = try startPanel(codeDir: projectDir, state: &state)
         }
         ensureTab(.code, cwd: projectDir, state: &state)
         ensureTab(.chat, cwd: paths.chatDir.path, state: &state)
         return live != nil
     }
 
-    /// Relaunches a mode's tab if Claude exited or the tab was closed. Returns true if it launched one.
+    /// Starts the hidden panel with Code as its first window, and returns its socket once kitty answers and Code is tagged.
+    private func startPanel(codeDir: String, state: inout SavedState) throws -> String {
+        let request = PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before it's ever shown
+        let args = sessionArgs(.code, cwd: codeDir, state: &state)
+        let argv = KittyCommands.launchPanel(paths: paths, request: request, claude: claude, args: args)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
+        p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName())
+        p.currentDirectoryURL = URL(fileURLWithPath: codeDir)
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        try p.run()
+        lastRequest = request
+        for _ in 0..<50 {
+            if let s = (try? FileManager.default.contentsOfDirectory(atPath: paths.support.path))?
+                .first(where: { $0.hasPrefix("kitty-") && $0.hasSuffix(".sock") }) {
+                let socket = "unix:" + paths.support.appending(path: s).path
+                if runTool(KittyCommands.tagFirstWindow(socket: socket)).status == 0 { return socket }
+            }
+            usleep(100_000)
+        }
+        p.terminate() // an untagged kitty would get a second Code tab beside its own
+        throw KittyNotAnswering()
+    }
+
+    /// Relaunches a mode's tab if Claude exited or the tab was closed, and kitty itself if it's gone (quit, crashed, or
+    /// its last tab closed: `kitten panel` always quits then). Returns true if it launched that mode's Claude.
     @discardableResult
     func ensureTab(_ m: Mode, cwd: String, state: inout SavedState) -> Bool {
-        guard let socket else { return false }
-        let ls = runTool(KittyCommands.ls(socket: socket)).out
-        guard !windowExists(lsJSON: ls, mode: m) else { return false }
+        guard var socket else { return false }
+        var ls = runTool(KittyCommands.ls(socket: socket))
+        let restarted = ls.status != 0
+        if restarted {
+            unlink(String(socket.dropFirst("unix:".count))) // a crashed kitty leaves its socket file behind
+            do { socket = try startPanel(codeDir: state.usableProjectDir ?? paths.chatDir.path, state: &state) } catch {
+                EventLog.write("kitty restart failed: \(error)") // `socket` keeps the dead path, so the next send retries
+                return false
+            }
+            self.socket = socket
+            ls = runTool(KittyCommands.ls(socket: socket))
+        }
+        guard !windowExists(lsJSON: ls.out, mode: m) else { return restarted } // the new panel's first window is Code
         let args = sessionArgs(m, cwd: cwd, state: &state)
-        runTool(KittyCommands.launchTab(socket: socket, mode: m, cwd: cwd, claude: claude, args: args))
+        let launched = runTool(KittyCommands.launchTab(socket: socket, mode: m, cwd: cwd, claude: claude, args: args)).status == 0
         runTool(KittyCommands.focusTab(socket: socket, mode: .code)) // the console always rests on Code
-        return true
+        return launched
     }
 
     /// Moves and sizes the panel so it covers `content` (AppKit coords) on `display` (its full frame).
@@ -151,8 +171,9 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     }
 
     /// Closing windows leaves kitty running, so end the process itself. Sessions resume next launch.
+    /// Only while kitty still answers: if it died, its old pid may belong to another process by now.
     func quit() {
-        if let socket, let pid = kittyPid(fromSocket: socket) { kill(pid, SIGTERM) }
+        if let socket, runTool(KittyCommands.ls(socket: socket)).status == 0, let pid = kittyPid(fromSocket: socket) { kill(pid, SIGTERM) }
         socket = nil
     }
 
@@ -176,4 +197,8 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         if m == .code { state.codeSessionId = id } else { state.chatSessionId = id }
         return claudeArgs(mode: m, sessionId: id, resume: resume, settings: paths.hooksSettings(m).path)
     }
+}
+
+struct KittyNotAnswering: Error, CustomStringConvertible {
+    var description: String { "kitty didn't answer on its socket within 5 s" }
 }

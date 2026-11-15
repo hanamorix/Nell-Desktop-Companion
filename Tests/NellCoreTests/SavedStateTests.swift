@@ -45,3 +45,26 @@ import Testing
     let s = SavedState.load(url)
     #expect(s.projectDir == "/x" && s.theme == nil)
 }
+
+@Test func savedStateWithoutPositionsKeepsTheRest() throws {
+    // synthesized Decodable required every non-optional key, so one missing field wiped project, sessions and theme
+    let url = FileManager.default.temporaryDirectory.appending(path: "nell-state-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try Data(#"{"projectDir":"/x","codeSessionId":"c","chatSessionId":"h","theme":"Ink"}"#.utf8).write(to: url)
+    let s = SavedState.load(url)
+    #expect(s.projectDir == "/x" && s.codeSessionId == "c" && s.chatSessionId == "h" && s.theme == "Ink" && s.positions.isEmpty)
+    try Data("{}".utf8).write(to: url)
+    #expect(SavedState.load(url) == SavedState())
+}
+
+@Test func usableProjectDirIsAnExistingFolder() throws {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "nell-proj-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let file = dir.appending(path: "f.txt"); try Data().write(to: file)
+    var s = SavedState()
+    #expect(s.usableProjectDir == nil)
+    s.projectDir = dir.path; #expect(s.usableProjectDir == dir.path)
+    s.projectDir = file.path; #expect(s.usableProjectDir == nil)                     // a file, not a folder
+    s.projectDir = dir.appending(path: "gone").path; #expect(s.usableProjectDir == nil) // moved or deleted
+}

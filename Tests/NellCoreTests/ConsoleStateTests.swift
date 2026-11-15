@@ -14,14 +14,6 @@ import Testing
     c.pressCodeChip(selected: &selected); #expect(c.phase == .open)
 }
 
-@Test func chatChipLeavesConsoleAlone() {
-    var c = ConsoleState(); var selected = Mode.code
-    c.pressCodeChip(selected: &selected)
-    let before = c
-    selected = .chat // the 💬 chip only changes the selected mode
-    #expect(c == before)
-}
-
 @Test func chatConnectedReturnsToCodeTab() {
     var c = ConsoleState()
     c.open(tab: .chat); #expect(c.tab == .chat); #expect(c.phase == .open)

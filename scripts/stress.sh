@@ -25,6 +25,10 @@ mkdir -p "$OUT"
 bash scripts/showcase.sh list >/dev/null # bundles the showcase if it's stale
 if pgrep -f "$BIN" >/dev/null; then echo "a showcase is already running; quit it first (kill <its pid>)" >&2; exit 1; fi
 
+pid="" # the running phase's showcase; stopped on any exit, Ctrl-C included (open -n puts it outside our process group)
+trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; true' EXIT
+trap 'exit 130' INT TERM
+
 echo "phase,minutes,cpu_avg,cpu_peak,cpu_after_quiet,stalls,footprint_steady_mb,footprint_peak_mb,footprint_slope_mb_per_min,graphics_peak_mb,rss_start_mb,rss_peak_mb,rss_end_mb,pass" > "$OUT/summary.csv"
 
 mb() { awk -v v="$1" -v u="$2" 'BEGIN { print (u == "KB") ? v / 1024 : (u == "GB") ? v * 1024 : (u == "B") ? 0 : v }'; }
@@ -39,7 +43,7 @@ snapshot() { # snapshot <pid> <t> <txt> <csv>: one footprint sample
 phase() { # phase <name> <scene, or "" for the full cycle> <minutes>
   local name=$1 scene=$2 minutes=$3 log="$OUT/$1.log" csv="$OUT/$1.csv" fcsv="$OUT/$1-footprint.csv"
   open -n --stderr "$PWD/$log" "$APP" --args --showcase $scene
-  local pid=""
+  pid=""
   for _ in $(seq 50); do pid=$(pgrep -f "$BIN" || true); [ -n "$pid" ] && break; sleep 0.2; done
   [ -n "$pid" ] || { echo "showcase didn't start" >&2; exit 1; }
   echo "t_s,cpu_pct,rss_kb,cpu_time_s" > "$csv"
@@ -53,10 +57,12 @@ phase() { # phase <name> <scene, or "" for the full cycle> <minutes>
     sleep 1
   done
   snapshot "$pid" $(( $(date +%s) - t0 )) "$OUT/$name-footprint.txt" "$fcsv" # and one at the very end
-  kill "$pid" # the showcase only
+  local crashed=0
+  kill "$pid" 2>/dev/null || { crashed=1; echo "$name: the showcase crashed (see $log)" >&2; } # the showcase only
   while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done # gone before the next phase looks for a showcase
+  pid=""
   local stalls; stalls=$(grep -c STALL "$log" || true)
-  awk -F, -v name="$name" -v minutes="$minutes" -v stalls="$stalls" '
+  awk -F, -v name="$name" -v minutes="$minutes" -v stalls="$stalls" -v crashed="$crashed" '
     FNR == 1 { next }
     FILENAME ~ /-footprint\.csv$/ { fn++; ft[fn] = $1; fv[fn] = $2; if ($2 > fpeak) fpeak = $2; if ($3 > gpeak) gpeak = $3; next }
     { n++; t[n] = $1; c[n] = $2; r[n] = $3 / 1024; k[n] = $4 }
@@ -81,6 +87,7 @@ phase() { # phase <name> <scene, or "" for the full cycle> <minutes>
       if (name != "burst" && (m == 0 || steady > 80 || slope >= 1)) ok = 0 # burst memory is report-only
       if (name == "idle" && (!qn || qv > 0.2)) ok = 0
       if (name == "burst" && stalls > 0) ok = 0
+      if (crashed) ok = 0
       printf "%s,%s,%.2f,%.1f,%s,%s,%.1f,%.1f,%.3f,%.1f,%.1f,%.1f,%.1f,%s\n", name, minutes, avg, peak, quiet,
              (name == "burst") ? stalls : "n/a", steady, fpeak, slope, gpeak, r[1], rpeak, r[n], ok ? "PASS" : "FAIL"
     }' "$fcsv" "$csv" >> "$OUT/summary.csv"
