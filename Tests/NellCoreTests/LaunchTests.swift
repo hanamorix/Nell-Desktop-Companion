@@ -27,7 +27,7 @@ private func hooks(_ data: Data) throws -> [String: [[String: Any]]] {
 }
 
 @Test func settingsJSONHasPermissionTimeout600() throws {
-    let h = try hooks(hooksSettingsJSON(script: "/x/nell-hook.sh", socket: "/x/nell.sock", mode: .code))
+    let h = try hooks(hooksSettingsJSON(script: "/x/nell-hook.sh", statusScript: "/x/nell-status.sh", socket: "/x/nell.sock", mode: .code))
     for e in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
               "Notification", "Stop", "StopFailure", "SubagentStop", "SessionEnd"] { #expect(h[e] != nil, "\(e)") }
     let perm = try #require((h["PermissionRequest"]?.first?["hooks"] as? [[String: Any]])?.first)
@@ -39,7 +39,7 @@ private func hooks(_ data: Data) throws -> [String: [[String: Any]]] {
 @Test func settingsJSONQuotesPathsWithSpaces() throws {
     let script = "/Users/x/Library/Application Support/Nell/nell-hook.sh"
     let sock = "/Users/x/Library/Application Support/Nell/nell.sock"
-    let h = try hooks(hooksSettingsJSON(script: script, socket: sock, mode: .chat))
+    let h = try hooks(hooksSettingsJSON(script: script, statusScript: "/x/nell-status.sh", socket: sock, mode: .chat))
     let cmd = try #require(((h["Stop"]?.first?["hooks"] as? [[String: Any]])?.first?["command"]) as? String)
     #expect(cmd == "'\(script)' chat '\(sock)'")
 }
@@ -57,4 +57,31 @@ private func hooks(_ data: Data) throws -> [String: [[String: Any]]] {
     #expect(p.nellSocket.path == "/A/Nell/nell.sock")
     #expect(p.hooksSettings(.chat).path == "/A/Nell/hooks-chat.json")
     #expect(p.chatDir.path == "/A/Nell/chat")
+}
+
+@Test func settingsCarryStatusLine() throws {
+    for m in Mode.allCases {
+        let data = hooksSettingsJSON(script: "/x/nell-hook.sh", statusScript: "/A B/nell-status.sh", socket: "/A B/nell.sock", mode: m)
+        let obj = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let s = try #require(obj["statusLine"] as? [String: Any])
+        #expect(s["type"] as? String == "command")
+        #expect(s["command"] as? String == "'/A B/nell-status.sh' '/A B/nell.sock'")
+        #expect(s["padding"] as? Int == 0)
+        let h = try hooks(data)
+        #expect(h.count == hookEvents.count)
+    }
+}
+
+@Test func statusScriptGivesUpQuietly() throws {
+    let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "Sources/Nell/Resources/nell-status.sh").path
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/bash"); p.arguments = [script, "/nonexistent.sock"]
+    let inp = Pipe(), out = Pipe(); p.standardInput = inp; p.standardOutput = out
+    let t = Date(); try p.run()
+    inp.fileHandleForWriting.write(try fixture("statusline")); try inp.fileHandleForWriting.close()
+    p.waitUntilExit()
+    #expect(p.terminationStatus == 0)
+    #expect(out.fileHandleForReading.readDataToEndOfFile().isEmpty)
+    #expect(Date().timeIntervalSince(t) < 1)
 }

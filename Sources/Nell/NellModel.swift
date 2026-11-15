@@ -19,6 +19,11 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
     @Published private(set) var layout: NellCore.Layout?
     /// What Claude Code is doing right now, for the minimised console bubble.
     @Published private(set) var codeStatus: String?
+    /// The latest usage from Claude's status line (nil until the first reading; not persisted).
+    @Published private(set) var usage: UsageReading?
+    /// Published separately so the view redraws when a reset passes, though `usage` itself doesn't change.
+    @Published private(set) var weeklyGauge = gauge(nil, .weekly, now: Date())
+    @Published private(set) var sessionGauge = gauge(nil, .session, now: Date())
     var hovered: UUID?
     /// Recomputes where everything goes for a console phase and moves Nell's window (set by the app delegate).
     var relayout: ((ConsolePhase) -> NellCore.Layout)?
@@ -243,6 +248,12 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         refresh()
     }
 
+    func usageUpdated(_ r: UsageReading) {
+        let merged = usage?.merged(r) ?? r
+        if merged != usage { usage = merged }
+        refresh()
+    }
+
     func refresh() {
         guard let code = trackers[.code], let chat = trackers[.chat] else { return }
         let now = Date()
@@ -253,8 +264,11 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         for e in [Emoji.warning, .question, .plug] { reactions.setHeld(e, holding.contains(e)) }
         let emoji = reactions.current(now: now)
         let b = NellCore.body(code: code, chat: chat, selected: selected)
-        pose = (b, face(body: b, emoji: emoji), emoji, context.stacks)
+        pose = (b, face(body: b, emoji: emoji, tired: tired(usage, now: now)), emoji, context.stacks)
         sprite.show(body: b, face: pose.face, emoji: emoji, stacks: context.stacks)
+        let w = gauge(usage?.weekly, .weekly, now: now), s = gauge(usage?.session, .session, now: now)
+        if w != weeklyGauge { weeklyGauge = w }
+        if s != sessionGauge { sessionGauge = s }
         wakeAtExpiry(now)
         let held = trackers[selected]?.inputHeld ?? false
         if barHeld != held { barHeld = held }
@@ -262,9 +276,9 @@ enum ConsoleChrome { static let border: CGFloat = 4; static let title: CGFloat =
         if nextShown != shown { shown = nextShown } // don't re-render the view every tick
     }
 
-    /// A brief emoji ends on time (2.5 s), not on the next 1 Hz tick.
+    /// A brief emoji ends on time (2.5 s), and a passed usage reset empties its chip, both without waiting for the next 1 Hz tick or event.
     private func wakeAtExpiry(_ now: Date) {
-        let at = reactions.nextExpiry(now: now)
+        let at = [reactions.nextExpiry(now: now), usage?.nextReset(after: now)].compactMap { $0 }.min()
         guard at != expiry?.at else { return }
         expiry?.timer.invalidate(); expiry = nil
         guard let at else { return }

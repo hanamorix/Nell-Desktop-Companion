@@ -36,7 +36,8 @@ import SwiftUI
                     DispatchQueue.main.async { MainActor.assumeIsolated { model.handle(m, e, requestId: id) } } },
                 onRequestSettled: { m, id, a in
                     EventLog.write("\(m.rawValue) settled req=\(id.prefix(8)) \(a)")
-                    DispatchQueue.main.async { MainActor.assumeIsolated { model.requestSettled(m, id, a) } } })
+                    DispatchQueue.main.async { MainActor.assumeIsolated { model.requestSettled(m, id, a) } } },
+                onStatus: { r in DispatchQueue.main.async { MainActor.assumeIsolated { model.usageUpdated(r) } } })
             do { try server.start() } catch { return fail("Nell couldn't open her socket: \(error)") }
             self.server = server
         }

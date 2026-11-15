@@ -82,3 +82,33 @@ func waitFor(_ cond: () -> Bool) { for _ in 0..<100 where !cond() { usleep(50_00
     waitFor { !events.all.isEmpty }
     #expect(events.all == ["PreToolUse"])
 }
+
+private func postStatus(_ sock: String, _ body: Data) -> String {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+    p.arguments = ["-s", "-m", "10", "--unix-socket", sock, "--data-binary", "@-", "http://nell/status"]
+    let inp = Pipe(); p.standardInput = inp; p.standardOutput = Pipe()
+    try! p.run(); inp.fileHandleForWriting.write(body); try! inp.fileHandleForWriting.close()
+    return output(p)
+}
+
+@Test func statusRouteRepliesWithLineAndReportsReading() throws {
+    let sock = tmpSocket(); let events = Box<String>(); let readings = Box<UsageReading>()
+    let s = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, e, _ in events.add(e.name) },
+                       onRequestSettled: { _, _, _ in }, onStatus: { readings.add($0) })
+    try s.start(); defer { s.stop() }
+    let body = try fixture("statusline")
+    let expected = try #require(UsageReading.decode(body))
+    #expect(postStatus(sock, body) == statusLineText(expected))
+    waitFor { !readings.all.isEmpty }
+    #expect(readings.all == [expected]); #expect(events.all.isEmpty)
+}
+
+@Test func statusRouteWithoutLimitsRepliesEmpty() throws {
+    let sock = tmpSocket(); let readings = Box<UsageReading>()
+    let s = HookServer(socketPath: sock, registry: ApprovalRegistry(), onEvent: { _, _, _ in },
+                       onRequestSettled: { _, _, _ in }, onStatus: { readings.add($0) })
+    try s.start(); defer { s.stop() }
+    #expect(postStatus(sock, Data(#"{"model":{}}"#.utf8)) == "")
+    usleep(200_000); #expect(readings.all.isEmpty)
+}

@@ -12,11 +12,13 @@ public final class HookServer: @unchecked Sendable {
     private let registry: ApprovalRegistry
     private let onEvent: OnEvent
     private let onRequestSettled: OnSettled
+    private let onStatus: @Sendable (UsageReading) -> Void
     private var fd: Int32 = -1
     private var source: DispatchSourceRead?
 
-    public init(socketPath: String, registry: ApprovalRegistry, onEvent: @escaping OnEvent, onRequestSettled: @escaping OnSettled) {
-        self.path = socketPath; self.registry = registry; self.onEvent = onEvent; self.onRequestSettled = onRequestSettled
+    public init(socketPath: String, registry: ApprovalRegistry, onEvent: @escaping OnEvent, onRequestSettled: @escaping OnSettled,
+                onStatus: @escaping @Sendable (UsageReading) -> Void = { _ in }) {
+        self.path = socketPath; self.registry = registry; self.onEvent = onEvent; self.onRequestSettled = onRequestSettled; self.onStatus = onStatus
     }
 
     public func start() throws {
@@ -63,6 +65,10 @@ public final class HookServer: @unchecked Sendable {
             case .invalid: return
             case .incomplete: if buf.count > 4_000_000 { return }
             }
+        }
+        if let r = request, r.path == "/status" { // the status line, not a hook: reply with Claude's status-bar text
+            guard let reading = UsageReading.decode(r.body) else { reply(c, Data()); return }
+            onStatus(reading); reply(c, Data(statusLineText(reading).utf8)); return
         }
         guard let r = request, let mode = Mode(rawValue: r.query["mode"] ?? ""), let e = try? HookEvent.decode(r.body) else {
             reply(c, Data()); return

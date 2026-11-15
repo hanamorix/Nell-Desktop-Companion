@@ -9,6 +9,7 @@ public struct Paths: Sendable {
     public var nellSocket: URL { support.appending(path: "nell.sock") }
     public var kittyConf: URL { support.appending(path: "kitty.conf") }
     public var hookScript: URL { support.appending(path: "nell-hook.sh") }
+    public var statusScript: URL { support.appending(path: "nell-status.sh") }
     public var stateFile: URL { support.appending(path: "state.json") }
     public var chatDir: URL { support.appending(path: "chat") }
     public func hooksSettings(_ m: Mode) -> URL { support.appending(path: "hooks-\(m.rawValue).json") }
@@ -22,14 +23,14 @@ public let chatSystemPrompt = "You are in a plain chat inside Nell, a desktop co
 
 func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
-public func hooksSettingsJSON(script: String, socket: String, mode: Mode) -> Data {
+public func hooksSettingsJSON(script: String, statusScript: String, socket: String, mode: Mode) -> Data {
     let command = "\(shellQuote(script)) \(mode.rawValue) \(shellQuote(socket))"
     var hooks: [String: Any] = [:]
     for e in hookEvents {
         let timeout = e == "PermissionRequest" ? Timings.hookTimeout : 5
         hooks[e] = [["hooks": [["type": "command", "command": command, "timeout": timeout]]]]
     }
-    return try! JSONSerialization.data(withJSONObject: ["hooks": hooks], options: [.prettyPrinted, .sortedKeys])
+    return try! JSONSerialization.data(withJSONObject: ["hooks": hooks, "statusLine": ["type": "command", "command": "\(shellQuote(statusScript)) \(shellQuote(socket))", "padding": 0] as [String: Any]], options: [.prettyPrinted, .sortedKeys])
 }
 
 public func claudeArgs(mode: Mode, sessionId: String, resume: Bool, settings: String) -> [String] {

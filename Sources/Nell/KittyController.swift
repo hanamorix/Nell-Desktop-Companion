@@ -34,17 +34,17 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
 
     init(paths: Paths) { self.paths = paths }
 
-    /// Writes kitty.conf, the hook script and both hook settings files into Application Support.
+    /// Writes kitty.conf, the hook and status scripts and both hook settings files into Application Support.
     func installSupportFiles() throws {
         let fm = FileManager.default
         try fm.createDirectory(at: paths.chatDir, withIntermediateDirectories: true)
-        for (name, dest) in [("kitty.conf", paths.kittyConf), ("nell-hook.sh", paths.hookScript)] {
+        for (name, dest) in [("kitty.conf", paths.kittyConf), ("nell-hook.sh", paths.hookScript), ("nell-status.sh", paths.statusScript)] {
             try? fm.removeItem(at: dest)
             try fm.copyItem(at: resourceURL(name), to: dest)
         }
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: paths.hookScript.path)
+        for s in [paths.hookScript, paths.statusScript] { try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: s.path) }
         for m in Mode.allCases {
-            try hooksSettingsJSON(script: paths.hookScript.path, socket: paths.nellSocket.path, mode: m).write(to: paths.hooksSettings(m))
+            try hooksSettingsJSON(script: paths.hookScript.path, statusScript: paths.statusScript.path, socket: paths.nellSocket.path, mode: m).write(to: paths.hooksSettings(m))
         }
     }
 
