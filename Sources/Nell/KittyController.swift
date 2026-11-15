@@ -90,6 +90,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
         for s in sockets where s != live { unlink(s) }
         if let live {
             socket = "unix:" + live
+            codeAway = !state.ownsCodeSession(cwd: projectDir) // its Code may still be in the chat-folder fallback
             hideConsole() // the console phase always starts hidden
             applyTheme(theme)
         } else {
@@ -205,8 +206,7 @@ func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data)
     func restartCode(in dir: String, state: inout SavedState) {
         guard let socket else { return }
         runTool(KittyCommands.closeTab(socket: socket, mode: .code))
-        state.codeSessionId = nil
-        state.projectDir = dir
+        state.chooseProject(dir)
         ensureTab(.code, cwd: dir, state: &state)
     }
 

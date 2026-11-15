@@ -143,15 +143,42 @@ private func src(_ name: String, _ s: String) -> HookEvent { var e = ev(name); e
     #expect(s.sent.map(\.1) == ["after"])
 }
 
-@Test func rtfApprovalPendingAtStopLeavesNoHold() {
+// 1 (i): Stop hands a still-pending approval to kitty with no decision; Claude's own prompt may be open, so it holds.
+@Test func approvalPendingAtStopHoldsTheBar() {
     var s = Sim(); s.start(.code, now: t0)
-    s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u1"), now: at(1))
-    s.handle(.code, ev("PermissionRequest", tool: "Bash", input: rm), rid: "r1", now: at(1))
+    s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u8"), now: at(1))
+    s.handle(.code, ev("PermissionRequest", tool: "Bash", input: rm), rid: "r8", now: at(1))
     s.handle(.code, ev("Stop"), now: at(2))
-    #expect(s.releasedHooks.map(\.1) == ["r1"])
-    s.settle(.code, "r1", .none, now: at(2))
-    #expect(s.t[.code]!.inputHeld == false)
-    s.submit("goes straight out"); #expect(s.sent.count == 1)
+    #expect(s.releasedHooks.map(\.1) == ["r8"])
+    s.settle(.code, "r8", .none, now: at(2))
+    s.submit("typed")
+    #expect(s.sent.isEmpty, "sent \(s.sent) while Claude's prompt may be open")
+    s.tick(now: at(2 + Timings.typingWatchdog - 1)); #expect(s.draft.isEmpty)
+    s.tick(now: at(2 + Timings.typingWatchdog))
+    #expect(s.sent.isEmpty); #expect(s.draft == "typed", "the watchdog hands it back, never sends it")
+}
+
+// 1 (ii): Stop with a question's picker still open holds the bar too.
+@Test func questionPendingAtStopHoldsTheBar() {
+    var s = Sim(); s.start(.code, now: t0)
+    s.handle(.code, ev("PreToolUse", tool: "AskUserQuestion", input: ask, id: "q1"), now: at(1))
+    s.handle(.code, ev("PermissionRequest", tool: "AskUserQuestion", input: ask), rid: "rq", now: at(1))
+    s.handle(.code, ev("Stop"), now: at(2))
+    s.submit("typed")
+    #expect(s.sent.isEmpty, "sent \(s.sent) into an open picker")
+    s.handle(.code, ev("UserPromptSubmit"), now: at(9)) // you answered in kitty and Claude moved on
+    #expect(s.sent.map(\.1) == ["typed"])
+}
+
+// 1: a turn end with nothing pending releases as before.
+@Test func stopWithNothingPendingDoesNotHold() {
+    for end in ["Stop", "StopFailure"] {
+        var s = Sim(); s.start(.code, now: t0)
+        s.handle(.code, ev("PreToolUse", tool: "Bash", input: rm, id: "u1"), now: at(1))
+        s.handle(.code, ev("PostToolUse", tool: "Bash", input: rm, id: "u1"), now: at(2))
+        s.handle(.code, ev(end), now: at(3))
+        s.submit("goes straight out"); #expect(s.sent.count == 1, "\(end)")
+    }
 }
 
 @Test func rtfResumeClearsQuestionAndHold() {
@@ -330,4 +357,12 @@ private func src(_ name: String, _ s: String) -> HookEvent { var e = ev(name); e
     b.add(.alert, mode: .code, text: "Your message to Code is back in the bar", now: t0)
     b.add(.alert, mode: .code, text: "Your message to Code is back in the bar", now: at(1))
     #expect(b.bubbles.count == 1)
+}
+
+// 2: re-picking the same project folder keeps its Code session; a different folder starts a new one
+@Test func choosingTheSameProjectKeepsItsSession() {
+    var s = SavedState(); s.projectDir = "/Users/x/proj"; s.codeSessionId = "c"
+    s.chooseProject("/Users/x/proj/"); #expect(s.codeSessionId == "c", "same folder, trailing slash")
+    s.chooseProject("/Users/x/./proj"); #expect(s.codeSessionId == "c")
+    s.chooseProject("/Users/x/other"); #expect(s.codeSessionId == nil); #expect(s.projectDir == "/Users/x/other")
 }

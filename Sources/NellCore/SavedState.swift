@@ -39,6 +39,14 @@ public struct SavedState: Codable, Equatable, Sendable {
     /// any, with none saved). Code that fell back to the chat folder must not stop the project's session resuming.
     public func ownsCodeSession(cwd: String) -> Bool { projectDir == nil || projectDir == cwd }
 
+    /// Picking a project folder: a different one starts a fresh Code session; the same one (re-picked to recover from the
+    /// chat-folder fallback) keeps its session so it resumes.
+    public mutating func chooseProject(_ dir: String) {
+        let same = projectDir.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == URL(fileURLWithPath: dir).standardizedFileURL.path
+        if !same { codeSessionId = nil }
+        projectDir = dir
+    }
+
     public static func load(_ url: URL) -> SavedState {
         guard let d = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(SavedState.self, from: d) else { return SavedState() }
         return s
