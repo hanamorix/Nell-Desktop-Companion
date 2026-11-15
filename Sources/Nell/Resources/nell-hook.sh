@@ -4,6 +4,7 @@
 # Needs nothing on PATH, and no jq (it isn't on macOS before 15): Nell's settings pass the event name.
 # Nell's kitty windows carry the user var nell_mode (an env tag would be inherited by any new tab).
 mode="$1"; sock="$2"; event="$3"
+# Nell passes the kitten she found in kitty's env; the default is for a kitty an older Nell started
 KITTEN="${NELL_KITTEN:-/Applications/kitty.app/Contents/MacOS/kitten}"
 input=$(/bin/cat)
 # a Claude session started before the upgrade still runs the old two-argument command: read the event as before, where jq exists

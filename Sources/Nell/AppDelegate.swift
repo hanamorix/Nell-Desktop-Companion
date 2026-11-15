@@ -49,10 +49,15 @@ import SwiftUI
 
         Fonts.register()
         if showcase == nil {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            // a slow or hung shell falls back to the usual places, never stalls the launch
+            let lookup = runTool(claudeLookup(shell: kitty.shell, home: home), environment: kitty.baseEnvironment(), timeout: 10)
+            if lookup.status != 0 { EventLog.write("claude lookup in \(kitty.shell) ended with \(lookup.status)") }
+            guard let claude = locateClaude(shellOutput: String(decoding: lookup.out, as: UTF8.self), home: home) else { return claudeMissing() }
+            guard let app = locateKitty(home: home) ?? offerKittyInstall(home: home) else { return } // its alerts quit
+            kitty.claude = claude; kitty.commands = KittyCommands(app: app)
+            EventLog.write("claude \(claude), kitty \(app)")
             Fonts.installForKitty() // approved by the user: kitty only loads installed fonts
-            guard FileManager.default.isExecutableFile(atPath: kitty.claude) else {
-                return fail("Claude Code isn't installed at \(kitty.claude), where Nell runs it from.")
-            }
             // a moved or deleted folder asks again; Cancel leaves none, and Code works in the chat folder until one is picked
             if model.state.usableProjectDir == nil { model.state.projectDir = pickFolder() }
             do {
@@ -182,6 +187,68 @@ import SwiftUI
         kitty.restartCode(in: dir, state: &model.state)
         model.markLaunched([.code])
         save()
+    }
+
+    /// Never runs the installer itself: it's a remote script, so the user runs it in their own terminal.
+    private func claudeMissing() {
+        NSApp.activate()
+        let a = NSAlert()
+        a.messageText = "Nell needs Claude Code"
+        a.informativeText = "Claude Code isn't installed (Nell looked in your login shell's PATH and the usual places). "
+            + "Install it by running this in Terminal, then open Nell again:"
+        let command = NSTextField(string: "curl -fsSL https://claude.ai/install.sh | bash")
+        command.isEditable = false; command.isSelectable = true
+        command.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        command.frame = NSRect(x: 0, y: 0, width: 340, height: 22)
+        a.accessoryView = command
+        a.addButton(withTitle: "Quit"); a.addButton(withTitle: "Open Setup Guide")
+        if a.runModal() == .alertSecondButtonReturn { NSWorkspace.shared.open(URL(string: "https://docs.claude.com/en/docs/claude-code/setup")!) }
+        NSApp.terminate(nil)
+    }
+
+    private var kittyInstall: Result<URL, any Error>?
+
+    /// kitty is missing: offers the official signed one, installed into ~/Applications off the main thread while a
+    /// progress window shows. Returns its kitty.app, or nil once Nell is quitting.
+    private func offerKittyInstall(home: String) -> String? {
+        NSApp.activate()
+        let ask = NSAlert()
+        ask.messageText = "Nell needs kitty"
+        ask.informativeText = "Nell needs kitty (a free terminal) to run Claude. Install it now? "
+            + "(downloads the official signed kitty from github.com/kovidgoyal/kitty)"
+        ask.addButton(withTitle: "Install"); ask.addButton(withTitle: "Quit")
+        guard ask.runModal() == .alertFirstButtonReturn else { NSApp.terminate(nil); return nil }
+
+        let window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 70), styleMask: [.titled], backing: .buffered, defer: false)
+        window.title = "Nell"
+        let spinner = NSProgressIndicator(); spinner.style = .spinning; spinner.controlSize = .small; spinner.startAnimation(nil)
+        let row = NSStackView(views: [spinner, NSTextField(labelWithString: "Installing kitty… (about 80 MB)")])
+        row.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        window.contentView = row; window.center()
+        let folder = URL(fileURLWithPath: home).appending(path: "Applications")
+        DispatchQueue.global().async {
+            let r = Result { try installKitty(into: folder) }
+            // abortModal, not stopModal: this isn't an event of the modal window, so stopModal would wait for one
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.kittyInstall = r; NSApp.abortModal() } }
+        }
+        NSApp.runModal(for: window)
+        window.orderOut(nil)
+        switch kittyInstall {
+        case .success(let app)?:
+            EventLog.write("installed kitty at \(app.path)")
+            return app.path
+        case .failure(let e)?:
+            EventLog.write("kitty install failed: \(e)")
+            let a = NSAlert()
+            a.messageText = "Nell couldn't install kitty"
+            a.informativeText = "\((e as? InstallFailed)?.description ?? e.localizedDescription)\n\nNothing was installed. "
+                + "You can install kitty yourself from its site, then open Nell again."
+            a.addButton(withTitle: "Quit"); a.addButton(withTitle: "Open kitty's Site")
+            if a.runModal() == .alertSecondButtonReturn { NSWorkspace.shared.open(URL(string: "https://sw.kovidgoyal.net/kitty/")!) }
+        case nil: break
+        }
+        NSApp.terminate(nil)
+        return nil
     }
 
     private func fail(_ message: String) {

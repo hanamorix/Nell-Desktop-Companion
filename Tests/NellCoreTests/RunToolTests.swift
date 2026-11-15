@@ -23,3 +23,22 @@ import Testing
     #expect(String(decoding: fed.out, as: UTF8.self) == "echoed")
     #expect(runTool(["/nonexistent/tool"]).status == -1)
 }
+
+@Test func runToolTimeoutKillsAHungToolAndNeverWaitsForAHeldPipe() {
+    var start = Date()
+    let hung = runTool(["/bin/sleep", "10"], timeout: 0.3)
+    #expect(hung.status == -2)
+    #expect(Date().timeIntervalSince(start) < 2)
+    // an rc file that leaves a background job holding stdout: the tool exited, so its output comes back at once
+    start = Date()
+    let held = runTool(["/bin/sh", "-c", "/bin/sleep 3 & echo hi"], timeout: 5)
+    #expect(held.status == 0)
+    #expect(String(decoding: held.out, as: UTF8.self) == "hi\n")
+    #expect(Date().timeIntervalSince(start) < 2)
+}
+
+@Test func runToolPassesEnvironmentAndCanKeepStderr() {
+    #expect(String(decoding: runTool(["/usr/bin/env"], environment: ["ONLY": "1"]).out, as: UTF8.self) == "ONLY=1\n")
+    #expect(String(decoding: runTool(["/bin/sh", "-c", "echo err >&2"]).out, as: UTF8.self) == "")
+    #expect(String(decoding: runTool(["/bin/sh", "-c", "echo err >&2"], stderr: true).out, as: UTF8.self) == "err\n")
+}

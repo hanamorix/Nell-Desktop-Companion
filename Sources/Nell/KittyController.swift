@@ -20,8 +20,10 @@ func resourceURL(_ name: String) -> URL {
     private var tab: Mode = .code // the tab the console last showed
     private var restartFailedAt: Date?
     private let home = FileManager.default.homeDirectoryForCurrentUser
-    var claude: String { home.appending(path: ".local/bin/claude").path }
-    private let shell = KittyCommands.userLoginShell()
+    /// The kitty and claude Nell found, set by the owner before ensureRunning.
+    var commands = KittyCommands()
+    var claude = ""
+    let shell = KittyCommands.userLoginShell()
 
     /// Set by the owner before installSupportFiles runs; decides kitty.conf's colours.
     var theme: Theme = Themes.plumNight
@@ -37,7 +39,7 @@ func resourceURL(_ name: String) -> URL {
         theme = t
         guard let socket else { return }
         do { try kittyColorsConf(t).write(to: paths.kittyColors, atomically: true, encoding: .utf8) } catch { return }
-        runTool(KittyCommands.setColors(socket: socket, conf: paths.kittyColors.path))
+        runTool(commands.setColors(socket: socket, conf: paths.kittyColors.path))
     }
 
     /// Writes kitty.conf, the hook and status scripts and both hook settings files into Application Support.
@@ -70,7 +72,7 @@ func resourceURL(_ name: String) -> URL {
         var ls = (status: Int32(0), out: Data())
         var live = pickKittySocket(sockets, isLive: { path, pid in
             guard kill(pid, 0) == 0 else { return false }
-            ls = runTool(KittyCommands.ls(socket: "unix:" + path)); return ls.status == 0 || ls.status == -1 // -1 ends the search
+            ls = runTool(commands.ls(socket: "unix:" + path)); return ls.status == 0 || ls.status == -1 // -1 ends the search
         })
         // kitten never ran (no free fds): that kitty may be alive, so neither unlink its socket nor start a second one
         if ls.status == -1 { throw KittenWontRun() }
@@ -99,10 +101,10 @@ func resourceURL(_ name: String) -> URL {
     private func startPanel(codeDir: String, state: inout SavedState, wait: TimeInterval) throws -> String {
         let request = lastRequest ?? PanelRequest(marginLeft: 100, marginTop: 100, widthPx: 700, heightPx: 420) // re-placed before shown
         let args = sessionArgs(.code, cwd: codeDir, state: &state)
-        let argv = KittyCommands.launchPanel(paths: paths, request: request, cwd: codeDir, shell: shell, claude: claude, args: args)
+        let argv = commands.launchPanel(paths: paths, request: request, cwd: codeDir, shell: shell, claude: claude, args: args)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
-        p.environment = KittyCommands.cleanEnvironment(home: home.path, user: NSUserName(), shell: shell, session: sessionEnvironment())
+        p.environment = baseEnvironment()
         p.currentDirectoryURL = URL(fileURLWithPath: codeDir)
         p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
         do { try p.run() } catch where codeDir != paths.chatDir.path {
@@ -117,7 +119,7 @@ func resourceURL(_ name: String) -> URL {
         let path = paths.support.appending(path: "kitty-\(p.processIdentifier).sock").path // kitten panel execs into kitty
         let deadline = Date().addingTimeInterval(wait)
         while Date() < deadline {
-            if FileManager.default.fileExists(atPath: path), runTool(KittyCommands.tagFirstWindow(socket: "unix:" + path)).status == 0 {
+            if FileManager.default.fileExists(atPath: path), runTool(commands.tagFirstWindow(socket: "unix:" + path)).status == 0 {
                 return "unix:" + path
             }
             usleep(100_000)
@@ -132,7 +134,7 @@ func resourceURL(_ name: String) -> URL {
     @discardableResult
     func ensureTab(_ m: Mode, cwd: String, state: inout SavedState) -> TabCheck {
         guard var socket else { return .ready } // never started (the showcase): every kitty call is a no-op
-        var ls = runTool(KittyCommands.ls(socket: socket))
+        var ls = runTool(commands.ls(socket: socket))
         // kitten never ran (no free fds): kitty may be fine and mid-turn, so don't end it; nothing can take text right now
         if ls.status == -1 { return .unavailable }
         let restarted = ls.status != 0
@@ -151,14 +153,14 @@ func resourceURL(_ name: String) -> URL {
             }
             restartFailedAt = nil
             self.socket = socket
-            if shown { runTool(KittyCommands.showPanel(socket: socket)) }
-            ls = runTool(KittyCommands.ls(socket: socket))
+            if shown { runTool(commands.showPanel(socket: socket)) }
+            ls = runTool(commands.ls(socket: socket))
         }
         let started: [Mode] = restarted ? [.code] : [] // the new panel's first window is Code
         guard !windowExists(lsJSON: ls.out, mode: m) else { return started.isEmpty ? .ready : .launched(started) }
         let args = sessionArgs(m, cwd: cwd, state: &state)
-        let launched = runTool(KittyCommands.launchTab(socket: socket, mode: m, cwd: cwd, shell: shell, claude: claude, args: args)).status == 0
-        runTool(KittyCommands.focusTab(socket: socket, mode: tab)) // the console stays on the tab it shows
+        let launched = runTool(commands.launchTab(socket: socket, mode: m, cwd: cwd, shell: shell, claude: claude, args: args)).status == 0
+        runTool(commands.focusTab(socket: socket, mode: tab)) // the console stays on the tab it shows
         let all = started + (launched ? [m] : [])
         return all.isEmpty ? .unavailable : .launched(all)
     }
@@ -169,7 +171,7 @@ func resourceURL(_ name: String) -> URL {
         let r = panelRequest(content: content, display: display, cal: cal)
         guard r != lastRequest else { return }
         lastRequest = r
-        runTool(KittyCommands.placePanel(socket: socket, request: r))
+        runTool(commands.placePanel(socket: socket, request: r))
     }
 
     /// Shows the console on `tab` and gives it the keyboard. The first time, measures kitty's real frame and returns
@@ -177,28 +179,28 @@ func resourceURL(_ name: String) -> URL {
     func showConsole(tab: Mode) -> PanelCalibration? {
         guard let socket else { return nil }
         shown = true; self.tab = tab
-        runTool(KittyCommands.focusTab(socket: socket, mode: tab))
-        runTool(KittyCommands.showPanel(socket: socket))
-        runTool(KittyCommands.focus(socket: socket, mode: tab))
+        runTool(commands.focusTab(socket: socket, mode: tab))
+        runTool(commands.showPanel(socket: socket))
+        runTool(commands.focus(socket: socket, mode: tab))
         guard !measured, let r = lastRequest, let actual = panelFrameTopLeft() else { return nil }
         measured = true
         return PanelCalibration.measured(requested: CGRect(x: r.marginLeft, y: r.marginTop, width: r.widthPx, height: r.heightPx), actual: actual)
     }
 
     /// Switch the console's visible tab without showing it or taking the keyboard.
-    func selectTab(_ m: Mode) { tab = m; if let socket { runTool(KittyCommands.focusTab(socket: socket, mode: m)) } }
+    func selectTab(_ m: Mode) { tab = m; if let socket { runTool(commands.focusTab(socket: socket, mode: m)) } }
 
-    func hideConsole() { shown = false; if let socket { runTool(KittyCommands.hidePanel(socket: socket)) } }
+    func hideConsole() { shown = false; if let socket { runTool(commands.hidePanel(socket: socket)) } }
 
     func send(_ text: String, to m: Mode) {
         guard let socket else { return }
-        runTool(KittyCommands.sendText(socket: socket, mode: m), stdin: Data(text.utf8))
-        runTool(KittyCommands.sendEnter(socket: socket, mode: m))
+        runTool(commands.sendText(socket: socket, mode: m), stdin: Data(text.utf8))
+        runTool(commands.sendEnter(socket: socket, mode: m))
     }
 
     func restartCode(in dir: String, state: inout SavedState) {
         guard let socket else { return }
-        runTool(KittyCommands.closeTab(socket: socket, mode: .code))
+        runTool(commands.closeTab(socket: socket, mode: .code))
         state.chooseProject(dir)
         ensureTab(.code, cwd: dir, state: &state)
     }
@@ -206,7 +208,7 @@ func resourceURL(_ name: String) -> URL {
     /// Closing windows leaves kitty running, so end the process itself. Sessions resume next launch.
     /// Only while kitty still answers: if it died, its old pid may belong to another process by now.
     func quit() {
-        if let socket, runTool(KittyCommands.ls(socket: socket)).status == 0, let pid = kittyPid(fromSocket: socket) { kill(pid, SIGTERM) }
+        if let socket, runTool(commands.ls(socket: socket)).status == 0, let pid = kittyPid(fromSocket: socket) { kill(pid, SIGTERM) }
         socket = nil
     }
 
@@ -220,6 +222,11 @@ func resourceURL(_ name: String) -> URL {
             }
         }
         return nil
+    }
+
+    /// The clean environment kitty (and the claude lookup) start from: launchd's, never Nell's.
+    func baseEnvironment() -> [String: String] {
+        KittyCommands.cleanEnvironment(home: home.path, user: NSUserName(), shell: shell, session: sessionEnvironment())
     }
 
     /// What a terminal inherits from launchd but a login shell doesn't set, read from the system rather than Nell's env.
@@ -252,9 +259,11 @@ struct KittyNotAnswering: Error, CustomStringConvertible {
     var description: String { "kitty didn't answer on its socket within \(Int(wait)) s" }
 }
 
-/// The pid still runs a kitty.app binary, not another process that reused a crashed kitty's pid.
+/// The pid still runs a kitty.app binary, not another process that reused a crashed kitty's pid. Either place counts:
+/// a kitty Nell left running may be from the other one (her panel runs kitty.app's nested kitty-quick-access.app).
 func isKitty(_ pid: Int32) -> Bool {
     var buf = [UInt8](repeating: 0, count: 4096) // PROC_PIDPATHINFO_MAXSIZE
     let n = proc_pidpath(pid, &buf, UInt32(buf.count))
-    return n > 0 && String(decoding: buf.prefix(Int(n)), as: UTF8.self).hasPrefix("/Applications/kitty.app/")
+    let path = String(decoding: buf.prefix(Int(n)), as: UTF8.self)
+    return n > 0 && kittyApps(home: FileManager.default.homeDirectoryForCurrentUser.path).contains { path.hasPrefix($0 + "/") }
 }

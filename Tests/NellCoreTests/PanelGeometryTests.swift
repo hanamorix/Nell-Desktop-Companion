@@ -23,9 +23,9 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
 
 @Test func launchPanelArgsMatchGlobalConstraints() {
     let p = Paths(support: URL(fileURLWithPath: "/A/Nell"))
-    let a = KittyCommands.launchPanel(paths: p, request: PanelRequest(marginLeft: 10, marginTop: 20, widthPx: 700, heightPx: 420),
+    let a = KittyCommands().launchPanel(paths: p, request: PanelRequest(marginLeft: 10, marginTop: 20, widthPx: 700, heightPx: 420),
                                       cwd: "/p q", shell: "/bin/zsh", claude: "/c/claude", args: ["--resume", "S"])
-    #expect(a.first == KittyCommands.kitten)
+    #expect(a.first == KittyCommands().kitten)
     #expect(Array(a.dropFirst().prefix(1)) == ["panel"])
     let joined = a.joined(separator: " ")
     for part in ["--edge none", "--margin-left 10", "--margin-top 20", "--columns 700px", "--lines 420px", "--layer overlay",
@@ -40,17 +40,17 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
 }
 
 @Test func placePanelUsesIncrementalOsPanel() {
-    let a = KittyCommands.placePanel(socket: "unix:/s", request: PanelRequest(marginLeft: 1, marginTop: 2, widthPx: 3, heightPx: 4))
+    let a = KittyCommands().placePanel(socket: "unix:/s", request: PanelRequest(marginLeft: 1, marginTop: 2, widthPx: 3, heightPx: 4))
     #expect(Array(a.dropFirst()) == ["@", "--to", "unix:/s", "resize-os-window", "--action", "os-panel", "--incremental",
                                      "margin-left=1", "margin-top=2", "columns=3px", "lines=4px"])
 }
 
 @Test func tabAndVisibilityCommands() {
-    #expect(Array(KittyCommands.launchTab(socket: "unix:/s", mode: .chat, cwd: "/c d", shell: "/bin/bash", claude: "/cl", args: ["-x"]).dropFirst())
+    #expect(Array(KittyCommands().launchTab(socket: "unix:/s", mode: .chat, cwd: "/c d", shell: "/bin/bash", claude: "/cl", args: ["-x"]).dropFirst())
             == ["@", "--to", "unix:/s", "launch", "--type=tab", "--keep-focus", "--var", "nell_mode=chat", "--env", "NELL_MODE=chat", "--cwd", "/c d",
                 "/bin/bash", "-l", "-i", "-c", #"cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/c d", "/cl", "-x"])
-    #expect(KittyCommands.showPanel(socket: "unix:/s").suffix(2) == ["--action", "show"])
-    #expect(KittyCommands.hidePanel(socket: "unix:/s").suffix(2) == ["--action", "hide"])
-    #expect(KittyCommands.focusTab(socket: "unix:/s", mode: .chat).suffix(3) == ["focus-tab", "--match", "var:nell_mode=chat"])
-    #expect(KittyCommands.closeTab(socket: "unix:/s", mode: .code).suffix(3) == ["close-tab", "--match", "var:nell_mode=code"])
+    #expect(KittyCommands().showPanel(socket: "unix:/s").suffix(2) == ["--action", "show"])
+    #expect(KittyCommands().hidePanel(socket: "unix:/s").suffix(2) == ["--action", "hide"])
+    #expect(KittyCommands().focusTab(socket: "unix:/s", mode: .chat).suffix(3) == ["focus-tab", "--match", "var:nell_mode=chat"])
+    #expect(KittyCommands().closeTab(socket: "unix:/s", mode: .code).suffix(3) == ["close-tab", "--match", "var:nell_mode=code"])
 }

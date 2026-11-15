@@ -3,30 +3,34 @@ import Foundation
 /// argv arrays for kitty / kitten @ — never shell strings (the login shell's fixed script gets Claude's argv as its
 /// arguments). Windows are found by their `nell_mode` user var (Claude rewrites titles). The NELL_MODE env tag stays
 /// for nell-hook.sh, but kitty copies env into every new window, so Nell never matches it.
-public enum KittyCommands {
-    public static let kitty = "/Applications/kitty.app/Contents/MacOS/kitty"
-    public static let kitten = "/Applications/kitty.app/Contents/MacOS/kitten"
+/// Every path comes from `app`, the kitty.app Nell found (or installed).
+public struct KittyCommands: Sendable {
+    public let app: String
+    public init(app: String = "/Applications/kitty.app") { self.app = app }
+    public var kitty: String { app + "/Contents/MacOS/kitty" }
+    public var kitten: String { app + "/Contents/MacOS/kitten" }
 
-    static func match(_ m: Mode) -> [String] { ["--match", "var:nell_mode=\(m.rawValue)"] }
-    static func at(_ socket: String, _ rest: [String]) -> [String] { [kitten, "@", "--to", socket] + rest }
+    func match(_ m: Mode) -> [String] { ["--match", "var:nell_mode=\(m.rawValue)"] }
+    func at(_ socket: String, _ rest: [String]) -> [String] { [kitten, "@", "--to", socket] + rest }
 
     /// The text goes on stdin: as an argument kitten would apply Python escapes to it (\n, \e, \x41…).
-    public static func sendText(socket: String, mode: Mode) -> [String] {
+    public func sendText(socket: String, mode: Mode) -> [String] {
         at(socket, ["send-text"] + match(mode) + ["--bracketed-paste", "enable", "--stdin"])
     }
     // MARK: v2 panel
 
-    public static func launchPanel(paths: Paths, request r: PanelRequest, cwd: String, shell: String, claude: String, args: [String]) -> [String] {
+    public func launchPanel(paths: Paths, request r: PanelRequest, cwd: String, shell: String, claude: String, args: [String]) -> [String] {
         [kitten, "panel", "--edge", "none", "--margin-left", "\(r.marginLeft)", "--margin-top", "\(r.marginTop)",
          "--columns", "\(r.widthPx)px", "--lines", "\(r.heightPx)px", "--layer", "overlay",
          "-o", "macos_ns_window_layer=NSScreenSaverWindowLevel", "--focus-policy", "on-demand", "--start-as-hidden",
          "-c", paths.kittyConf.path, "-o", "allow_remote_control=socket-only", "-o", "tab_bar_style=hidden",
          "-o", "env=NELL_MODE=code", // a /usr/bin/env wrapper is invisible to kitty's env matching
-         "--listen-on", "unix:" + paths.support.appending(path: "kitty-{kitty_pid}.sock").path] + viaLoginShell(shell, cwd: cwd, [claude] + args)
+         "-o", "env=NELL_KITTEN=" + kitten, // nell-hook.sh raises kitty with it when Nell is down
+         "--listen-on", "unix:" + paths.support.appending(path: "kitty-{kitty_pid}.sock").path] + Self.viaLoginShell(shell, cwd: cwd, [claude] + args)
     }
-    public static func launchTab(socket: String, mode: Mode, cwd: String, shell: String, claude: String, args: [String]) -> [String] {
+    public func launchTab(socket: String, mode: Mode, cwd: String, shell: String, claude: String, args: [String]) -> [String] {
         at(socket, ["launch", "--type=tab", "--keep-focus", "--var", "nell_mode=\(mode.rawValue)", "--env", "NELL_MODE=\(mode.rawValue)",
-                    "--cwd", cwd] + viaLoginShell(shell, cwd: cwd, [claude] + args))
+                    "--cwd", cwd] + Self.viaLoginShell(shell, cwd: cwd, [claude] + args))
     }
 
     /// Runs `argv` in `cwd` as the last act of an interactive login shell, so it gets exactly your terminal's environment
@@ -57,21 +61,21 @@ public enum KittyCommands {
     }
     public static func userLoginShell() -> String { loginShell(getpwuid(getuid()).flatMap { $0.pointee.pw_shell.map { String(cString: $0) } }) }
     /// `kitten panel` has no --var, so the panel's first window (Code, id 1 in a fresh kitty) is tagged once kitty answers.
-    public static func tagFirstWindow(socket: String) -> [String] { at(socket, ["set-user-vars", "--match", "id:1", "nell_mode=code"]) }
-    public static func placePanel(socket: String, request r: PanelRequest) -> [String] {
+    public func tagFirstWindow(socket: String) -> [String] { at(socket, ["set-user-vars", "--match", "id:1", "nell_mode=code"]) }
+    public func placePanel(socket: String, request r: PanelRequest) -> [String] {
         at(socket, ["resize-os-window", "--action", "os-panel", "--incremental", "margin-left=\(r.marginLeft)",
                     "margin-top=\(r.marginTop)", "columns=\(r.widthPx)px", "lines=\(r.heightPx)px"])
     }
-    public static func showPanel(socket: String) -> [String] { at(socket, ["resize-os-window", "--action", "show"]) }
-    public static func hidePanel(socket: String) -> [String] { at(socket, ["resize-os-window", "--action", "hide"]) }
-    public static func focusTab(socket: String, mode: Mode) -> [String] { at(socket, ["focus-tab"] + match(mode)) }
-    public static func closeTab(socket: String, mode: Mode) -> [String] { at(socket, ["close-tab"] + match(mode)) }
+    public func showPanel(socket: String) -> [String] { at(socket, ["resize-os-window", "--action", "show"]) }
+    public func hidePanel(socket: String) -> [String] { at(socket, ["resize-os-window", "--action", "hide"]) }
+    public func focusTab(socket: String, mode: Mode) -> [String] { at(socket, ["focus-tab"] + match(mode)) }
+    public func closeTab(socket: String, mode: Mode) -> [String] { at(socket, ["close-tab"] + match(mode)) }
 
-    public static func sendEnter(socket: String, mode: Mode) -> [String] { at(socket, ["send-key"] + match(mode) + ["enter"]) }
-    public static func focus(socket: String, mode: Mode) -> [String] { at(socket, ["focus-window"] + match(mode)) }
+    public func sendEnter(socket: String, mode: Mode) -> [String] { at(socket, ["send-key"] + match(mode) + ["enter"]) }
+    public func focus(socket: String, mode: Mode) -> [String] { at(socket, ["focus-window"] + match(mode)) }
     /// Recolours every window of Nell's kitty from a colour file, both existing and future ones.
-    public static func setColors(socket: String, conf: String) -> [String] { at(socket, ["set-colors", "--all", "--configured", conf]) }
-    public static func ls(socket: String) -> [String] { at(socket, ["ls"]) }
+    public func setColors(socket: String, conf: String) -> [String] { at(socket, ["set-colors", "--all", "--configured", conf]) }
+    public func ls(socket: String) -> [String] { at(socket, ["ls"]) }
 
     /// kitty must not inherit a parent Claude Code's env (CLAUDECODE, ANTHROPIC_BASE_URL, …), or anything else of Nell's.
     /// It starts the way a terminal does, from launchd's: its PATH, and `session` (TMPDIR, SSH_AUTH_SOCK) read from the

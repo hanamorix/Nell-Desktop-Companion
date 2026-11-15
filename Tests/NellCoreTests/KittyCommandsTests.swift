@@ -6,16 +6,16 @@ let sock = "unix:/A/Nell/kitty-42.sock"
 
 @Test func sendTextPipesTextOnStdinSoNoEscapesApply() {
     // kitten @ send-text applies Python escapes to an argv text (\n, \e, \x41…); --stdin sends it as-is.
-    let a = KittyCommands.sendText(socket: sock, mode: .code)
-    #expect(a.first == KittyCommands.kitten)
+    let a = KittyCommands().sendText(socket: sock, mode: .code)
+    #expect(a.first == KittyCommands().kitten)
     #expect(Array(a.dropFirst()) == ["@", "--to", sock, "send-text", "--match", "var:nell_mode=code", "--bracketed-paste", "enable", "--stdin"])
 }
 
 @Test func commandsMatchThePerWindowVarNotTheInheritedEnv() {
     // kitty gives the env tag to every new window (a ⌘T shell too); a user var stays on the window it was set on
-    #expect(KittyCommands.focus(socket: sock, mode: .code).suffix(3) == ["focus-window", "--match", "var:nell_mode=code"])
-    #expect(KittyCommands.sendEnter(socket: sock, mode: .chat).suffix(4) == ["send-key", "--match", "var:nell_mode=chat", "enter"])
-    #expect(Array(KittyCommands.tagFirstWindow(socket: sock).dropFirst())
+    #expect(KittyCommands().focus(socket: sock, mode: .code).suffix(3) == ["focus-window", "--match", "var:nell_mode=code"])
+    #expect(KittyCommands().sendEnter(socket: sock, mode: .chat).suffix(4) == ["send-key", "--match", "var:nell_mode=chat", "enter"])
+    #expect(Array(KittyCommands().tagFirstWindow(socket: sock).dropFirst())
             == ["@", "--to", sock, "set-user-vars", "--match", "id:1", "nell_mode=code"])
 }
 
@@ -116,6 +116,19 @@ private func throughShell(_ shell: String, home: URL, folder: URL, _ program: [S
 }
 
 @Test func setColorsCommandShape() {
-    #expect(KittyCommands.setColors(socket: "unix:/x", conf: "/A/colors.conf")
-            == [KittyCommands.kitten, "@", "--to", "unix:/x", "set-colors", "--all", "--configured", "/A/colors.conf"])
+    #expect(KittyCommands().setColors(socket: "unix:/x", conf: "/A/colors.conf")
+            == [KittyCommands().kitten, "@", "--to", "unix:/x", "set-colors", "--all", "--configured", "/A/colors.conf"])
+}
+
+@Test func everyKittyPathFollowsTheLocatedApp() {
+    let k = KittyCommands(app: "/Users/x/Applications/kitty.app")
+    #expect(k.kitty == "/Users/x/Applications/kitty.app/Contents/MacOS/kitty")
+    #expect(k.kitten == "/Users/x/Applications/kitty.app/Contents/MacOS/kitten")
+    #expect(k.ls(socket: "unix:/s").first == k.kitten)
+    #expect(KittyCommands().kitten == "/Applications/kitty.app/Contents/MacOS/kitten", "the default")
+    // the hook script raises kitty with this kitten when Nell is down; kitty passes its env to every window
+    let a = k.launchPanel(paths: Paths(support: URL(fileURLWithPath: "/A")), request: PanelRequest(marginLeft: 0, marginTop: 0, widthPx: 1, heightPx: 1),
+                          cwd: "/p", shell: "/bin/zsh", claude: "/c", args: [])
+    #expect(a.first == k.kitten)
+    #expect(a.joined(separator: " ").contains("-o env=NELL_KITTEN=/Users/x/Applications/kitty.app/Contents/MacOS/kitten"))
 }
