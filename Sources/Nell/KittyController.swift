@@ -7,21 +7,6 @@ func resourceURL(_ name: String) -> URL {
     return Bundle.module.url(forResource: "Resources", withExtension: nil)!.appending(path: name)
 }
 
-@discardableResult
-func runTool(_ argv: [String], stdin: Data? = nil) -> (status: Int32, out: Data) {
-    let p = Process()
-    p.executableURL = URL(fileURLWithPath: argv[0])
-    p.arguments = Array(argv.dropFirst())
-    let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
-    let inp = Pipe(); p.standardInput = stdin == nil ? FileHandle.nullDevice : inp
-    do { try p.run() } catch { return (-1, Data()) } // -1: it never ran (e.g. no free fds), so it says nothing about kitty
-    // a kitten that exits without reading (kitty gone) breaks the pipe; its exit status reports the failure
-    if let stdin { try? inp.fileHandleForWriting.write(contentsOf: stdin); try? inp.fileHandleForWriting.close() }
-    let data = out.fileHandleForReading.readDataToEndOfFile()
-    p.waitUntilExit()
-    return (p.terminationStatus, data)
-}
-
 /// Owns Nell's kitty panel: tab 1 runs Claude Code (the console shows it), tab 2 runs Chat (never shown, except
 /// once for Chat's first-run trust prompt). The panel starts hidden and only appears inside Nell's console bubble.
 /// shortcut: kitten @ calls run synchronously on the main thread (each ~20 ms); move to a queue if they ever stall the UI.
