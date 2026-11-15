@@ -335,7 +335,9 @@ struct BubbleColumn: SwiftUI.Layout {
                           budget: bounds.height, spacing: spacing)
         let shown = Set(zip(oldestFirst, fit).filter(\.1).map(\.0))
         let total = shown.map { heights[$0] }.reduce(0, +) + spacing * CGFloat(max(0, shown.count - 1))
-        var y = columnUp ? bounds.maxY - total : bounds.minY // overflow (pinned rows, or one tall bubble) clips the far end
+        // shortcut: pinned rows alone can outgrow 320 pt (three at once; two measured fit), and then the far end is
+        // clipped (drawn and clickable only inside the column). Upgrade with a taller column or a pinned-row cap if seen.
+        var y = columnUp ? bounds.maxY - total : bounds.minY
         for i in subviews.indices {
             let p = ProposedViewSize(width: bounds.width, height: heights[i])
             if shown.contains(i) { subviews[i].place(at: CGPoint(x: bounds.minX, y: y), proposal: p); y += heights[i] + spacing }

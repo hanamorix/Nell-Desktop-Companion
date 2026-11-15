@@ -205,6 +205,10 @@ public enum Showcase {
             Step("column below her", [.place(x: 0.75, y: 1)], shows: [.bubble(.approval)]),
             Step("console open", [.place(x: 1, y: 0), .openConsole], shows: [.bubble(.approval), .console(.open)]),
             Step("question with dismiss", [.minimiseConsole] + question("q1"), shows: [.bubble(.question)]),
+            // two pinned bubbles with long text, below her: measures whether pinned rows alone outgrow the column
+            Step("two tall pinned below her", [.settle(.code, requestId: "r1", .allow), .place(x: 0.75, y: 1)]
+                    + permission(.code, "r2", "u2", "find . -name '*.orig' -o -name '*.rej' -o -name '*.bak' | xargs rm -f && git clean -fdx build dist"),
+                 shows: [.bubble(.question), .bubble(.approval)]),
         ]),
         Scene(name: "placement", steps: [
             ("bottom-left quadrant", 0.25, 0.25), ("bottom-right quadrant", 0.75, 0.25),
