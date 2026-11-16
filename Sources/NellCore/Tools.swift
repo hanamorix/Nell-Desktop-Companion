@@ -89,8 +89,9 @@ public func installKitty(into folder: URL, cancel: Cancellation = Cancellation()
     try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
     defer { try? fm.removeItem(at: tmp) }
 
-    @discardableResult func step(_ argv: [String], _ failure: String) throws -> String {
-        let r = run(argv, cancel), said = String(decoding: r.out, as: UTF8.self)
+    @discardableResult func step(_ argv: [String], _ failure: String, cancellable: Bool = true) throws -> String {
+        if cancel.isCancelled { throw InstallFailed.cancelled } // nothing new starts after Cancel
+        let r = run(argv, cancellable ? cancel : nil), said = String(decoding: r.out, as: UTF8.self)
         if cancel.isCancelled { throw InstallFailed.cancelled }
         guard r.status == 0 else {
             let why = said.split(whereSeparator: \.isNewline).last.map { " (\($0))" } ?? ""
@@ -127,8 +128,9 @@ public func installKitty(into folder: URL, cancel: Cancellation = Cancellation()
     // detached even when attach fails: it may have mounted before it failed
     // never cancelled: it's the cleanup
     defer { if run(["/usr/bin/hdiutil", "detach", mount.path], nil).status != 0 { _ = run(["/usr/bin/hdiutil", "detach", "-force", mount.path], nil) } }
+    // never cancelled either: killed midway, it could still mount after the detach looked, under a deleted temp folder
     try step(["/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount.path, image.path],
-             "Couldn't open \(dmg.name).")
+             "Couldn't open \(dmg.name).", cancellable: false)
     try verify(mount.appending(path: "kitty.app"))
 
     try fm.createDirectory(at: folder, withIntermediateDirectories: true)

@@ -112,7 +112,7 @@ private func asset(_ name: String, url: String? = nil, size: Int = 10, digest: S
     try FileManager.default.copyItem(atPath: "/bin/echo", toPath: fake)
     try #require(runTool(["/usr/bin/codesign", "-f", "-s", "-", "-i", "x\nTeamIdentifier=\(kittyTeam)", fake]).status == 0)
     #expect(runTool(["/usr/bin/codesign", "--verify", "--deep", "--strict", fake]).status == 0, "the spoof does fool a plain verify")
-    #expect(runTool(kittyVerify(fake)).status != 0)
+    #expect(runTool(kittyVerify(fake)).status == 3, "3: the requirement is well-formed and unmet (a malformed one fails differently)")
 }
 
 @Test(.enabled(if: FileManager.default.fileExists(atPath: "/Applications/kitty.app")))
@@ -132,6 +132,7 @@ private final class FakeTools: @unchecked Sendable {
                              digest: "sha256:" + SHA256.hash(data: dmgBytes).map { String(format: "%02x", $0) }.joined())])
 
     var cancelAt: String? // the tool during which Cancel is pressed
+    let token = Cancellation() // the installer's
     func run(_ a: [String], _ c: Cancellation?) -> (status: Int32, out: Data) {
         calls.append(a)
         if let t = cancelAt, a[0].hasSuffix("/" + t), !a.last!.hasPrefix("https://api.github.com/"), let c {
@@ -151,6 +152,8 @@ private final class FakeTools: @unchecked Sendable {
                 if let f = fail("download", "curl: (18) transfer closed with 100 bytes remaining") { return f }
             }
         case "hdiutil" where a[1] == "attach":
+            if c != nil { Issue.record("Cancel must never stop the attach: a half-killed attach can leave a mount the detach misses") }
+            if cancelAt == "attach" { token.cancel() } // pressed while it attaches: it still finishes
             if let f = fail("attach", "hdiutil: attach failed - image not recognized") { return f }
             let mount = URL(fileURLWithPath: a[a.firstIndex(of: "-mountpoint")! + 1])
             try! fm.createDirectory(at: mount, withIntermediateDirectories: true)
@@ -258,4 +261,25 @@ func liveKittyInstallIntoATempFolder() throws {
     })
     print("INSTALLED \(app.path)")
     #expect(runTool(["/usr/bin/codesign", "--verify", "--deep", "--strict", app.path]).status == 0)
+}
+
+/// Cancel while the download is checked (or between any two steps): nothing new starts, so the attach never runs.
+@Test func nothingStartsAfterCancel() throws {
+    let tools = FakeTools(), into = folder()
+    defer { try? FileManager.default.removeItem(at: into.deletingLastPathComponent()) }
+    tools.token.cancel()
+    #expect { try installKitty(into: into, cancel: tools.token, run: tools.run) } throws: { ($0 as? InstallFailed)?.description == "Cancelled." }
+    #expect(tools.calls.isEmpty)
+}
+
+/// Cancel while the image attaches: the attach finishes, its mount is detached, then the install stops as cancelled.
+@Test func cancelDuringAttachLetsItFinishThenDetaches() throws {
+    let tools = FakeTools(), into = folder()
+    defer { try? FileManager.default.removeItem(at: into.deletingLastPathComponent()) }
+    tools.cancelAt = "attach"
+    #expect { try installKitty(into: into, cancel: tools.token, run: tools.run) } throws: { ($0 as? InstallFailed)?.description == "Cancelled." }
+    let order = tools.calls.map { ($0[0] as NSString).lastPathComponent + " " + $0[1] }
+    #expect(order.suffix(2) == ["hdiutil attach", "hdiutil detach"], "nothing runs between the attach and its detach")
+    #expect(!tools.ran("codesign") && !tools.ran("ditto"))
+    #expect(!FileManager.default.fileExists(atPath: try #require(tools.tempDir)))
 }
