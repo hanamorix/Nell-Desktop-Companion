@@ -55,6 +55,7 @@ import SwiftUI
             if lookup.status != 0 { EventLog.write("claude lookup in \(kitty.shell) ended with \(lookup.status)") }
             guard let claude = locateClaude(shellOutput: String(decoding: lookup.out, as: UTF8.self), home: home) else { return claudeMissing() }
             guard let app = locateKitty(home: home) ?? offerKittyInstall(home: home) else { return } // its alerts quit
+            try? FileManager.default.removeItem(at: kittyStaging(in: URL(fileURLWithPath: home).appending(path: "Applications"))) // an install cut short
             kitty.claude = claude; kitty.commands = KittyCommands(app: app)
             EventLog.write("claude \(claude), kitty \(app)")
             Fonts.installForKitty() // approved by the user: kitty only loads installed fonts
@@ -207,9 +208,10 @@ import SwiftUI
     }
 
     private var kittyInstall: Result<URL, any Error>?
+    private let kittyCancel = Cancellation()
 
     /// kitty is missing: offers the official signed one, installed into ~/Applications off the main thread while a
-    /// progress window shows. Returns its kitty.app, or nil once Nell is quitting.
+    /// progress window shows (its Cancel ends the running step and cleans up). Returns its kitty.app, or nil once Nell is quitting.
     private func offerKittyInstall(home: String) -> String? {
         NSApp.activate()
         let ask = NSAlert()
@@ -219,15 +221,17 @@ import SwiftUI
         ask.addButton(withTitle: "Install"); ask.addButton(withTitle: "Quit")
         guard ask.runModal() == .alertFirstButtonReturn else { NSApp.terminate(nil); return nil }
 
-        let window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 70), styleMask: [.titled], backing: .buffered, defer: false)
+        let window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 380, height: 70), styleMask: [.titled], backing: .buffered, defer: false)
         window.title = "Nell"
         let spinner = NSProgressIndicator(); spinner.style = .spinning; spinner.controlSize = .small; spinner.startAnimation(nil)
-        let row = NSStackView(views: [spinner, NSTextField(labelWithString: "Installing kitty… (about 80 MB)")])
+        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelKittyInstall(_:)))
+        cancel.keyEquivalent = "\u{1b}"
+        let row = NSStackView(views: [spinner, NSTextField(labelWithString: "Installing kitty… (about 80 MB)"), cancel])
         row.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         window.contentView = row; window.center()
-        let folder = URL(fileURLWithPath: home).appending(path: "Applications")
+        let folder = URL(fileURLWithPath: home).appending(path: "Applications"), token = kittyCancel
         DispatchQueue.global().async {
-            let r = Result { try installKitty(into: folder) }
+            let r = Result { try installKitty(into: folder, cancel: token) }
             // abortModal, not stopModal: this isn't an event of the modal window, so stopModal would wait for one
             DispatchQueue.main.async { MainActor.assumeIsolated { self.kittyInstall = r; NSApp.abortModal() } }
         }
@@ -237,6 +241,8 @@ import SwiftUI
         case .success(let app)?:
             EventLog.write("installed kitty at \(app.path)")
             return app.path
+        case .failure where kittyCancel.isCancelled:
+            EventLog.write("kitty install cancelled")
         case .failure(let e)?:
             EventLog.write("kitty install failed: \(e)")
             let a = NSAlert()
@@ -250,6 +256,9 @@ import SwiftUI
         NSApp.terminate(nil)
         return nil
     }
+
+    /// The install ends itself (and its modal) once the running step is killed and cleaned up.
+    @objc private func cancelKittyInstall(_ sender: NSButton) { sender.isEnabled = false; kittyCancel.cancel() }
 
     private func fail(_ message: String) {
         NSApp.activate()

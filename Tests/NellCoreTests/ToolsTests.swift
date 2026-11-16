@@ -40,7 +40,7 @@ import Testing
     try "echo hello from zshrc\nexport PATH=\"$HOME/bin:$PATH\"\n".write(to: home.appending(path: ".zshrc"), atomically: true, encoding: .utf8)
     let env = KittyCommands.cleanEnvironment(home: home.path, user: "nobody", shell: "/bin/zsh", session: [:])
     let r = runTool(claudeLookup(shell: "/bin/zsh", home: home.path), environment: env, timeout: 10)
-    #expect(locateClaude(shellOutput: String(decoding: r.out, as: UTF8.self), home: home.path) == home.appending(path: "bin/claude").path)
+    #expect(locateClaude(shellOutput: String(decoding: r.out, as: UTF8.self), home: home.path) == home.appending(path: "bin/claude").path, "status \(r.status): \(String(decoding: r.out, as: UTF8.self))")
 }
 
 @Test func isExecutableFileRejectsFolders() {
@@ -75,7 +75,7 @@ private func asset(_ name: String, url: String? = nil, size: Int = 10, digest: S
     let json = release([asset("kitty-0.50.0.dmg.sig"), asset("kitten-darwin-arm64"), asset("kitty-0.50.0-arm64.txz"),
                         asset("kitty-0.50.0.dmg", size: 80076984, digest: "sha256:CC01"), asset("kitty-0.50.0.tar.xz")])
     #expect(kittyDMG(fromRelease: json) == KittyDMG(name: "kitty-0.50.0.dmg", url: dmgURL, size: 80076984, sha256: "cc01"))
-    #expect(kittyDMG(fromRelease: release([asset("kitty-0.50.0.dmg")]))?.sha256 == nil, "no digest published: size only")
+    #expect(kittyDMG(fromRelease: release([asset("kitty-0.50.0.dmg")]))?.sha256 == nil, "no digest published: the installer refuses it")
     #expect(kittyDMG(fromRelease: release([asset("kitty-0.50.0.dmg", digest: "sha512:ab")]))?.sha256 == nil)
 }
 
@@ -87,15 +87,36 @@ private func asset(_ name: String, url: String? = nil, size: Int = 10, digest: S
     #expect(kittyDMG(fromRelease: release([asset("kitty-0.50.0.dmg", size: 0)])) == nil)
     #expect(kittyDMG(fromRelease: Data("{\"message\":\"API rate limit exceeded\"}".utf8)) == nil)
     #expect(kittyDMG(fromRelease: Data("garbage".utf8)) == nil)
+    // curl collapses dot-segments, so a prefix check alone could be walked out of kitty's releases
+    let base = "https://github.com/kovidgoyal/kitty/releases/download/"
+    for url in [base + "../../../../torvalds/linux/releases/download/v1/kitty-0.50.0.dmg", base + "v0.50.0/../../x/kitty-0.50.0.dmg",
+                base + "%2e%2e/%2e%2e/x/kitty-0.50.0.dmg", base + "v0.50.0/sub/kitty-0.50.0.dmg", base + "v0.50.0/kitty-0.50.0.dmg?x=1"] {
+        #expect(kittyDMG(fromRelease: release([asset("kitty-0.50.0.dmg", url: url)])) == nil, "\(url)")
+    }
 }
 
-@Test func teamComesFromItsOwnLineOfCodesignOutput() {
-    let real = "Executable=/Volumes/kitty/kitty.app/Contents/MacOS/kitty\nIdentifier=net.kovidgoyal.kitty\nTeamIdentifier=NTY7FVCEKP\nRuntime Version=26.2.0\n"
-    #expect(teamIdentifier(fromCodesign: real) == "NTY7FVCEKP")
-    #expect(teamIdentifier(fromCodesign: "Identifier=x\nTeamIdentifier=not set\n") == "not set")
-    #expect(teamIdentifier(fromCodesign: "Identifier=TeamIdentifier=NTY7FVCEKP\n") == nil)
-    #expect(teamIdentifier(fromCodesign: "") == nil)
+@Test func verifyPinsApplesDeveloperIDForKittysTeam() {
+    // Apple's root, its Developer ID intermediate and leaf markers, and kitty's team: an ad-hoc signature can't satisfy it
+    #expect(kittyVerify("/x/kitty.app") == ["/usr/bin/codesign", "--verify", "--deep", "--strict",
+        #"-R=anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "NTY7FVCEKP""#,
+        "/x/kitty.app"])
 }
+
+/// The real codesign: an ad-hoc signature whose identifier smuggles in a `TeamIdentifier=` line passes a plain
+/// `--verify` and would fool a text parse of `codesign -dv`, but never the pinned requirement.
+@Test func aSpoofedTeamCantPassTheRealCheck() throws {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "nell-spoof-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let fake = dir.appending(path: "echo").path
+    try FileManager.default.copyItem(atPath: "/bin/echo", toPath: fake)
+    try #require(runTool(["/usr/bin/codesign", "-f", "-s", "-", "-i", "x\nTeamIdentifier=\(kittyTeam)", fake]).status == 0)
+    #expect(runTool(["/usr/bin/codesign", "--verify", "--deep", "--strict", fake]).status == 0, "the spoof does fool a plain verify")
+    #expect(runTool(kittyVerify(fake)).status != 0)
+}
+
+@Test(.enabled(if: FileManager.default.fileExists(atPath: "/Applications/kitty.app")))
+func theRealKittyPassesTheCheck() { #expect(runTool(kittyVerify("/Applications/kitty.app")).status == 0) }
 
 // MARK: the installer, with every tool faked
 
@@ -110,8 +131,13 @@ private final class FakeTools: @unchecked Sendable {
     lazy var json = release([asset("kitty-0.50.0.dmg.sig"), asset("kitty-0.50.0.dmg", size: dmgBytes.count,
                              digest: "sha256:" + SHA256.hash(data: dmgBytes).map { String(format: "%02x", $0) }.joined())])
 
-    func run(_ a: [String]) -> (status: Int32, out: Data) {
+    var cancelAt: String? // the tool during which Cancel is pressed
+    func run(_ a: [String], _ c: Cancellation?) -> (status: Int32, out: Data) {
         calls.append(a)
+        if let t = cancelAt, a[0].hasSuffix("/" + t), !a.last!.hasPrefix("https://api.github.com/"), let c {
+            if t == "ditto" { try? FileManager.default.createDirectory(atPath: a[2] + "/Contents", withIntermediateDirectories: true) } // half copied
+            c.cancel(); return (-1, Data()) // killed
+        }
         let fm = FileManager.default
         func fail(_ step: String, _ said: String = "") -> (status: Int32, out: Data)? { failing.contains(step) ? (1, Data(said.utf8)) : nil }
         switch (a[0] as NSString).lastPathComponent {
@@ -130,9 +156,10 @@ private final class FakeTools: @unchecked Sendable {
             try! fm.createDirectory(at: mount, withIntermediateDirectories: true)
             if symlinkApp { try! fm.createSymbolicLink(atPath: mount.appending(path: "kitty.app").path, withDestinationPath: "/Applications/kitty.app") }
             else { try! fm.createDirectory(at: mount.appending(path: "kitty.app/Contents/MacOS"), withIntermediateDirectories: true) }
-        case "hdiutil": break // detach
-        case "codesign" where a[1] == "-dv": return (0, Data("Identifier=net.kovidgoyal.kitty\nTeamIdentifier=\(team)\n".utf8))
+        case "hdiutil": if c != nil { Issue.record("Cancel must never stop the detach") }
         case "codesign":
+            // as the real one: only the pinned requirement tells kitty's team from any other signature
+            if team != kittyTeam, a.contains("-R=" + kittyRequirement) { return (3, Data("test-requirement: code failed to satisfy specified code requirement(s)".utf8)) }
             let copy = !a.last!.contains("/mount/")
             if let f = fail(copy ? "verify-copy" : "verify", "kitty.app: a sealed resource is missing or invalid") { return f }
         case "spctl": if let f = fail("spctl", "kitty.app: rejected") { return f }
@@ -157,8 +184,10 @@ private func folder() -> URL { FileManager.default.temporaryDirectory.appending(
     #expect(app == into.appending(path: "kitty.app"))
     #expect(FileManager.default.fileExists(atPath: app.appending(path: "Contents/MacOS").path), "the folder was created and kitty copied in")
     let order = tools.calls.map { ($0[0] as NSString).lastPathComponent + ($0.count > 1 ? " " + $0[1] : "") }
-    #expect(order == ["curl -fsSL", "curl -fsSL", "hdiutil attach", "codesign --verify", "spctl --assess", "codesign -dv",
-                      "ditto " + (tools.calls[6][1]), "codesign --verify", "spctl --assess", "codesign -dv", "hdiutil detach"])
+    #expect(order == ["curl -fsSL", "curl -fsSL", "hdiutil attach", "codesign --verify", "spctl --assess",
+                      "ditto " + (tools.calls[5][1]), "codesign --verify", "spctl --assess", "hdiutil detach"])
+    #expect(tools.calls.filter { $0[0].hasSuffix("/codesign") } == [kittyVerify(tools.calls[3].last!), kittyVerify(tools.calls[6].last!)],
+            "the image and the copy both pass the pinned requirement")
     let attach = try #require(tools.calls.first { $0.contains("attach") })
     for flag in ["-nobrowse", "-readonly", "-noautoopen"] { #expect(attach.contains(flag)) }
     #expect(tools.calls[0].contains("=https") && tools.calls[1].contains("=https") && tools.calls[1].last == dmgURL)
@@ -168,9 +197,9 @@ private func folder() -> URL { FileManager.default.temporaryDirectory.appending(
 
 /// Every way it can go wrong: a clear reason, no kitty.app, no staging copy, the image detached, the download deleted.
 @Test(arguments: [
-    ("api", "GitHub"), ("download", "download"), ("truncated", "incomplete"), ("corrupt", "checksum"), ("attach", "open"),
-    ("verify", "signature"), ("spctl", "Gatekeeper"), ("team", "WRONGTEAM1"), ("symlink", "no kitty.app"),
-    ("ditto", "copy"), ("verify-copy", "signature"),
+    ("api", "GitHub"), ("nodigest", "no published checksum"), ("download", "download"), ("truncated", "incomplete"), ("corrupt", "checksum"), ("attach", "open"),
+    ("verify", "signature"), ("spctl", "Gatekeeper"), ("team", "kitty's developer"), ("symlink", "no kitty.app"),
+    ("ditto", "copy"), ("verify-copy", "signature"), ("cancel-download", "Cancelled"), ("cancel-ditto", "Cancelled"),
 ])
 func anyFailureAbortsAndLeavesNothingInstalled(step: String, reason: String) throws {
     let tools = FakeTools(), into = folder()
@@ -180,6 +209,9 @@ func anyFailureAbortsAndLeavesNothingInstalled(step: String, reason: String) thr
     case "corrupt": var d = tools.dmgBytes; d[10] = 0; tools.served = d
     case "team": tools.team = "WRONGTEAM1"
     case "symlink": tools.symlinkApp = true
+    case "nodigest": tools.json = release([asset("kitty-0.50.0.dmg", size: tools.dmgBytes.count)])
+    case "cancel-download": tools.cancelAt = "curl" // the download, not the API read
+    case "cancel-ditto": tools.cancelAt = "ditto"
     default: tools.failing = [step]
     }
     #expect {
@@ -191,15 +223,16 @@ func anyFailureAbortsAndLeavesNothingInstalled(step: String, reason: String) thr
     #expect(((try? FileManager.default.contentsOfDirectory(atPath: into.path)) ?? []).isEmpty, "\(step): no staging copy left")
     #expect(tools.ran("hdiutil", "attach") == tools.ran("hdiutil", "detach"), "\(step): every mount is detached")
     #expect(!FileManager.default.fileExists(atPath: try #require(tools.tempDir)), "\(step): the download is deleted")
-    if ["api", "download", "truncated", "corrupt"].contains(step) { #expect(!tools.ran("hdiutil"), "\(step): an unchecked download is never even mounted") }
-    if step != "ditto" && step != "verify-copy" { #expect(!tools.ran("ditto"), "\(step): nothing unverified is copied") }
+    if ["api", "nodigest", "download", "truncated", "corrupt", "cancel-download"].contains(step) { #expect(!tools.ran("hdiutil"), "\(step): an unchecked download is never even mounted") }
+    if !["ditto", "verify-copy", "cancel-ditto"].contains(step) { #expect(!tools.ran("ditto"), "\(step): nothing unverified is copied") }
 }
 
 @Test func anExistingKittyIsNeverReplaced() throws {
     let tools = FakeTools(), into = folder()
     defer { try? FileManager.default.removeItem(at: into.deletingLastPathComponent()) }
     try FileManager.default.createDirectory(at: into.appending(path: "kitty.app/Contents/yours"), withIntermediateDirectories: true)
-    #expect(throws: InstallFailed.self) { try installKitty(into: into, run: tools.run) }
+    // e.g. one Nell rejected (no kitten): say what to do with it
+    #expect { try installKitty(into: into, run: tools.run) } throws: { ($0 as? InstallFailed)?.description.contains("Trash") == true }
     #expect(FileManager.default.fileExists(atPath: into.appending(path: "kitty.app/Contents/yours").path))
     #expect(tools.calls.isEmpty)
 }
@@ -218,8 +251,8 @@ func liveKittyInstallIntoATempFolder() throws {
     let into = URL(fileURLWithPath: ProcessInfo.processInfo.environment["NELL_LIVE_KITTY_INSTALL"]!)
     let home = FileManager.default.homeDirectoryForCurrentUser.path
     try #require(!into.path.hasPrefix("/Applications") && !into.path.hasPrefix(home + "/Applications"), "never a real Applications folder")
-    let app = try installKitty(into: into, run: { a in
-        let r = runTool(a, stderr: true)
+    let app = try installKitty(into: into, run: { a, c in
+        let r = runTool(a, stderr: true, cancel: c)
         print("RUN \(a.joined(separator: " "))\n  -> \(r.status) \(String(decoding: r.out, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))")
         return r
     })

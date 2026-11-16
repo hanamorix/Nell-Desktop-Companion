@@ -42,3 +42,26 @@ import Testing
     #expect(String(decoding: runTool(["/bin/sh", "-c", "echo err >&2"]).out, as: UTF8.self) == "")
     #expect(String(decoding: runTool(["/bin/sh", "-c", "echo err >&2"], stderr: true).out, as: UTF8.self) == "err\n")
 }
+
+@Test func runToolTimeoutEndsTheToolsChildrenToo() {
+    // a login shell whose rc started a job that holds stdout: the timeout ends the whole process group
+    let marker = "30.\(Int.random(in: 1000...9999))"
+    let start = Date()
+    let r = runTool(["/bin/sh", "-c", "/bin/sleep \(marker) & /bin/sleep 30"], timeout: 0.3)
+    #expect(r.status == -2)
+    #expect(Date().timeIntervalSince(start) < 2)
+    usleep(200_000)
+    #expect(runTool(["/usr/bin/pgrep", "-f", "sleep \(marker)"]).status != 0, "the background child was left running")
+}
+
+@Test func cancellationEndsTheRunningToolAndAnyStartedAfter() {
+    let c = Cancellation()
+    DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { c.cancel() }
+    let start = Date()
+    #expect(runTool(["/bin/sh", "-c", "/bin/sleep 10 & /bin/sleep 10"], cancel: c).status != 0)
+    #expect(Date().timeIntervalSince(start) < 2, "it waited for the tool instead of ending it")
+    #expect(c.isCancelled)
+    #expect(runTool(["/bin/sleep", "10"], cancel: c).status != 0) // pressed before it started
+    #expect(Date().timeIntervalSince(start) < 3)
+    #expect(runTool(["/bin/echo", "cleanup"]).status == 0, "a run without the cancellation still works")
+}
