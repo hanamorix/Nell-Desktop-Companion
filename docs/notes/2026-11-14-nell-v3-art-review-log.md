@@ -13,7 +13,7 @@ Each round of the user's visual review: what was shown, what they said, and whet
 
 | Round | Shown | User's notes | Result |
 |---|---|---|---|
-| 1 | 128 px master at 2× on light and dark, beside the concept and the Nell-PixelArt reference | Remove the fang so the mouth looks right. Show the table's rounded edges. Connect the laptop hinge. Clean up the black outlines. Simplify the hands so they're nicer to look at; the left hand must not overlap the laptop screen and both hands go on the keyboard. | Changes requested |
+| 1 | 128 px master at 2× on light and dark, beside the concept and the user's pixel-art reference | Remove the fang so the mouth looks right. Show the table's rounded edges. Connect the laptop hinge. Clean up the black outlines. Simplify the hands so they're nicer to look at; the left hand must not overlap the laptop screen and both hands go on the keyboard. | Changes requested |
 | 2 | Round 2: fang removed, rounded desk corners, connected hinge, cleaned outlines, simplified hands on the keyboard | "Revert the hands back, the simplified ones are pretty bad." Everything else is accepted by omission. | Changes requested: restore round 1's hands, keeping them on the keyboard and clear of the screen |
 | 3 | Round 3: round 1's hands restored and moved onto the keyboard, clear of the screen; round 2 fixes kept | "Accept" | **Accepted.** The master sprite is signed off |
 

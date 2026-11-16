@@ -13,7 +13,7 @@
 **The user's machine and settings**
 - Never modify `~/.claude/settings.json` or `~/.claude.json`. Reading them is allowed.
 - Never touch the user's running Nell (`build/Nell.app`, its process, `~/Library/Application Support/Nell`), or `/Applications/kitty.app`.
-- Never open `/Users/me/Claude/private-artwork/private/` or `/private/`.
+- Never open the user's private artwork folders outside the repo.
 - Live tests use throwaway kittys on `/tmp` sockets with their own temporary support folders. Kill only their pids.
   - claude may be run only for the stated parity checks, with tiny prompts, in a scratch folder or Nell's chat-folder equivalent under `/tmp`.
   - Only read-only tools may be allowed, for example `--allowedTools "Bash(echo:*)" "Bash(command -v:*)"`.
