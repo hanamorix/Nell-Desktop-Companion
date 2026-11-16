@@ -38,17 +38,22 @@ public struct KittyCommands: Sendable {
     /// its pid, cwd, hooks and SIGTERM are unchanged.
     /// - The folder is the first argument and the script cds into it: an rc file that cds can't move Claude, and the cd
     ///   runs your chpwd hooks (zsh; fish's PWD handlers), where direnv and mise load the folder's environment. `;`, not
-    ///   `&&`: a folder it can't enter shows the error and still starts Claude, never a dead tab. `builtin`/`command`
-    ///   skip a `cd` function or alias in your rc files (`cd() { builtin cd "$1"; }` would make it `cd --`: home).
+    ///   `&&`: a folder it can't enter shows the error and still starts Claude, never a dead tab.
+    /// - Your own `cd` runs first, as at a terminal (nvm's `alias cd=cdnvm`, autoenv and rvm load a folder's environment
+    ///   there); if it didn't land in the folder (it printed, failed, or `cd() { builtin cd "$1"; }` took `--` as home),
+    ///   `builtin`/`command \cd` goes there past any function or alias. No `--` for yours: the folder is always absolute.
     /// - bash's own per-prompt hooks live in PROMPT_COMMAND, which `-c` never runs, so it runs once here.
     ///   shortcut: an array PROMPT_COMMAND (bash 5.1+) runs only its first entry; loop over it if someone needs more.
     /// - zsh and bash lower SHLVL on exec, so it's raised first: Claude sees 1, as from a terminal prompt.
     public static func viaLoginShell(_ shell: String, cwd: String, _ argv: [String]) -> [String] {
         let script = switch (shell as NSString).lastPathComponent {
-        case "fish": "builtin cd $argv[1]; exec $argv[2..-1]"
-        case "zsh": #"builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#
-        case "bash", "sh": #"builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""# // macOS's sh is bash
-        default: #"command \cd -- "$0"; exec "$@""# // dash has no `builtin`; ksh's own `command` alias expands an unquoted cd
+        // shortcut: fish compares paths as text (its `test -ef` is unverified), so a symlinked folder is entered twice; harmless.
+        case "fish": #"cd $argv[1]; test "$PWD" = $argv[1]; or builtin cd $argv[1]; exec $argv[2..-1]"#
+        case "zsh": #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#
+        case "bash": #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#
+        // sh may be bash, dash or zsh (/private/var/select/sh), and dash has no `builtin`
+        case "sh": #"cd "$0"; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#
+        default: #"cd "$0"; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; exec "$@""# // ksh's own `command` alias expands an unquoted cd
         }
         return [shell, "-l", "-i", "-c", script, cwd] + argv
     }

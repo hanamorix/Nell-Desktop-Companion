@@ -35,7 +35,7 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
         #expect(joined.contains(part), "\(part)")
     }
     // Claude runs as the last act of your interactive login shell, in its folder, so it gets your terminal's environment
-    #expect(Array(a.suffix(9)) == ["/bin/zsh", "-l", "-i", "-c", #"builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p q", "/c/claude", "--resume", "S"])
+    #expect(Array(a.suffix(9)) == ["/bin/zsh", "-l", "-i", "-c", #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p q", "/c/claude", "--resume", "S"])
     #expect(!a.contains("--session"))
 }
 
@@ -48,7 +48,7 @@ let display = CGRect(x: 0, y: 0, width: 1800, height: 1169)
 @Test func tabAndVisibilityCommands() {
     #expect(Array(KittyCommands().launchTab(socket: "unix:/s", mode: .chat, cwd: "/c d", shell: "/bin/bash", claude: "/cl", args: ["-x"]).dropFirst())
             == ["@", "--to", "unix:/s", "launch", "--type=tab", "--keep-focus", "--var", "nell_mode=chat", "--env", "NELL_MODE=chat", "--cwd", "/c d",
-                "/bin/bash", "-l", "-i", "-c", #"builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/c d", "/cl", "-x"])
+                "/bin/bash", "-l", "-i", "-c", #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/c d", "/cl", "-x"])
     #expect(KittyCommands().showPanel(socket: "unix:/s").suffix(2) == ["--action", "show"])
     #expect(KittyCommands().hidePanel(socket: "unix:/s").suffix(2) == ["--action", "hide"])
     #expect(KittyCommands().focusTab(socket: "unix:/s", mode: .chat).suffix(3) == ["focus-tab", "--match", "var:nell_mode=chat"])
