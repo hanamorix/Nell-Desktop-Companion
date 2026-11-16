@@ -44,16 +44,16 @@ let sock = "unix:/A/Nell/kitty-42.sock"
 @Test func loginShellArgvPerShell() {
     // the folder comes first, so an rc file that cds can't move Claude, and the cd runs your chpwd hooks (direnv, mise)
     #expect(KittyCommands.viaLoginShell("/bin/zsh", cwd: "/p", ["/c/claude", "--resume", "S"])
-            == ["/bin/zsh", "-l", "-i", "-c", #"cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude", "--resume", "S"])
+            == ["/bin/zsh", "-l", "-i", "-c", #"builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude", "--resume", "S"])
     #expect(KittyCommands.viaLoginShell("/bin/bash", cwd: "/p", ["/c/claude"])
-            == ["/bin/bash", "-l", "-i", "-c", #"cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"])
+            == ["/bin/bash", "-l", "-i", "-c", #"builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"])
     #expect(KittyCommands.viaLoginShell("/bin/sh", cwd: "/p", ["/c/claude"])
-            == ["/bin/sh", "-l", "-i", "-c", #"cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"], "macOS's sh is bash")
+            == ["/bin/sh", "-l", "-i", "-c", #"builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"], "macOS's sh is bash")
     #expect(KittyCommands.viaLoginShell("/bin/ksh", cwd: "/p", ["/c/claude"]) // ksh and dash leave SHLVL as a terminal does
-            == ["/bin/ksh", "-l", "-i", "-c", #"cd -- "$0"; exec "$@""#, "/p", "/c/claude"])
+            == ["/bin/ksh", "-l", "-i", "-c", #"command \cd -- "$0"; exec "$@""#, "/p", "/c/claude"])
     // fish has no $0/$@: everything after the command is $argv
     #expect(KittyCommands.viaLoginShell("/opt/homebrew/bin/fish", cwd: "/p", ["/c/claude", "--resume", "S"])
-            == ["/opt/homebrew/bin/fish", "-l", "-i", "-c", "cd $argv[1]; exec $argv[2..-1]", "/p", "/c/claude", "--resume", "S"])
+            == ["/opt/homebrew/bin/fish", "-l", "-i", "-c", "builtin cd $argv[1]; exec $argv[2..-1]", "/p", "/c/claude", "--resume", "S"])
 }
 
 /// Runs `program` through the real shell from the clean base, in `home` as both HOME and the folder; returns its stdout.
@@ -96,6 +96,23 @@ private func throughShell(_ shell: String, home: URL, folder: URL, _ program: [S
         #expect(env.contains("PWD=\(folder.path)"), "\(shell): in its folder")
         #expect(env.contains("NELL_HOOK=\(folder.path)"), "\(shell): its folder hook ran there")
         #expect(env.contains("SHLVL=1"), "\(shell)")
+    }
+}
+
+/// A `cd` wrapper or alias in your rc files can't send Claude elsewhere: `cd -- dir` through `cd() { builtin cd "$1"; }`
+/// is `cd --`, which is home.
+@Test func loginShellStartsInItsFolderPastYourCdWrappers() throws {
+    let rcs = [#"cd() { builtin cd "$1"; }"#, "cd /\ncd() { echo nope; }", "cd /\nalias cd='echo nope'"]
+    for rc in rcs {
+        let home = FileManager.default.temporaryDirectory.appending(path: "nell-shell-\(UUID().uuidString)")
+        let folder = home.appending(path: "my project")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        for f in [".zshrc", ".bash_profile", ".profile"] { try (rc + "\n").write(to: home.appending(path: f), atomically: true, encoding: .utf8) }
+        for shell in ["/bin/zsh", "/bin/bash", "/bin/ksh", "/bin/dash"] {
+            let out = try throughShell(shell, home: home, folder: folder, ["/bin/pwd"]).out
+            #expect(out == folder.path + "\n", "\(shell) with \(rc)")
+        }
     }
 }
 

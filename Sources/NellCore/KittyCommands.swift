@@ -38,16 +38,17 @@ public struct KittyCommands: Sendable {
     /// its pid, cwd, hooks and SIGTERM are unchanged.
     /// - The folder is the first argument and the script cds into it: an rc file that cds can't move Claude, and the cd
     ///   runs your chpwd hooks (zsh; fish's PWD handlers), where direnv and mise load the folder's environment. `;`, not
-    ///   `&&`: a folder it can't enter shows the error and still starts Claude, never a dead tab.
+    ///   `&&`: a folder it can't enter shows the error and still starts Claude, never a dead tab. `builtin`/`command`
+    ///   skip a `cd` function or alias in your rc files (`cd() { builtin cd "$1"; }` would make it `cd --`: home).
     /// - bash's own per-prompt hooks live in PROMPT_COMMAND, which `-c` never runs, so it runs once here.
     ///   shortcut: an array PROMPT_COMMAND (bash 5.1+) runs only its first entry; loop over it if someone needs more.
     /// - zsh and bash lower SHLVL on exec, so it's raised first: Claude sees 1, as from a terminal prompt.
     public static func viaLoginShell(_ shell: String, cwd: String, _ argv: [String]) -> [String] {
         let script = switch (shell as NSString).lastPathComponent {
-        case "fish": "cd $argv[1]; exec $argv[2..-1]"
-        case "zsh": #"cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#
-        case "bash", "sh": #"cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""# // macOS's sh is bash
-        default: #"cd -- "$0"; exec "$@""#
+        case "fish": "builtin cd $argv[1]; exec $argv[2..-1]"
+        case "zsh": #"builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#
+        case "bash", "sh": #"builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""# // macOS's sh is bash
+        default: #"command \cd -- "$0"; exec "$@""# // dash has no `builtin`; ksh's own `command` alias expands an unquoted cd
         }
         return [shell, "-l", "-i", "-c", script, cwd] + argv
     }
