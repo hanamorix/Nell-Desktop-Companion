@@ -130,7 +130,7 @@ There are a few honest limits:
 - **Unusual login shells.** zsh, bash, sh, ksh, mksh, dash and fish are supported, though fish is only tested by the command Nell builds for it. Other shells, such as tcsh, nu or xonsh, start Claude from zsh instead.
 - **A `claude` alias or shell function.** Nell runs the `claude` program itself, so an alias or function that adds flags or environment variables doesn't apply.
 - **`CLAUDE_CONFIG_DIR`.** If you set it in your shell, Claude uses it, but Nell looks for session transcripts in `~/.claude`, so her sessions don't resume: each launch starts fresh.
-- **A very slow shell startup.** If your login shell takes more than 10 seconds to start, Nell stops waiting for it to say where `claude` is and checks only the usual places, so she may say Claude Code is missing. A slow start can also show her **Claude needs you in the console** nudge before Claude is up.
+- **A very slow shell startup.** If your login shell takes more than 10 seconds to start, Nell stops waiting for it to say where `claude` is and checks only the usual places, so she may say Claude Code is missing. A slow start can also show her **Claude needs you in the console** nudge (for Chat, **Chat needs a one-time OK**) before Claude is up.
 - **Project status lines.** A status line set in a project's own `.claude/settings.json` is replaced by Nell's. She only chains the one in your user settings.
 - **Background agents.** If a background agent's prompt is still open in the console when the main turn ends, Nell stops holding her bar for it. The next message you send could land in that prompt. We've never seen this happen, but it can.
 

@@ -61,7 +61,7 @@ She must still feel like one cosy character on the desktop, not a second Claude 
   - The user's expression library: 1024 px RGBA illustrations, four frames each.
   - The user's own pixel pipeline output (150 px idle and smile, with 96-frame idle and talk loops at 40 ms, blink included).
   - Expressions are converted with the **hana-pixel** skill (`hana-pixel:image-to-animated-pixel-art`) at the head size the 128 px scene needs, to match that pipeline's style.
-  - The mature-themed expression folders are **out of scope** and won't be used.
+  - Folders outside the repo that the build must not use are **out of scope**.
 - **Desk, laptop, chair and hands:** no art exists. They're drawn new in Aseprite, using the concept strips (`artwork/concept`, `artwork/idle`) for pose and the Plum Night palette for colour (hair browns for the desk).
 - **Style guide:** `concept-nell-design-system/assets/Character/nell-pixel-reference.png`.
 
