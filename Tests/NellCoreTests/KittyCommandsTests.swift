@@ -44,13 +44,13 @@ let sock = "unix:/A/Nell/kitty-42.sock"
 @Test func loginShellArgvPerShell() {
     // the folder comes first, so an rc file that cds can't move Claude, and the cd runs your chpwd hooks (direnv, mise)
     #expect(KittyCommands.viaLoginShell("/bin/zsh", cwd: "/p", ["/c/claude", "--resume", "S"])
-            == ["/bin/zsh", "-l", "-i", "-c", #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude", "--resume", "S"])
+            == ["/bin/zsh", "-l", "-i", "-c", #"cd "$0" || :; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude", "--resume", "S"])
     #expect(KittyCommands.viaLoginShell("/bin/bash", cwd: "/p", ["/c/claude"])
-            == ["/bin/bash", "-l", "-i", "-c", #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"])
+            == ["/bin/bash", "-l", "-i", "-c", #"cd "$0" || :; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"])
     #expect(KittyCommands.viaLoginShell("/bin/sh", cwd: "/p", ["/c/claude"])
-            == ["/bin/sh", "-l", "-i", "-c", #"cd "$0"; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"], "sh may be dash")
+            == ["/bin/sh", "-l", "-i", "-c", #"cd "$0" || :; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#, "/p", "/c/claude"], "sh may be dash")
     #expect(KittyCommands.viaLoginShell("/bin/ksh", cwd: "/p", ["/c/claude"]) // ksh and dash leave SHLVL as a terminal does
-            == ["/bin/ksh", "-l", "-i", "-c", #"cd "$0"; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; exec "$@""#, "/p", "/c/claude"])
+            == ["/bin/ksh", "-l", "-i", "-c", #"cd "$0" || :; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; exec "$@""#, "/p", "/c/claude"])
     // fish has no $0/$@: everything after the command is $argv
     #expect(KittyCommands.viaLoginShell("/opt/homebrew/bin/fish", cwd: "/p", ["/c/claude", "--resume", "S"])
             == ["/opt/homebrew/bin/fish", "-l", "-i", "-c", #"cd $argv[1]; test "$PWD" = $argv[1]; or builtin cd $argv[1]; exec $argv[2..-1]"#, "/p", "/c/claude", "--resume", "S"])
@@ -104,14 +104,16 @@ private func throughShell(_ shell: String, home: URL, folder: URL, _ program: [S
 @Test func loginShellStartsInItsFolderPastYourCdWrappers() throws {
     // CD is the rc's own way past its wrapper: zsh's `command` skips builtins, and dash has no `builtin`
     let loads = [#"cd() { CD "$@" && export NELL_ENTERED="$PWD"; }"#, "cdnvm() { CD \"$@\" && export NELL_ENTERED=\"$PWD\"; }\nalias cd=cdnvm"]
-    let hostile = [#"cd() { builtin cd "$1"; }"#, "cd /\ncd() { echo nope; return 1; }", "cd /\nalias cd='echo nope'"]
+    let hostile = [#"cd() { builtin cd "$1"; }"#, "cd /\ncd() { echo nope; return 1; }", "cd /\nalias cd='echo nope'",
+                   "cd /\nERREXIT\ncd() { echo nope; return 1; }"] // errexit must not let your failing cd stop the launch
     for rc in loads + hostile {
         let home = FileManager.default.temporaryDirectory.appending(path: "nell-shell-\(UUID().uuidString)")
         let folder = home.appending(path: "my project")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
-        for (f, cd) in [(".zshrc", "builtin cd"), (".bash_profile", "builtin cd"), (".profile", "command cd")] {
-            try (rc.replacingOccurrences(of: "CD", with: cd) + "\n").write(to: home.appending(path: f), atomically: true, encoding: .utf8)
+        for (f, cd, errexit) in [(".zshrc", "builtin cd", "setopt ERR_EXIT"), (".bash_profile", "builtin cd", "set -e"), (".profile", "command cd", "set -e")] {
+            let text = rc.replacingOccurrences(of: "CD", with: cd).replacingOccurrences(of: "ERREXIT", with: errexit)
+            try (text + "\n").write(to: home.appending(path: f), atomically: true, encoding: .utf8)
         }
         // /bin/sh can be bash, dash or zsh (/private/var/select/sh): an `sh` named link to each
         var shells = ["/bin/zsh", "/bin/bash", "/bin/ksh", "/bin/dash"]

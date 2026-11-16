@@ -42,6 +42,7 @@ public struct KittyCommands: Sendable {
     /// - Your own `cd` runs first, as at a terminal (nvm's `alias cd=cdnvm`, autoenv and rvm load a folder's environment
     ///   there); if it didn't land in the folder (it printed, failed, or `cd() { builtin cd "$1"; }` took `--` as home),
     ///   `builtin`/`command \cd` goes there past any function or alias. No `--` for yours: the folder is always absolute.
+    ///   `|| :` keeps a failing cd of yours from ending the shell under `set -e` / ERR_EXIT (fish has no errexit).
     /// - bash's own per-prompt hooks live in PROMPT_COMMAND, which `-c` never runs, so it runs once here.
     ///   shortcut: an array PROMPT_COMMAND (bash 5.1+) runs only its first entry; loop over it if someone needs more.
     /// - zsh and bash lower SHLVL on exec, so it's raised first: Claude sees 1, as from a terminal prompt.
@@ -49,11 +50,11 @@ public struct KittyCommands: Sendable {
         let script = switch (shell as NSString).lastPathComponent {
         // shortcut: fish compares paths as text (its `test -ef` is unverified), so a symlinked folder is entered twice; harmless.
         case "fish": #"cd $argv[1]; test "$PWD" = $argv[1]; or builtin cd $argv[1]; exec $argv[2..-1]"#
-        case "zsh": #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#
-        case "bash": #"cd "$0"; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#
+        case "zsh": #"cd "$0" || :; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; export SHLVL=$((SHLVL+1)); exec "$@""#
+        case "bash": #"cd "$0" || :; [ "$PWD" -ef "$0" ] || builtin cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#
         // sh may be bash, dash or zsh (/private/var/select/sh), and dash has no `builtin`
-        case "sh": #"cd "$0"; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#
-        default: #"cd "$0"; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; exec "$@""# // ksh's own `command` alias expands an unquoted cd
+        case "sh": #"cd "$0" || :; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; eval "${PROMPT_COMMAND:-}"; export SHLVL=$((SHLVL+1)); exec "$@""#
+        default: #"cd "$0" || :; [ "$PWD" -ef "$0" ] || command \cd -- "$0"; exec "$@""# // ksh's own `command` alias expands an unquoted cd
         }
         return [shell, "-l", "-i", "-c", script, cwd] + argv
     }
