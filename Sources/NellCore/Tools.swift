@@ -39,12 +39,10 @@ public func kittyApps(home: String) -> [String] { [KittyCommands().app, home + "
 /// so the floor is the release they were verified on.
 public let minKittyVersion = "0.50.0"
 
-/// Whether the dotted version `v` is at least `min`, number by number: 0.9 < 0.10, and 0.50 is 0.50.0.
+/// Whether the dotted version `v` is at least `min`, number by number: 0.9 < 0.10, and 0.50 is 0.50.0. A build suffix
+/// is ignored (0.50.0+git is 0.50.0); no leading number at all is never enough.
 public func versionAtLeast(_ v: String, _ min: String) -> Bool {
-    func numbers(_ s: String) -> [Int]? {
-        let n = s.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
-        return n.contains(nil) ? nil : n.compactMap { $0 }
-    }
+    func numbers(_ s: String) -> [Int]? { s.prefixMatch(of: /[0-9]+(\.[0-9]+)*/).map { $0.0.split(separator: ".").compactMap { Int($0) } } }
     guard let a = numbers(v), let b = numbers(min) else { return false }
     for i in 0..<max(a.count, b.count) {
         let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
@@ -57,6 +55,8 @@ public func versionAtLeast(_ v: String, _ min: String) -> Bool {
 public func kittyVersion(_ app: String) -> String? {
     NSDictionary(contentsOfFile: app + "/Contents/Info.plist")?["CFBundleShortVersionString"] as? String
 }
+/// An empty version is no version: the alert says "of an unknown version", never "Your kitty  is too old".
+private func nonEmpty(_ s: String) -> String? { s.trimmingCharacters(in: .whitespaces).isEmpty ? nil : s }
 
 public enum KittyFound: Equatable, Sendable {
     case ready(String)
@@ -74,8 +74,8 @@ public func findKitty(home: String, isExecutable: (String) -> Bool = isExecutabl
     let apps = kittyApps(home: home)
     func runs(_ app: String) -> Bool { let k = KittyCommands(app: app); return isExecutable(k.kitty) && isExecutable(k.kitten) }
     if let app = apps.first(where: { runs($0) && version($0).map { versionAtLeast($0, minKittyVersion) } == true }) { return .ready(app) }
-    if exists(apps[1]) { return .blocked(version: runs(apps[1]) ? version(apps[1]) : nil) }
-    return runs(apps[0]) ? .tooOld(version: version(apps[0])) : .missing
+    if exists(apps[1]) { return .blocked(version: runs(apps[1]) ? version(apps[1]).flatMap(nonEmpty) : nil) }
+    return runs(apps[0]) ? .tooOld(version: version(apps[0]).flatMap(nonEmpty)) : .missing
 }
 
 /// Kovid Goyal's Developer ID team, which signs every official kitty.

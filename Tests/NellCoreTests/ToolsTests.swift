@@ -96,6 +96,8 @@ import Testing
             == .blocked(version: "0.41.1"), "the old one is in ~/Applications, where the installer would go")
     #expect(findKitty(home: "/Users/x", isExecutable: { !mine($0) }, version: { _ in nil }, exists: { !mine($0) })
             == .tooOld(version: nil), "a version Nell can't read isn't trusted")
+    #expect(findKitty(home: "/Users/x", isExecutable: { !mine($0) }, version: { _ in "" }, exists: { !mine($0) })
+            == .tooOld(version: nil), "an empty one is no version")
 }
 
 @Test func kittyVersionsCompareByNumber() {
@@ -110,6 +112,10 @@ import Testing
     #expect(!versionAtLeast("0.5.0", "0.50.0"))
     #expect(!versionAtLeast("", "0.50.0"))
     #expect(!versionAtLeast("garbage", "0.50.0"))
+    // a build suffix is compared by its numeric prefix
+    #expect(versionAtLeast("0.50.0+git", "0.50.0"))
+    #expect(versionAtLeast("0.50.1-dev", "0.50.0"))
+    #expect(!versionAtLeast("0.49.2+git", "0.50.0"))
 }
 
 @Test func kittyVersionIsReadFromItsInfoPlist() throws {
