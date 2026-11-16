@@ -41,10 +41,11 @@ How to open Nell
 What Nell needs
 ---------------
 - macOS 14 or later, on an Apple silicon or Intel Mac.
-- kitty, the terminal Nell drives. If you don't have it, Nell offers to install it for you:
+- kitty 0.50.0 or later, the terminal Nell drives. If you don't have it, or yours is too old,
+  Nell offers to install the current one for you:
   she downloads the official, signed release from kitty's own project.
 - Claude Code, installed and logged in to your account. Nell uses your own Claude Code;
-  she doesn't install it for you.
+  she doesn't install it for you. Run "claude" once in Terminal to log in before opening Nell.
 
 More: https://github.com/hanamorix/Nell-Desktop-Companion#readme
 EOF

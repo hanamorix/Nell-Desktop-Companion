@@ -76,11 +76,11 @@ Under the hood it's all real Claude Code. Chat and Code each run the full Claude
 ### What she needs
 
 - **macOS 14 or later**, on an Apple silicon or Intel Mac.
-- **[Claude Code](https://docs.claude.com/en/docs/claude-code/setup), installed and logged in.** Nell finds it wherever it is. She asks your login shell first (`command -v claude`), then looks in the usual places: `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.claude/local` and `~/.npm-global/bin`. If it's missing, she shows you the official install command to copy and a link to the setup guide. She never runs the installer herself.
-- **[kitty](https://sw.kovidgoyal.net/kitty/)**, the free terminal that Nell drives. She looks in `/Applications` and `~/Applications`. If you don't have it, she offers to install it for you:
+- **[Claude Code](https://docs.claude.com/en/docs/claude-code/setup), installed and logged in.** Run `claude` once in Terminal to log in before opening Nell. Nell finds it wherever it is. She asks your login shell first (`command -v claude`), then looks in the usual places: `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.claude/local` and `~/.npm-global/bin`. If it's missing, she shows you the official install command to copy and a link to the setup guide. She never runs the installer herself.
+- **[kitty](https://sw.kovidgoyal.net/kitty/)**, the free terminal that Nell drives. She looks in `/Applications` and `~/Applications`, and needs kitty 0.50.0 or later. If you don't have it, or yours is too old, she offers to install the current one for you:
   - She downloads the official release (about 80 MB) from kitty's own GitHub releases.
-  - She checks it before installing anything. The size must match the published one, and so must the checksum when GitHub publishes one. The app must also pass its code signature check, Gatekeeper, and a check that it's signed by kitty's developer.
-  - She puts it in `~/Applications`, which needs no admin password.
+  - She checks it before installing anything. The size and SHA-256 checksum must match the ones GitHub publishes; without a published checksum, nothing is installed. The app must also pass its code signature check, Gatekeeper, and a check that it's signed by kitty's developer.
+  - She puts it in `~/Applications`, which needs no admin password. An old kitty in `/Applications` stays where it is. She never replaces a `kitty.app`, so if the old one is in `~/Applications`, she asks you to update it or move it to the Trash first.
   - If any check fails, nothing is installed.
 
   You can also install kitty yourself.
@@ -89,13 +89,13 @@ Under the hood it's all real Claude Code. Chat and Code each run the full Claude
 
 - She asks which project folder Code should work in. If you cancel, Code works in her chat folder until you choose one.
 - She copies her pixel font, Departure Mono, into `~/Library/Fonts`, because kitty can only use installed fonts.
-- She registers herself as a login item, so she opens when you log in.
+- She adds herself as a login item once. Turn it off in System Settings → General → Login Items and she'll leave it off. (She never adds herself when opened from the disk image.)
 - The first time Chat starts, Claude Code asks whether to trust Nell's chat folder. Nell shows a **Chat needs a one-time OK** bubble with an **Open console** button, so you can answer it there.
 
 ## 💬 Using her
 
 **Chat and Code.** Nell has two sessions, picked with the two chips beside her:
-- **Chat** (the speech-bubble chip) is a Claude Code session in Nell's own chat folder, for questions and conversation. It starts in Claude Code's default permission mode.
+- **Chat** (the speech-bubble chip) is a Claude Code session in Nell's own chat folder, for questions and conversation. It starts in your own default permission mode (`defaultMode` in your Claude Code settings).
 - **Code** (the ⌘ chip) is a Claude Code session in your project folder. It starts in Auto permission mode.
 
 Both are full Claude Code, with all of your setup.
@@ -127,7 +127,10 @@ There are a few honest limits:
   [[ -z $NELL_MODE ]] && exec tmux
   ```
 - **Prompt-time hooks.** zsh's `precmd` hooks run just before a prompt is drawn, and Claude starts before any prompt. Anything that loads only in `precmd` won't have loaded when Claude starts. `chpwd` hooks do run. In bash, `PROMPT_COMMAND` runs once before Claude starts.
-- **Unusual login shells.** zsh, bash, sh, ksh, mksh, dash and fish are supported. Other shells, such as tcsh, nu or xonsh, start Claude from zsh instead.
+- **Unusual login shells.** zsh, bash, sh, ksh, mksh, dash and fish are supported, though fish is only tested by the command Nell builds for it. Other shells, such as tcsh, nu or xonsh, start Claude from zsh instead.
+- **A `claude` alias or shell function.** Nell runs the `claude` program itself, so an alias or function that adds flags or environment variables doesn't apply.
+- **`CLAUDE_CONFIG_DIR`.** If you set it in your shell, Claude uses it, but Nell looks for session transcripts in `~/.claude`, so her sessions don't resume: each launch starts fresh.
+- **A very slow shell startup.** If your login shell takes more than 10 seconds to start, Nell stops waiting for it to say where `claude` is and checks only the usual places, so she may say Claude Code is missing. A slow start can also show her **Claude needs you in the console** nudge before Claude is up.
 - **Project status lines.** A status line set in a project's own `.claude/settings.json` is replaced by Nell's. She only chains the one in your user settings.
 - **Background agents.** If a background agent's prompt is still open in the console when the main turn ends, Nell stops holding her bar for it. The next message you send could land in that prompt. We've never seen this happen, but it can.
 
@@ -137,7 +140,7 @@ There are a few honest limits:
 - **What Claude tells her.** Claude Code's hooks send her its events: your prompts, its tool calls, its replies and its questions. She uses them to draw her bubbles and faces.
 - **Your transcripts.** When a Code turn ends or a session resumes, she reads the end of that session's transcript to count its context for the paper stacks. She also checks that a saved session's transcript exists before she resumes it.
 - **Her own files.** They live in `~/Library/Application Support/Nell`: her saved state, kitty config, hook scripts, chat folder and log. `nell.log` gets a line for each Claude event, with the event and tool name but none of the content, plus notes from start-up.
-- **Files outside that folder.** Her font goes in `~/Library/Fonts`. If you asked her to install kitty, it goes in `~/Applications`, and its download is deleted afterwards. She's also registered as a login item.
+- **Files outside that folder.** Her font goes in `~/Library/Fonts`. If you asked her to install kitty, it goes in `~/Applications`, and its download is deleted afterwards. She adds herself as a login item once; turn it off in System Settings → General → Login Items and she'll leave it off.
 - **Her socket.** Claude's hooks talk to Nell through a local Unix socket that only your user can open.
 - **The network.** Nell herself goes online only for the optional kitty download from GitHub. Claude Code talks to Anthropic as it always does.
 
