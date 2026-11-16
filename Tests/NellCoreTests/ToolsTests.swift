@@ -51,12 +51,57 @@ import Testing
 
 @Test func kittyIsFoundInApplicationsThenYourApplications() {
     #expect(kittyApps(home: "/Users/x") == ["/Applications/kitty.app", "/Users/x/Applications/kitty.app"])
-    let mine: (String) -> Bool = { $0.hasPrefix("/Users/x/Applications/kitty.app/") }
-    #expect(locateKitty(home: "/Users/x", isExecutable: mine) == "/Users/x/Applications/kitty.app")
-    #expect(locateKitty(home: "/Users/x", isExecutable: { _ in true }) == "/Applications/kitty.app")
-    #expect(locateKitty(home: "/Users/x", isExecutable: { _ in false }) == nil)
-    // a kitty.app missing its kitten can't run Nell's panel
-    #expect(locateKitty(home: "/Users/x", isExecutable: { mine($0) && !$0.hasSuffix("kitten") }) == nil)
+    let mine: (String) -> Bool = { $0.hasPrefix("/Users/x/Applications/kitty.app") }
+    let current: (String) -> String? = { _ in minKittyVersion }
+    func find(_ isExecutable: @escaping (String) -> Bool, _ version: @escaping (String) -> String? = current,
+              exists: @escaping (String) -> Bool = { _ in false }) -> KittyFound {
+        findKitty(home: "/Users/x", isExecutable: isExecutable, version: version, exists: exists)
+    }
+    #expect(find(mine) == .ready("/Users/x/Applications/kitty.app"))
+    #expect(find({ _ in true }) == .ready("/Applications/kitty.app"))
+    #expect(find({ _ in false }) == .missing)
+    // a kitty.app missing its kitten can't run Nell's panel; the installer won't replace it, so say what to do
+    #expect(find({ mine($0) && !$0.hasSuffix("kitten") }, exists: mine) == .blocked(version: nil))
+}
+
+/// A kitty older than the panel and remote-control flags Nell uses would only fail once started; it's skipped like a
+/// missing one, and the current one is installed beside it.
+@Test func aTooOldKittyIsSkippedForACurrentOne() {
+    let all: (String) -> Bool = { _ in true }
+    let mine: (String) -> Bool = { $0.hasPrefix("/Users/x/Applications/kitty.app") }
+    let oldInApplications: (String) -> String? = { $0.hasPrefix("/Applications/") ? "0.41.1" : minKittyVersion }
+    #expect(findKitty(home: "/Users/x", isExecutable: all, version: oldInApplications, exists: { _ in true })
+            == .ready("/Users/x/Applications/kitty.app"), "an install beside the old one is used from then on")
+    #expect(findKitty(home: "/Users/x", isExecutable: { !mine($0) }, version: oldInApplications, exists: { !mine($0) })
+            == .tooOld(version: "0.41.1"), "offer the install into ~/Applications")
+    #expect(findKitty(home: "/Users/x", isExecutable: all, version: { _ in "0.41.1" }, exists: { _ in true })
+            == .blocked(version: "0.41.1"), "the old one is in ~/Applications, where the installer would go")
+    #expect(findKitty(home: "/Users/x", isExecutable: { !mine($0) }, version: { _ in nil }, exists: { !mine($0) })
+            == .tooOld(version: nil), "a version Nell can't read isn't trusted")
+}
+
+@Test func kittyVersionsCompareByNumber() {
+    #expect(versionAtLeast("0.50.0", "0.50.0"))
+    #expect(versionAtLeast("0.50", "0.50.0"))
+    #expect(versionAtLeast("0.50.0", "0.50"))
+    #expect(versionAtLeast("0.50.1", "0.50.0"))
+    #expect(versionAtLeast("1.0", "0.50.0"))
+    #expect(versionAtLeast("0.10", "0.9"))
+    #expect(!versionAtLeast("0.9", "0.10"))
+    #expect(!versionAtLeast("0.49.2", "0.50.0"))
+    #expect(!versionAtLeast("0.5.0", "0.50.0"))
+    #expect(!versionAtLeast("", "0.50.0"))
+    #expect(!versionAtLeast("garbage", "0.50.0"))
+}
+
+@Test func kittyVersionIsReadFromItsInfoPlist() throws {
+    let app = FileManager.default.temporaryDirectory.appending(path: "nell-kitty-\(UUID().uuidString)/kitty.app")
+    defer { try? FileManager.default.removeItem(at: app.deletingLastPathComponent()) }
+    #expect(kittyVersion(app.path) == nil)
+    try FileManager.default.createDirectory(at: app.appending(path: "Contents"), withIntermediateDirectories: true)
+    let plist = try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": "0.48.1"], format: .xml, options: 0)
+    try plist.write(to: app.appending(path: "Contents/Info.plist"))
+    #expect(kittyVersion(app.path) == "0.48.1")
 }
 
 // MARK: the release and the signature

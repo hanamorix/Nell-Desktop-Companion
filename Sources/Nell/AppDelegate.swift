@@ -54,7 +54,15 @@ import SwiftUI
             let lookup = runTool(claudeLookup(shell: kitty.shell, home: home), environment: kitty.baseEnvironment(), timeout: 10)
             if lookup.status != 0 { EventLog.write("claude lookup in \(kitty.shell) ended with \(lookup.status)") }
             guard let claude = locateClaude(shellOutput: String(decoding: lookup.out, as: UTF8.self), home: home) else { return claudeMissing() }
-            guard let app = locateKitty(home: home) ?? offerKittyInstall(home: home) else { return } // its alerts quit
+            let found = findKitty(home: home)
+            EventLog.write("kitty: \(found)")
+            let app: String? = switch found {
+            case .ready(let app): app
+            case .missing: offerKittyInstall(home: home, old: nil)
+            case .tooOld(let v): offerKittyInstall(home: home, old: v ?? "of an unknown version")
+            case .blocked(let v): kittyBlocked(home: home, version: v)
+            }
+            guard let app else { return } // their alerts quit
             try? FileManager.default.removeItem(at: kittyStaging(in: URL(fileURLWithPath: home).appending(path: "Applications"))) // an install cut short
             kitty.claude = claude; kitty.commands = KittyCommands(app: app)
             EventLog.write("claude \(claude), kitty \(app)")
@@ -212,13 +220,16 @@ import SwiftUI
     private var kittyInstall: Result<URL, any Error>?
     private let kittyCancel = Cancellation()
 
-    /// kitty is missing: offers the official signed one, installed into ~/Applications off the main thread while a
+    /// kitty is missing or too old: offers the official signed one, installed into ~/Applications off the main thread while a
     /// progress window shows (its Cancel ends the running step and cleans up). Returns its kitty.app, or nil once Nell is quitting.
-    private func offerKittyInstall(home: String) -> String? {
+    /// `old`: the version of the too-old kitty in /Applications, which stays; the current one goes in ~/Applications.
+    private func offerKittyInstall(home: String, old: String?) -> String? {
         NSApp.activate()
         let ask = NSAlert()
-        ask.messageText = "Nell needs kitty"
-        ask.informativeText = "Nell needs kitty (a free terminal) to run Claude. Install it now? "
+        ask.messageText = old == nil ? "Nell needs kitty" : "Nell needs a newer kitty"
+        ask.informativeText = (old.map { "Your kitty \($0) is too old for Nell (she needs \(minKittyVersion) or later); install the current one? "
+                + "It goes in ~/Applications; your old kitty stays where it is. " }
+            ?? "Nell needs kitty (a free terminal) to run Claude. Install it now? ")
             + "(downloads the official signed kitty from github.com/kovidgoyal/kitty)"
         ask.addButton(withTitle: "Install"); ask.addButton(withTitle: "Quit")
         guard ask.runModal() == .alertFirstButtonReturn else { NSApp.terminate(nil); return nil }
@@ -255,6 +266,20 @@ import SwiftUI
             if a.runModal() == .alertSecondButtonReturn { NSWorkspace.shared.open(URL(string: "https://sw.kovidgoyal.net/kitty/")!) }
         case nil: break
         }
+        NSApp.terminate(nil)
+        return nil
+    }
+
+    /// ~/Applications/kitty.app is too old or broken, and the installer never replaces a kitty.app: says what to do, then quits.
+    private func kittyBlocked(home: String, version: String?) -> String? {
+        NSApp.activate()
+        let a = NSAlert()
+        a.messageText = "Nell needs a newer kitty"
+        a.informativeText = (version.map { "Your kitty \($0) in \(home)/Applications is too old for Nell (she needs \(minKittyVersion) or later). " }
+            ?? "There's a kitty.app in \(home)/Applications, but it isn't one Nell can run (it needs its kitty and kitten). ")
+            + "Update it from kitty's site, or move it to the Trash and open Nell again to install the current one."
+        a.addButton(withTitle: "Quit"); a.addButton(withTitle: "Open kitty's Site")
+        if a.runModal() == .alertSecondButtonReturn { NSWorkspace.shared.open(URL(string: "https://sw.kovidgoyal.net/kitty/")!) }
         NSApp.terminate(nil)
         return nil
     }

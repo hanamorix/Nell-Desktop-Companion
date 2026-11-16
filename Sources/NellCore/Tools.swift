@@ -31,8 +31,49 @@ public func locateClaude(shellOutput: String, home: String, isExecutable: (Strin
 
 public func kittyApps(home: String) -> [String] { [KittyCommands().app, home + "/Applications/kitty.app"] }
 
-public func locateKitty(home: String, isExecutable: (String) -> Bool = isExecutableFile) -> String? {
-    kittyApps(home: home).first { let k = KittyCommands(app: $0); return isExecutable(k.kitty) && isExecutable(k.kitten) }
+/// The oldest kitty Nell runs with. The panel kitten came to macOS in 0.42.0 and `macos_ns_window_layer` in 0.48.0;
+/// 0.48.1 fixed the `--edge none` panel shrinking with a top margin, and 0.50.0 fixed remote-control `send-key`,
+/// `set-colors` and `ls` ignoring options. `--focus-policy`, `--layer` and `--start-as-hidden` have no changelog entry,
+/// so the floor is the release they were verified on.
+public let minKittyVersion = "0.50.0"
+
+/// Whether the dotted version `v` is at least `min`, number by number: 0.9 < 0.10, and 0.50 is 0.50.0.
+public func versionAtLeast(_ v: String, _ min: String) -> Bool {
+    func numbers(_ s: String) -> [Int]? {
+        let n = s.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+        return n.contains(nil) ? nil : n.compactMap { $0 }
+    }
+    guard let a = numbers(v), let b = numbers(min) else { return false }
+    for i in 0..<max(a.count, b.count) {
+        let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
+        if x != y { return x > y }
+    }
+    return true
+}
+
+/// The kitty.app's version, from its Info.plist.
+public func kittyVersion(_ app: String) -> String? {
+    NSDictionary(contentsOfFile: app + "/Contents/Info.plist")?["CFBundleShortVersionString"] as? String
+}
+
+public enum KittyFound: Equatable, Sendable {
+    case ready(String)
+    /// None: the installer can put one in ~/Applications.
+    case missing
+    /// Only a too-old one, in /Applications (nil: its version can't be read); the installer puts the current one in ~/Applications.
+    case tooOld(version: String?)
+    /// ~/Applications/kitty.app is too old (nil: or can't run), and the installer never replaces a kitty.app.
+    case blocked(version: String?)
+}
+
+/// The first kitty.app that has kitty and kitten and is at least `minKittyVersion`, else what the user can do about it.
+public func findKitty(home: String, isExecutable: (String) -> Bool = isExecutableFile, version: (String) -> String? = kittyVersion,
+                      exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }) -> KittyFound {
+    let apps = kittyApps(home: home)
+    func runs(_ app: String) -> Bool { let k = KittyCommands(app: app); return isExecutable(k.kitty) && isExecutable(k.kitten) }
+    if let app = apps.first(where: { runs($0) && version($0).map { versionAtLeast($0, minKittyVersion) } == true }) { return .ready(app) }
+    if exists(apps[1]) { return .blocked(version: runs(apps[1]) ? version(apps[1]) : nil) }
+    return runs(apps[0]) ? .tooOld(version: version(apps[0])) : .missing
 }
 
 /// Kovid Goyal's Developer ID team, which signs every official kitty.
