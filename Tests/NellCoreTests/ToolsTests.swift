@@ -28,7 +28,7 @@ import Testing
 
 @Test func claudeLookupAsksTheShellClaudeWillRunIn() throws {
     let a = claudeLookup(shell: "/bin/zsh", home: "/Users/x")
-    #expect(Array(a.prefix(4)) == ["/bin/zsh", "-l", "-i", "-c"])
+    #expect(Array(a.prefix(6)) == ["/usr/bin/env", "NELL_MODE=code", "/bin/zsh", "-l", "-i", "-c"])
     // sh inherits the login shell's PATH, so it finds the file claude will be, never an alias
     #expect(Array(a.suffix(3)) == ["/bin/sh", "-c", #"printf '\nnell-claude=%s\n' "$(command -v claude)""#])
     // the real thing, with a home whose rc prints and puts a fake claude on PATH
@@ -41,6 +41,24 @@ import Testing
     let env = KittyCommands.cleanEnvironment(home: home.path, user: "nobody", shell: "/bin/zsh", session: [:])
     let r = runTool(claudeLookup(shell: "/bin/zsh", home: home.path), environment: env, timeout: 10)
     #expect(locateClaude(shellOutput: String(decoding: r.out, as: UTF8.self), home: home.path) == home.appending(path: "bin/claude").path, "status \(r.status): \(String(decoding: r.out, as: UTF8.self))")
+}
+
+/// The README's guard for an rc that execs tmux checks NELL_MODE; the lookup is started as Code is, so it sees it too.
+@Test func claudeLookupPassesTheNellModeGuard() throws {
+    let home = FileManager.default.temporaryDirectory.appending(path: "nell-claude-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: home.appending(path: "bin"), withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: home) }
+    try "#!/bin/sh\n".write(to: home.appending(path: "bin/claude"), atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: home.appending(path: "bin/claude").path)
+    // an nvm-style PATH set in the rc, then the guarded takeover (a stand-in for `exec tmux`)
+    let rc = "export PATH=\"$HOME/bin:$PATH\"\n[ -z \"$NELL_MODE\" ] && exec /usr/bin/true\n"
+    for f in [".zshrc", ".bash_profile"] { try rc.write(to: home.appending(path: f), atomically: true, encoding: .utf8) }
+    for shell in ["/bin/zsh", "/bin/bash"] {
+        let env = KittyCommands.cleanEnvironment(home: home.path, user: "nobody", shell: shell, session: [:])
+        let r = runTool(claudeLookup(shell: shell, home: home.path), environment: env, timeout: 10)
+        #expect(locateClaude(shellOutput: String(decoding: r.out, as: UTF8.self), home: home.path) == home.appending(path: "bin/claude").path,
+                "\(shell) status \(r.status): \(String(decoding: r.out, as: UTF8.self))")
+    }
 }
 
 @Test func isExecutableFileRejectsFolders() {

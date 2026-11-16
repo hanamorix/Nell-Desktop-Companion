@@ -16,9 +16,11 @@ public func claudeCandidates(home: String) -> [String] {
 }
 
 /// Asks your login shell, started as Claude will be, which claude it runs. sh inherits that shell's PATH, so the answer
-/// is the file, never an alias or function; the marker sets it apart from anything your rc files print.
+/// is the file, never an alias or function; the marker sets it apart from anything your rc files print. NELL_MODE is
+/// set as in Code's window, so an rc that guards `exec tmux` with it lets the lookup through.
 public func claudeLookup(shell: String, home: String) -> [String] {
-    KittyCommands.viaLoginShell(shell, cwd: home, ["/bin/sh", "-c", #"printf '\nnell-claude=%s\n' "$(command -v claude)""#])
+    ["/usr/bin/env", "NELL_MODE=code"]
+        + KittyCommands.viaLoginShell(shell, cwd: home, ["/bin/sh", "-c", #"printf '\nnell-claude=%s\n' "$(command -v claude)""#])
 }
 
 /// The claude your login shell finds (`shellOutput` is `claudeLookup`'s), else the first of the usual places that exists.
