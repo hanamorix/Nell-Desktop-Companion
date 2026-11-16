@@ -56,3 +56,9 @@ Last narrow round: 12a0e23 6461f75 1dcf254 (328 tests, hook-script 14/14).
 Last narrow round re-review: 2–5 ADDRESSED; 1 PARTLY (errexit + failing user cd stops the launch) → one-token fix dispatched.
 Errexit fix ab2bd22 — controller verified with a real zsh (ERR_EXIT + failing cd wrapper → exec still runs in the folder); 328 tests, hook-script 14/14.
 FINAL: DMG rebuilt from ab2bd22: verify VALID; contents complete; copy to a spaced unicode path: codesign OK, x86_64 arm64; showcase crowded from the copy: running, 0 MISMATCH; sha256 c4f93fa4…e224be, 1,585,908 bytes.
+
+## Release day (2026-11-16)
+
+- History purge (user's request): the user's private art-folder names and home path were in two v3 docs and two test fixtures on the public main, nell-v1 and nell-v2. They were rewritten in every commit with git-filter-repo `--replace-text`, using the same scrubbed wording the current tree already had. The tip tree is byte-identical and there are still 128 commits. A fresh mirror clone from GitHub has 0 hits in contents and messages. Authors were already the GitHub noreply address. There are no forks or PRs. GitHub still serves the old commits by exact SHA until its own clean-up.
+- Ruling: strip the shipped binary. The DMG's binary held absolute build paths: 42 debug-map object paths plus Swift source paths. bundle.sh now builds with `-file-prefix-map <checkout>=.`, runs `strip -S` after lipo, and fails if the checkout path is still in the binary. Cost if wrong: crash logs from users lose local symbol names; our own symbols are still in the exported symbol table.
+- DMG rebuilt from main: verify VALID; 0 private-string hits across the whole volume; 0 OSO stabs; codesign strict OK; x86_64 arm64; a copy at a spaced unicode path ran showcase crowded with 0 MISMATCH.
