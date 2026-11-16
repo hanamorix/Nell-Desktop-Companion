@@ -127,8 +127,10 @@ import SwiftUI
             if CommandLine.arguments.contains("--probe") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.runner?.probe() }
             }
-        } else if Bundle.main.bundleURL.pathExtension == "app" {
+        } else if Bundle.main.bundleURL.pathExtension == "app", model.state.shouldRegisterLoginItem(bundlePath: Bundle.main.bundlePath) {
             try? SMAppService.mainApp.register()
+            model.state.loginItemOffered = true // even if it failed: never retried, so a removal in System Settings sticks
+            save()
         }
     }
 

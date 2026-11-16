@@ -11,6 +11,8 @@ public struct SavedState: Codable, Equatable, Sendable {
     public var calibration: PanelCalibration?
     /// Colour theme name; nil or unknown means Plum Night (see `Themes.named`).
     public var theme: String?
+    /// Whether she has added herself as a login item; she does it once, so turning it off in System Settings sticks.
+    public var loginItemOffered = false
 
     public init() {}
 
@@ -23,6 +25,13 @@ public struct SavedState: Codable, Equatable, Sendable {
         positions = try c.decodeIfPresent([String: CGPoint].self, forKey: .positions) ?? [:]
         calibration = try c.decodeIfPresent(PanelCalibration.self, forKey: .calibration)
         theme = try c.decodeIfPresent(String.self, forKey: .theme)
+        loginItemOffered = try c.decodeIfPresent(Bool.self, forKey: .loginItemOffered) ?? false
+    }
+
+    /// Add the login item only the first time, and only from an installed copy: not one run from the disk image or
+    /// translocated by Gatekeeper, which would be what opens at login.
+    public func shouldRegisterLoginItem(bundlePath: String) -> Bool {
+        !loginItemOffered && !bundlePath.hasPrefix("/Volumes/") && !bundlePath.contains("/AppTranslocation/")
     }
 
     /// `projectDir` while it's still a folder kitty can start in: it may have been moved, deleted, be on a drive not

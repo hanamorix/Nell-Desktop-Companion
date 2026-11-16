@@ -74,3 +74,28 @@ import Testing
     s.projectDir = file.path; #expect(s.usableProjectDir == nil)                     // a file, not a folder
     s.projectDir = dir.appending(path: "gone").path; #expect(s.usableProjectDir == nil) // moved or deleted
 }
+
+@Test func savedStateRemembersTheLoginItemWasOffered() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "nell-login-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    var s = SavedState()
+    #expect(!s.loginItemOffered)
+    s.loginItemOffered = true
+    try s.save(url)
+    #expect(SavedState.load(url).loginItemOffered)
+    try Data(#"{"theme":"Moss"}"#.utf8).write(to: url) // from a Nell before this key
+    #expect(!SavedState.load(url).loginItemOffered)
+    #expect(SavedState.load(url).theme == "Moss")
+}
+
+/// She adds herself once, from a real install: turning it off in System Settings must stick, and a copy run from the
+/// disk image or a translocated one must not be what opens at login.
+@Test func loginItemIsRegisteredOnceAndOnlyFromAnInstalledCopy() {
+    var s = SavedState()
+    #expect(s.shouldRegisterLoginItem(bundlePath: "/Applications/Nell.app"))
+    #expect(s.shouldRegisterLoginItem(bundlePath: "/Users/x/Applications/Nell.app"))
+    #expect(!s.shouldRegisterLoginItem(bundlePath: "/Volumes/Nell/Nell.app"))
+    #expect(!s.shouldRegisterLoginItem(bundlePath: "/private/var/folders/ab/T/AppTranslocation/1234-ABCD/d/Nell.app"))
+    s.loginItemOffered = true
+    #expect(!s.shouldRegisterLoginItem(bundlePath: "/Applications/Nell.app"))
+}
